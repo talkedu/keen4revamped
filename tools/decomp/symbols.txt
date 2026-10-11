@@ -1,0 +1,40 @@
+# Hand-assigned function names: SSSS:OOOO Name   # evidence
+# Segment:offset are in the unpacked load image (see docs/decomp/MODULES.md).
+
+# Borland C0 / runtime (segment 0000)
+0000:0000 c0_start            # MZ entry point, sets DS=DGROUP 2EE7
+0000:05BB exit                # called after every fatal message, and at the end of c0
+0000:0FA3 printf              # called with format/message strings
+0000:1D8D open                # called with "EGAGRAPH.CK4", "EGA2.CK4"
+0000:026D close               # pairs with open in the EGA combine code
+0000:1FFB rename              # rename("EGA1.CK4","EGAGRAPH.CK4"), followed by "Can't rename EGA1.CK4!"
+
+# CK_MAIN (segment 037D)
+037D:022F Quit                # called with every fatal error string
+037D:007F ShutdownId          # calls the seven *_Shutdown in id's usual order
+037D:00A7 InitGame            # calls the *_Startup chain
+037D:06AB main                # called by c0_start; checks "DEMO", "JOYPAD" parameters
+
+# Engine shutdown chain, in ShutdownId order
+1931:05E2 US_Shutdown
+1874:099F SD_Shutdown
+1460:0868 IN_Shutdown
+1654:0134 RF_Shutdown
+1D06:0090 VW_Shutdown
+12A6:0999 CA_Shutdown
+155E:06E2 MM_Shutdown
+
+# Engine startup chain, in InitGame order
+1931:079A US_TextScreen
+155E:042B MM_Startup
+1D06:0005 VW_Startup
+1654:000F RF_Startup
+1460:0794 IN_Startup
+1874:0826 SD_Startup
+1931:0547 US_Startup
+1931:0911 US_UpdateTextScreen
+12A6:0954 CA_Startup
+1931:05C1 US_Setup
+1931:0C3C US_FinishTextScreen   # last US_ call in InitGame, after graphics are locked
+
+1931:06B5 US_CheckParm        # called from main with "DEMO", "JOYPAD"

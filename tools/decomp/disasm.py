@@ -70,10 +70,19 @@ for i, seg in enumerate(segs):
         for v in imm_refs(ins):
             s = str_at(v)
             if s:
-                m = re.match(r'([A-Z]{2,3}_[A-Za-z0-9]+)\s*:', s)
-                if m:
+                m = re.match(r'([A-Za-z][A-Za-z0-9_]{3,})\s*(?:\(\))?\s*(?::|-)', s)
+                if m and ('_' in m.group(1) or sum(c.isupper() for c in m.group(1)) >= 2) and not m.group(1).isupper():
                     fs = max([f for f in starts if f <= ins.address], default=None)
                     if fs is not None: names.setdefault((seg, fs), m.group(1))
+
+# hand-assigned names override the automatic ones: lines of `SSSS:OOOO Name`
+symfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'symbols.txt')
+if os.path.exists(symfile):
+    for line in open(symfile):
+        line = line.split('#')[0].split()
+        if len(line) >= 2:
+            sg, of = line[0].split(':')
+            names[(int(sg, 16), int(of, 16))] = line[1]
 
 def fname(seg, off):
     return names.get((seg, off), 'sub_%04X_%04X' % (seg, off))
