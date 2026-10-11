@@ -1,0 +1,15 @@
+# Build output
+/build/
+/out/
+CMakeUserPresets.json
+
+# Copyrighted game data and anything derived from the original executable.
+# Never commit these: players supply their own copy of Keen 4.
+*.CK4
+*.ck4
+*.EXE
+*.exe
+/gamedata/
+/decomp-work/
+listings/
+extracted/
