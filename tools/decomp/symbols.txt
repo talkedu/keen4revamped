@@ -49,7 +49,7 @@
 155E:0E7F MM_UnusedMemory     # follows MM_ShowMemory
 155E:0EE6 MM_TotalFree        # last function in ID_MM
 1874:0A90 SD_SoundPlaying     # MM_SortMem checks for a playing sound first
-1874:0AD7 SD_WaitSoundDone    # MM_SortMem waits before moving blocks (could be SD_StopSound)
+1874:0AD7 SD_StopSound        # MM_SortMem stops the playing sound before moving blocks; follows SD_SoundPlaying in ID_SD.C order
 1D06:00E9 VW_ColorBorder      # MM_SortMem sets border 15, then restores it
 1D06:0152 VW_SetDefaultColors # first call in MM_ShowMemory
 1D06:02DD VW_SetLineWidth     # MM_ShowMemory sets 40, restores 64
@@ -85,3 +85,37 @@
 12A6:17BF CAL_DialogUpdate
 12A6:1812 CAL_DialogFinish
 12A6:184B CA_CacheMarks       # anchored: last ID_CA call in InitGame
+
+# ID_SD (segment 1874), tail of ID_SD.C in source order (medium confidence)
+1874:074B SD_SetSoundMode     # far, just before SD_Startup
+1874:07D0 SD_SetMusicMode     # far, just before SD_Startup
+1874:0913 SD_Default          # far, between SD_Startup and SD_Shutdown
+1874:09DF SD_SetUserHook
+1874:0AFD SD_WaitSoundDone
+1874:0B0A SD_MusicOn          # 11 bytes: sets the sequencer active flag
+1874:0B15 SD_MusicOff
+1874:0B62 SD_StartMusic
+1874:0BB4 SD_FadeOutMusic
+1874:0BC7 SD_MusicPlaying
+
+# ID_IN (segment 1460). Mouse functions anchored by INT 33h; the rest by ID_IN.C order (medium confidence)
+1460:01D0 INL_GetMouseDelta   # INT 33h
+1460:01E8 INL_GetMouseButtons # INT 33h
+1460:0536 INL_StartMouse      # INT 33h reset
+1460:0826 IN_Default          # far, between IN_Startup and IN_Shutdown
+1460:0896 IN_SetKeyHook
+1460:08A8 IN_ClearKeysDown
+1460:08CB INL_AdjustCursor
+1460:08F9 IN_ReadCursor
+1460:09BE IN_ReadControl      # anchored: "Demo playback exceeded", "Demo buffer overflow"
+1460:0D28 IN_SetControlType
+1460:0D39 IN_StartDemoRecord
+1460:0D81 IN_StartDemoPlayback
+1460:0DA1 IN_StopDemo
+1460:0DBF IN_FreeDemoBuffer
+1460:0DD7 IN_GetScanName
+1460:0E1F IN_WaitForKey
+1460:0E3D IN_WaitForASCII
+1460:0E5A IN_AckBack          # near-only, called by IN_Ack
+1460:0F43 IN_IsUserInput
+1460:0F92 IN_UserInput
