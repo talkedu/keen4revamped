@@ -9,4 +9,5 @@ game; keep every output out of the repository (`extracted/` and `listings/` are 
 | `extract_heads.py` | `extract_heads.py extracted/KEEN4E_UNP.EXE extracted/` | AUDIOHED, EGAHEAD, EGADICT, MAPHEAD `.CK4` tables |
 | `segmap.py` | `segmap.py extracted/KEEN4E_UNP.EXE` | Code segment map from far-call relocations |
 | `disasm.py` | `disasm.py extracted/KEEN4E_UNP.EXE listings/` | Per-segment listings (needs `pip install capstone`) |
+| `symbols.txt` | read by `disasm.py` | Hand-assigned function names (`SSSS:OOOO Name  # evidence`) |
 | `findheads.py`, `testdict.py` | exploratory | Used to locate and check the header tables |
