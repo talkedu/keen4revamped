@@ -139,3 +139,20 @@
 1D06:0DE3 VWB_Bar             # marks x..x+w-1, y..y+h-1, then VW_Bar
 1E0A:00AF VW_DrawTile8        # called by VWB_DrawTile8
 1E0A:05DA VWL_UpdateScreenBlocks # called by VW_UpdateScreen
+
+# ID_RF (segment 1654 = ID_RF.C, 1826 = ID_RF_A.ASM)
+1654:0139 RF_FixOfs           # far, right after RF_Shutdown; called from six game and UI segments
+1654:0868 RFL_RemoveAnimsOnX  # near helpers after RF_CheckForAnimTile, ID_RF.C order (medium)
+1654:08AB RFL_RemoveAnimsOnY  # ID_RF.C order (medium)
+1654:08EF RFL_RemoveAnimsInBlock # ID_RF.C order (medium)
+1654:0AFB RFL_ClearScrollBlocks  # zeroes the horizontal and vertical scroll block counts
+1654:0B61 RFL_BoundScroll     # near helper after RF_SetScrollBlock (medium)
+1654:0C50 RF_SetRefreshHook   # stores a far pointer that RF_Refresh calls each frame
+1654:1333 RF_NewPosition      # far, called from CK_DEMO and CK_PLAY (medium)
+1654:13DD RF_Scroll           # far, called only from CK_PLAY (medium)
+1654:185B RF_RemoveSprite     # far, right after RF_PlaceSprite; called from actor code
+1654:18E3 RFL_EraseBlocks     # called by RF_Refresh before RFL_UpdateSprites
+1654:1A6E RFL_UpdateSprites   # called by RF_Refresh
+1654:1C6E RF_Refresh          # anim tiles, update tiles, erase, sprites, refresh hook, VW_SetScreen
+1826:000C RFL_NewTile         # asm; called next to RF_CheckForAnimTile when tiles change
+1826:01EA RFL_UpdateTiles     # asm; called by RF_Refresh
