@@ -119,3 +119,23 @@
 1460:0E5A IN_AckBack          # near-only, called by IN_Ack
 1460:0F43 IN_IsUserInput
 1460:0F92 IN_UserInput
+
+# ID_VW (segments 1D06 = ID_VW.C, 1E0A = ID_VW_AE.ASM)
+1D06:00AC VW_SetScreenMode    # three INT 10h calls; InitGame calls it before VW_ColorBorder
+1D06:00FD VW_SetPalette       # near helper between VW_ColorBorder and VW_SetDefaultColors
+1D06:016F VW_FadeOut          # INT 10h palette steps; ID_VW.C order (medium)
+1D06:01C2 VW_FadeIn           # ID_VW.C order (medium)
+1D06:0215 VW_FadeUp           # ID_VW.C order (medium)
+1D06:0269 VW_FadeDown         # ID_VW.C order (medium)
+1D06:02BD VW_SetAtrReg        # writes the attribute controller with OUT DX,AL
+1D06:030D VW_ClearVideo       # Quit and InitGame call it next to VW_SetLineWidth / VW_ColorBorder
+1D06:064E VW_Bar              # called by VWB_Bar after VW_MarkUpdateBlock
+1D06:07D7 VWL_DrawCursor      # VW_UpdateScreen calls it when cursorvisible > 0
+1D06:0829 VWL_EraseCursor     # VW_UpdateScreen calls it after the block update
+1D06:09BB VW_MarkUpdateBlock  # returns nonzero if any block was marked; every VWB_ wrapper calls it
+1D06:0A9B VW_UpdateScreen     # cursor draw, VWL_UpdateScreenBlocks, cursor erase; 62 call sites
+1D06:0ABB VWB_DrawTile8       # adds pansx/pansy, marks x&~7..+7, then VW_DrawTile8(x/8,y,tile)
+1D06:0C79 VWB_DrawPic         # chunknum - STARTPICS(6) indexes the pic table (medium)
+1D06:0DE3 VWB_Bar             # marks x..x+w-1, y..y+h-1, then VW_Bar
+1E0A:00AF VW_DrawTile8        # called by VWB_DrawTile8
+1E0A:05DA VWL_UpdateScreenBlocks # called by VW_UpdateScreen
