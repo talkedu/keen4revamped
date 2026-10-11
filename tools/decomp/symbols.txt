@@ -38,3 +38,50 @@
 1931:0C3C US_FinishTextScreen   # last US_ call in InitGame, after graphics are locked
 
 1931:06B5 US_CheckParm        # called from main with "DEMO", "JOYPAD"
+
+# ID_MM (segment 155E), in ID_MM.C source order
+155E:0001 MML_CheckForEMS     # opens "EMMXXXX0" via INT 21h
+155E:0037 MML_SetupEMS        # INT 67h calls, Quit on error
+155E:0181 MML_CheckForXMS     # INT 2Fh
+155E:019C MML_SetupXMS        # INT 2Fh, calls the XMS driver through [cc62]
+155E:020B MML_ShutdownXMS     # XMS driver call through [cc62]
+155E:0B5D MM_SortMem          # VW_ColorBorder around beforesort/aftersort hooks
+155E:0E7F MM_UnusedMemory     # follows MM_ShowMemory
+155E:0EE6 MM_TotalFree        # last function in ID_MM
+1874:0A90 SD_SoundPlaying     # MM_SortMem checks for a playing sound first
+1874:0AD7 SD_WaitSoundDone    # MM_SortMem waits before moving blocks (could be SD_StopSound)
+1D06:00E9 VW_ColorBorder      # MM_SortMem sets border 15, then restores it
+1D06:0152 VW_SetDefaultColors # first call in MM_ShowMemory
+1D06:02DD VW_SetLineWidth     # MM_ShowMemory sets 40, restores 64
+1E0A:07DA VW_SetScreen        # MM_ShowMemory shows page 0
+1460:0EDF IN_Ack              # MM_ShowMemory waits for a key before restoring
+
+# ID_CA (segment 12A6). Most names follow id's ID_CA.C function order (medium confidence);
+# entries marked "anchored" are confirmed by a string or a call site.
+12A6:005F CA_OpenDebug        # anchored: opens "DEBUG.TXT"
+12A6:0083 CA_CloseDebug
+12A6:0094 CAL_GetGrChunkLength
+12A6:00F4 CA_FarRead          # anchored: "CA_FarRead doesn't support 64K reads yet!"
+12A6:0140 CA_FarWrite         # anchored: "CA_FarWrite doesn't support ..."
+12A6:018C CA_ReadFile
+12A6:0200 CA_LoadFile
+12A6:0283 CAL_OptimizeNodes
+12A6:02CC CAL_HuffExpand
+12A6:03F5 CAL_CarmackExpand
+12A6:0535 CA_RLEWCompress
+12A6:0685 CA_RLEWexpand
+12A6:0741 CAL_SetupGrFile     # anchored: "Cannot open EGAGRAPH.CK4!"
+12A6:08DD CAL_SetupMapFile    # anchored: "Can't open GAMEMAPS.CK4!"
+12A6:0910 CAL_SetupAudioFile  # anchored: "Can't open AUDIO.CK4!"
+12A6:09C2 CA_CacheAudioChunk
+12A6:0B28 CA_LoadAllSounds
+12A6:0BAE CAL_ShiftSprite
+12A6:0F05 CAL_ExpandGrChunk
+12A6:0FF9 CAL_ReadGrChunk
+12A6:1117 CA_CacheGrChunk     # anchored: Quit caches the order screen with it
+12A6:151A CA_ClearMarks       # anchored: InitGame calls it before CA_CacheMarks
+12A6:1593 CA_SetAllPurge      # anchored: first call in Quit
+12A6:1650 CAL_DialogDraw      # anchored: draws "Loading"
+12A6:17BF CAL_DialogUpdate
+12A6:1812 CAL_DialogFinish
+12A6:184B CA_CacheMarks       # anchored: last ID_CA call in InitGame
