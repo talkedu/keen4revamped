@@ -9,7 +9,7 @@ namespace keen4::platform {
 
 // No window, no sound, scripted input and a virtual clock. Used by tests, CI
 // and for rendering frames to image files.
-class HeadlessPlatform final : public IPlatform {
+class HeadlessPlatform : public IPlatform {
  public:
   std::uint64_t Ticks70() override { return millis_ * 70 / 1000; }
   std::uint64_t Millis() override { return millis_; }

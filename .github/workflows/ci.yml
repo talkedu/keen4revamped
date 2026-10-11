@@ -14,9 +14,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install SDL3 build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
+            libasound2-dev libpulse-dev
       - name: Configure
-        run: cmake --preset debug
+        run: cmake --preset release
       - name: Build
-        run: cmake --build --preset debug
+        run: cmake --build --preset release
       - name: Test
-        run: ctest --preset debug
+        run: ctest --test-dir build/release -C Release --output-on-failure
+      - name: Upload Windows build
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: keen4-windows
+          path: |
+            build/release/Release/keen4.exe
+            README.md

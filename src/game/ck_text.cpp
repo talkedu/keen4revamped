@@ -376,6 +376,8 @@ int HelpChunk(int topic) { return g_exe.Word(static_cast<std::uint16_t>(0x0716 +
 
 // 0915:09A5
 void HelpScreens() {
+  sword oldfontnumber = fontnumber;
+  fontnumber = 0;
   CA_UpLevel();
   VW_ClearVideo(BACKCOLOR);
   RF_FixOfs();
@@ -386,6 +388,7 @@ void HelpScreens() {
     if (n == -1) {
       CA_DownLevel();
       IN_ClearKeysDown();
+      fontnumber = oldfontnumber;
       VW_ClearVideo(BACKCOLOR);
       RF_FixOfs();
       return;

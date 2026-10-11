@@ -17,15 +17,16 @@ static int failures = 0;
 int main() {
   CHECK(std::strlen(keen4::VersionString()) > 0);
 
-  keen4::platform::HeadlessTimer timer;
-  timer.Advance(70);
-  CHECK(timer.Tics() == 70);
+  // The headless clock only moves when the program waits.
+  keen4::platform::HeadlessPlatform platform;
+  CHECK(platform.Ticks70() == 0);
+  platform.Delay(1000);
+  CHECK(platform.Ticks70() == 70);
 
-  keen4::platform::HeadlessInput input;
-  input.SetKey(0x39, true);
-  CHECK(input.KeyDown(0x39));
-  CHECK(!input.KeyDown(0x1C));
-  CHECK(!input.KeyDown(200));
+  keen4::platform::KeyEvent event;
+  platform.PushKey(0x39, true);
+  CHECK(platform.PollKey(&event) && event.scancode == 0x39 && event.down);
+  CHECK(!platform.PollKey(&event));
 
   if (failures == 0) std::printf("all tests passed\n");
   return failures == 0 ? 0 : 1;

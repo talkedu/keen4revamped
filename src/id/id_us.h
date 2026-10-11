@@ -81,6 +81,7 @@ int US_CheckParm(const char* parm, const char* const* strings);
 boolean US_ParmPresent(const char* arg);
 
 // Port: command line, set by main().
+void USL_CheckSavedGames();
 void US_SetArgs(int argc, char** argv);
 int US_ArgCount();
 const char* US_Arg(int i);

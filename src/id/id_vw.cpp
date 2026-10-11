@@ -10,7 +10,7 @@ byte vw_framebuffer[SCREENWIDTH * SCREENHEIGHT];
 byte* vw_screen = vw_framebuffer;
 
 sword px, py;
-byte pdrawmode, fontcolor = 15;
+byte pdrawmode = 0x18, fontcolor = 15;  // DGROUP 6024: text is XORed by default
 sword fontnumber;
 
 sword bordercolor;

@@ -1,4 +1,5 @@
 // CK_PHYS: actor movement, clipping and the state machine (segment 09DC).
+#include <cstdio>
 #include "game/ck_def.h"
 #include "exe/keen4exe.h"
 
@@ -545,6 +546,10 @@ void DoActor(objtype* ob) {
     state = ob->state;
   }
   while (ticcount) {
+    // A state chain that ends with tics left over leaves state NULL. The
+    // original then reads DS:0 as a state; those bytes make it a long,
+    // skippable non-think state, so the loop ends without moving the object.
+    if (!state) break;
     if (!state->skippable && state->tictime <= ticcount)
       ticcount = StateMachineTics(ob, static_cast<sword>(state->tictime - 1));
     else

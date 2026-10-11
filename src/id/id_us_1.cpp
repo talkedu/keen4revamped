@@ -118,6 +118,8 @@ void USL_WriteConfig() {
 // The original stores the address of PrintX (DGROUP A537) as a build check.
 constexpr word kOldTest = 0xA537;
 
+}  // namespace
+
 // 1931:0490
 void USL_CheckSavedGames() {
   for (word i = 0; i < MaxSaveGames; i++) {
@@ -139,6 +141,8 @@ void USL_CheckSavedGames() {
     }
   }
 }
+
+namespace {
 
 // 1931:11AF
 void USL_XORICursor(int x, int y, const char* s, word cursor) {
@@ -202,6 +206,8 @@ void US_SetLoadSaveHooks(boolean (*load)(std::FILE*), boolean (*save)(std::FILE*
 // 1931:0547
 void US_Startup() {
   if (US_Started) return;
+  // The default high score table is initialised data at DGROUP 43C4.
+  std::memcpy(Scores, g_exe.DGroup(0x43C4), sizeof Scores);
   US_InitRndT(true);
   USL_ReadConfig();
   for (int i = 1; i < g_argc; i++) {

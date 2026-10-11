@@ -32,6 +32,8 @@ void (*INL_KeyHook)();
 // Scancode to ASCII tables in far data segments 1F68, 1F70 and 1F78, and the
 // direction table at DGROUP 3D28.
 byte ASCIINames[128], ShiftNames[128], SpecialNames[128];
+// The code indexes DGROUP 3D28 with (y*3+x)*2 for x, y in -1..1, so the
+// nine entries start four words earlier.
 sword DirTable[9];
 
 // 1460:000B, the keyboard interrupt handler.
@@ -84,7 +86,7 @@ void IN_Startup() {
     ShiftNames[i] = *g_exe.At(0x1F70, static_cast<std::uint16_t>(i));
     SpecialNames[i] = *g_exe.At(0x1F78, static_cast<std::uint16_t>(i));
   }
-  for (int i = 0; i < 9; i++) DirTable[i] = g_exe.Int(static_cast<std::uint16_t>(0x3D28 + i * 2));
+  for (int i = 0; i < 9; i++) DirTable[i] = g_exe.Int(static_cast<std::uint16_t>(0x3D20 + i * 2));
   std::memcpy(KbdDefs, g_exe.DGroup(0x3BC2), sizeof KbdDefs);
   IN_ClearKeysDown();
   MousePresent = false;
