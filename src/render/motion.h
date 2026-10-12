@@ -12,6 +12,10 @@
 // What glides is the object's own position; each frame's art offset goes on
 // top, so frames whose art sits at different offsets (the inchworm's stretch
 // and hump) don't slide the image back and forth.
+//
+// The camera glides by the same rules. While Keen runs, he and the camera move
+// in the same scenes; on different clocks he would wobble against the
+// scrolling background, a few pixels back and forth every frame.
 
 #include <vector>
 
@@ -32,6 +36,9 @@ class SpriteMotion {
   // Where to draw sp's image top-left at time `now`. Returns false, leaving x
   // and y alone, for a sprite the last Update did not see.
   bool Position(const SceneSprite& sp, double now, float* x, float* y) const;
+  // Where to put the camera (the classic view's top-left) at time `now`.
+  // Returns false, leaving x and y alone, before the first Update.
+  bool Camera(double now, float* x, float* y) const;
 
  private:
   struct Track {
@@ -44,8 +51,12 @@ class SpriteMotion {
   };
   const Track* Find(const void* id) const;
   static void Eval(const Track& t, double now, float* x, float* y);
+  // The track of an object now at (x, y), going on from `old` if it had one.
+  static Track Follow(const Track* old, const void* id, int x, int y, double now, double refresh);
 
   std::vector<Track> tracks_;
+  Track camera_{};
+  bool have_camera_ = false;
   int map_ = -1;
   double last_update_ = -1;
 };

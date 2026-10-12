@@ -6,6 +6,7 @@ namespace keen4::render {
 
 void SpriteMotion::Reset() {
   tracks_.clear();
+  have_camera_ = false;
   map_ = -1;
   last_update_ = -1;
 }
@@ -48,33 +49,41 @@ double GlideTime(double* step, double interval, double refresh) {
 
 }  // namespace
 
+SpriteMotion::Track SpriteMotion::Follow(const Track* old, const void* id, int x, int y, double now,
+                                         double refresh) {
+  Track t{id, static_cast<float>(x), static_cast<float>(y), x, y, now, now, now, 0};
+  if (!old) return t;
+  if (x == old->tox && y == old->toy) return *old;  // still, or still gliding to where it is
+  float cx, cy;
+  Eval(*old, now, &cx, &cy);
+  if (std::abs(cx - static_cast<float>(x)) > kMaxStep || std::abs(cy - static_cast<float>(y)) > kMaxStep)
+    return t;
+  double step = old->step;
+  const double glide = GlideTime(&step, now - old->lastmove, refresh);
+  return Track{id, cx, cy, x, y, now, now + glide, now, step};
+}
+
 void SpriteMotion::Update(const Scene& scene, double now) {
   if (scene.map != map_) {
     tracks_.clear();
+    have_camera_ = false;
     map_ = scene.map;
   }
   const double refresh = last_update_ >= 0 && now > last_update_ ? now - last_update_ : 0;
-  last_update_ = now;
   std::vector<Track> next;
   next.reserve(scene.sprites.size());
-  for (const SceneSprite& sp : scene.sprites) {
-    const int ox = sp.x - sp.artx, oy = sp.y - sp.arty;
-    Track t{sp.id, static_cast<float>(ox), static_cast<float>(oy), ox, oy, now, now, now, 0};
-    if (const Track* old = Find(sp.id)) {
-      float cx, cy;
-      Eval(*old, now, &cx, &cy);
-      if (ox == old->tox && oy == old->toy) {
-        t = *old;  // still, or still gliding to where it is
-      } else if (std::abs(cx - static_cast<float>(ox)) <= kMaxStep &&
-                 std::abs(cy - static_cast<float>(oy)) <= kMaxStep) {
-        double step = old->step;
-        const double glide = GlideTime(&step, now - old->lastmove, refresh);
-        t = Track{sp.id, cx, cy, ox, oy, now, now + glide, now, step};
-      }
-    }
-    next.push_back(t);
-  }
+  for (const SceneSprite& sp : scene.sprites)
+    next.push_back(Follow(Find(sp.id), sp.id, sp.x - sp.artx, sp.y - sp.arty, now, refresh));
   tracks_.swap(next);
+  camera_ = Follow(have_camera_ ? &camera_ : nullptr, nullptr, scene.viewx, scene.viewy, now, refresh);
+  have_camera_ = true;
+  last_update_ = now;
+}
+
+bool SpriteMotion::Camera(double now, float* x, float* y) const {
+  if (!have_camera_) return false;
+  Eval(camera_, now, x, y);
+  return true;
 }
 
 bool SpriteMotion::Position(const SceneSprite& sp, double now, float* x, float* y) const {

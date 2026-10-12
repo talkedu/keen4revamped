@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -100,6 +102,35 @@ int main() {
     x = -1;
     SceneSprite stranger{&other, 334, 116, 46, 8, 4, 2, false};
     CHECK(!motion.Position(stranger, 3.0, &x, &y) && x == -1);
+  }
+
+  // Keen running with the camera locked on him stays put on screen, even when
+  // scenes arrive 2 and 3 tics apart: the camera glides on the sprites' clock.
+  {
+    using keen4::render::Scene;
+    using keen4::render::SceneSprite;
+    using keen4::render::SpriteMotion;
+    int keen = 0;
+    SpriteMotion motion;
+    Scene s;
+    s.map = 1;
+    s.sprites.push_back(SceneSprite{&keen, 100, 0, 80, 0, 0, 1, false});
+    double now = 0, worst = 0;
+    const double gaps[] = {2 / 70.0, 3 / 70.0, 2 / 70.0, 2 / 70.0, 3 / 70.0, 3 / 70.0, 2 / 70.0};
+    for (int i = 0; i < 40; i++) {
+      s.viewx = i * 6;
+      s.sprites[0].x = i * 6 + 150;
+      motion.Update(s, now);
+      const double gap = gaps[i % 7];
+      for (int k = 0; k < 8; k++) {
+        const double t = now + gap * k / 8;
+        float cx = 0, cy = 0, kx = 0, ky = 0;
+        CHECK(motion.Camera(t, &cx, &cy) && motion.Position(s.sprites[0], t, &kx, &ky));
+        worst = std::max(worst, static_cast<double>(std::abs(kx - cx - 150)));
+      }
+      now += gap;
+    }
+    CHECK(worst < 0.01);
   }
 
   // Art layers: curated art wins over the AI set, `bad` falls through to the

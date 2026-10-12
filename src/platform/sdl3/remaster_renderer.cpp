@@ -17,8 +17,6 @@ constexpr int kOverlayLimit = render::kClassicWidth * render::kClassicHeight * 2
 // Bigger jumps than this are teleports or new objects, never interpolated.
 constexpr int kMaxLerp = 48;
 
-float Lerp(float a, float b, float t) { return a + (b - a) * t; }
-
 double Seconds(Uint64 ns) { return static_cast<double>(ns) * 1e-9; }
 
 }  // namespace
@@ -46,11 +44,9 @@ void RemasterRenderer::Update(const render::Scene* scene, Uint64 now_ns) {
   if (have_cur_ && scene->serial == cur_.serial) return;
   if (have_cur_) {
     prev_ = cur_;
-    prev_ns_ = cur_ns_;
     have_prev_ = true;
   }
   cur_ = *scene;
-  cur_ns_ = now_ns;
   have_cur_ = true;
   motion_.Update(cur_, Seconds(now_ns));
 }
@@ -82,12 +78,13 @@ SDL_Texture* RemasterRenderer::Texture(render::AssetKind kind, int number, const
   return tex;
 }
 
-void RemasterRenderer::DrawScene(float alpha, double now) {
+void RemasterRenderer::DrawScene(double now) {
   const render::Scene& s = cur_;
   const bool lerp = have_prev_ && prev_.map == s.map && std::abs(prev_.viewx - s.viewx) <= kMaxLerp &&
                     std::abs(prev_.viewy - s.viewy) <= kMaxLerp;
-  float camx = lerp ? Lerp(static_cast<float>(prev_.viewx), static_cast<float>(s.viewx), alpha) : s.viewx;
-  float camy = lerp ? Lerp(static_cast<float>(prev_.viewy), static_cast<float>(s.viewy), alpha) : s.viewy;
+  // the camera glides like the sprites, so what it follows doesn't wobble
+  float camx = static_cast<float>(s.viewx), camy = static_cast<float>(s.viewy);
+  if (lerp && interpolate) motion_.Camera(now, &camx, &camy);
   // the wider view must not show the map border the classic camera never shows
   if (s.maxx - s.minx >= render::kWideWidth) {
     camx = std::max(camx, s.minx + kMargin);
@@ -235,12 +232,7 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
     return;
   }
 
-  float alpha = 1;
-  if (interpolate && have_prev_ && cur_ns_ > prev_ns_) {
-    alpha = static_cast<float>(now_ns - cur_ns_) / static_cast<float>(cur_ns_ - prev_ns_);
-    alpha = std::clamp(alpha, 0.0f, 1.0f);
-  }
-  DrawScene(alpha, Seconds(now_ns));
+  DrawScene(Seconds(now_ns));
 
   // palette fades: darken the new art by how dark the palette is
   float sum = 0, normal = 0;
