@@ -11,6 +11,7 @@
 #include "id/id_vw.h"
 #include "platform/headless/headless_platform.h"
 #include "render/art.h"
+#include "render/scene.h"
 
 // The engine reports fatal errors through Quit, normally from CK_MAIN.
 [[noreturn]] void Quit(const char* error) {
@@ -54,6 +55,26 @@ int main() {
     std::vector<std::uint8_t> diag = {0, 1, 1, 1};
     std::vector<std::uint8_t> d = keen4::render::Scale4x(diag, 2, 2);
     CHECK(d[0] == 0 && d[7 * 8 + 7] == 1);
+  }
+
+  // Smooth motion follows the object, not the image corner: an inchworm
+  // stepping 8 pixels right swaps its flat frame (art at +0) for its hump
+  // (art at +8), and the hump must not start 8 pixels behind and slide.
+  {
+    using keen4::render::Scene;
+    using keen4::render::SceneSprite;
+    int worm = 0, other = 0;
+    Scene prev, cur;
+    prev.sprites.push_back(SceneSprite{&worm, 333, 100, 50, 0, 8, 2, false});
+    cur.sprites.push_back(SceneSprite{&worm, 334, 116, 46, 8, 4, 2, false});
+    float x = -1, y = -1;
+    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 0, 48, &x, &y) && x == 108 && y == 46);
+    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 1, 48, &x, &y) && x == 116 && y == 46);
+    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 0.5f, 48, &x, &y) && x == 112);
+    x = -1;
+    CHECK(!keen4::render::InterpolateSprite(prev, cur.sprites[0], 0.5f, 4, &x, &y) && x == -1);
+    SceneSprite stranger{&other, 334, 116, 46, 8, 4, 2, false};
+    CHECK(!keen4::render::InterpolateSprite(prev, stranger, 0.5f, 48, &x, &y) && x == -1);
   }
 
   // Art layers: curated art wins over the AI set, `bad` falls through to the
