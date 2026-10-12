@@ -51,7 +51,7 @@ keen4 --art art
   original next to its result.
 - Real-ESRGAN runs once per image size: the program returned corrupted images when one
   run mixed sizes. A Windows `realesrgan-ncnn-vulkan.exe` can be driven from WSL. The
-  full set (about 3,000 model runs) takes about 7 minutes on an RTX 5070 and needs about
+  full set (about 2,900 images in 127 runs) takes about 7 minutes on an RTX 5070 and needs about
   15 GB of RAM for the large tile sheets.
 - Extracted and generated art is derived from the game data and stays out of the
   repository, like the data itself.
