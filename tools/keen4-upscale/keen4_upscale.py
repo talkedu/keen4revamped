@@ -146,50 +146,109 @@ def nearest(rows, factor=DENSITY):
 
 
 class RealEsrgan:
-    """Runs realesrgan-ncnn-vulkan on whole images; alpha is handled separately."""
+    """Runs realesrgan-ncnn-vulkan once over a folder of images (loading the
+    model once). A Windows build of the program also works from WSL."""
 
-    def __init__(self, program, model):
-        self.program, self.model = program, model
+    def __init__(self, program, model, workdir):
+        self.program, self.model, self.workdir = program, model, workdir
+        self.windows = program.lower().endswith(".exe") and shutil.which("wslpath") is not None
 
-    def run(self, rows):
-        h, w = len(rows), len(rows[0])
-        with tempfile.TemporaryDirectory() as tmp:
-            src, dst = os.path.join(tmp, "in.png"), os.path.join(tmp, "out.png")
-            write_png(src, w, h, rows)
-            subprocess.run([self.program, "-i", src, "-o", dst, "-s", str(DENSITY), "-n", self.model],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            ow, oh, out = read_png(dst)
-        if (ow, oh) != (w * DENSITY, h * DENSITY):
-            raise RuntimeError(f"model returned {ow}x{oh}, expected {w * DENSITY}x{h * DENSITY}")
+    def path(self, p):
+        if not self.windows:
+            return p
+        return subprocess.run(["wslpath", "-w", p], check=True, capture_output=True, text=True).stdout.strip()
+
+    def run_all(self, images):
+        """images: list of RGBA rows; returns their 4x versions in the same order.
+        Images of one size go through the program together: mixing sizes in
+        one run gave corrupted results for some images."""
+        by_size = {}
+        for i, rows in enumerate(images):
+            by_size.setdefault((len(rows[0]), len(rows)), []).append(i)
+        out = [None] * len(images)
+        src, dst = os.path.join(self.workdir, "in"), os.path.join(self.workdir, "out")
+        for (w, h), indices in by_size.items():
+            for d in (src, dst):
+                shutil.rmtree(d, ignore_errors=True)
+                os.makedirs(d)
+            for i in indices:
+                write_png(os.path.join(src, f"{i:05d}.png"), w, h, images[i])
+            subprocess.run([self.program, "-i", self.path(src), "-o", self.path(dst), "-s", str(DENSITY),
+                            "-n", self.model, "-f", "png"], check=True, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+            for i in indices:
+                ow, oh, big = read_png(os.path.join(dst, f"{i:05d}.png"))
+                if (ow, oh) != (w * DENSITY, h * DENSITY):
+                    raise RuntimeError(f"model returned {ow}x{oh} for a {w}x{h} image")
+                out[i] = big
+        shutil.rmtree(self.workdir, ignore_errors=True)
         return out
 
 
-def upscale(rows, method, ai):
-    """4x upscale of RGBA rows. Transparency is kept as a hard edge."""
-    if method == "nearest":
-        return nearest(rows)
-    if method == "scale4x":
-        return scale2x(scale2x(rows))
-    # AI: colour and mask go through separately; transparent pixels take the
-    # colour of an opaque neighbour so the model sees no fake edges.
-    h, w = len(rows), len(rows[0])
-    colour = [[(px[0], px[1], px[2], 255) for px in row] for row in rows]
-    for y in range(h):
-        for x in range(w):
-            if rows[y][x][3] == 0:
-                for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
-                    yy, xx = y + dy, x + dx
-                    if 0 <= yy < h and 0 <= xx < w and rows[yy][xx][3]:
-                        colour[y][x] = colour[yy][xx]
-                        break
-    big = ai.run(colour)
-    has_alpha = any(px[3] < 255 for row in rows for px in row)
-    if not has_alpha:
-        return big
-    mask = [[(px[3], px[3], px[3], 255) for px in row] for row in rows]
-    bigmask = ai.run(mask)
-    return [[(c[0], c[1], c[2], 255 if m[0] >= 128 else 0) for c, m in zip(crow, mrow)]
-            for crow, mrow in zip(big, bigmask)]
+class Upscaler:
+    """4x upscale of RGBA images; transparency is kept as a hard edge. With an
+    AI model, work is queued and run in one batch by flush()."""
+
+    def __init__(self, method, ai):
+        self.method, self.ai, self.jobs = method, ai, []
+
+    def submit(self, rows, done, model_mask=True):
+        """model_mask=False keeps the original outline (Scale4x of the mask)
+        instead of the model's, for tiles that must line up with neighbours."""
+        if self.method == "nearest":
+            done(nearest(rows))
+        elif self.method == "scale4x":
+            done(scale2x(scale2x(rows)))
+        else:
+            self.jobs.append((rows, done, model_mask))
+
+    def flush(self):
+        """Runs the queued jobs, one image size at a time to keep memory low."""
+        groups = {}
+        for job in self.jobs:
+            rows = job[0]
+            groups.setdefault((len(rows[0]), len(rows)), []).append(job)
+        self.jobs = []
+        total = sum(len(g) for g in groups.values())
+        print(f"running {self.ai.model} on {total} images in {len(groups)} sizes...", flush=True)
+        for jobs in groups.values():
+            self._run(jobs)
+
+    def _run(self, jobs):
+        # Colour and mask go through the model separately; transparent pixels
+        # take the colour of an opaque neighbour so the model sees no fake edges.
+        images, plan = [], []
+        for rows, done, model_mask in jobs:
+            h, w = len(rows), len(rows[0])
+            colour = [[(px[0], px[1], px[2], 255) for px in row] for row in rows]
+            for y in range(h):
+                for x in range(w):
+                    if rows[y][x][3] == 0:
+                        for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                            yy, xx = y + dy, x + dx
+                            if 0 <= yy < h and 0 <= xx < w and rows[yy][xx][3]:
+                                colour[y][x] = colour[yy][xx]
+                                break
+            colour_index = len(images)
+            images.append(colour)
+            mask_index = None
+            if any(px[3] < 255 for row in rows for px in row):
+                if model_mask:
+                    mask_index = len(images)
+                    images.append([[(px[3], px[3], px[3], 255) for px in row] for row in rows])
+                else:
+                    mask_index = scale2x(scale2x([[px[3] for px in row] for row in rows]))
+            plan.append((colour_index, mask_index, done))
+        results = self.ai.run_all(images)
+        for colour_index, mask_index, done in plan:
+            big = results[colour_index]
+            if isinstance(mask_index, list):
+                big = [[(c[0], c[1], c[2], m) for c, m in zip(crow, mrow)] for crow, mrow in zip(big, mask_index)]
+            elif mask_index is not None:
+                bigmask = results[mask_index]
+                big = [[(c[0], c[1], c[2], 255 if m[0] >= 128 else 0) for c, m in zip(crow, mrow)]
+                       for crow, mrow in zip(big, bigmask)]
+            done(big)
 
 
 # --- pipeline ----------------------------------------------------------------
@@ -227,38 +286,69 @@ def main():
     args = ap.parse_args()
 
     ai = None
+    if args.method != "realesrgan":
+        up = Upscaler(args.method, None)
     if args.method == "realesrgan":
         program = shutil.which(args.realesrgan) or (args.realesrgan if os.path.exists(args.realesrgan) else None)
         if not program:
             sys.exit(f"{args.realesrgan} not found; install Real-ESRGAN (ncnn-vulkan) or use --method scale4x")
-        ai = RealEsrgan(program, args.model)
+        ai = RealEsrgan(program, args.model, os.path.join(args.art, ".work"))
+    up = Upscaler(args.method, ai)
 
     kinds = set(args.only.split(","))
     sheets, strips = parse_index(os.path.join(args.extracted, "index.txt"))
-    manifest, review = [], []
+    manifest, review = {}, {}
 
     for kind, sheet, cols, count in sheets:
         if kind not in kinds:
             continue
-        print(f"{kind}: upscaling {sheet} in context...", flush=True)
+        print(f"{kind}: {sheet} is upscaled in context", flush=True)
         _, _, rows = read_png(os.path.join(args.extracted, sheet))
-        big = upscale(rows, args.method, ai)
-        t = 16 * DENSITY
-        for n in range(count):
-            x, y = (n % cols) * t, (n // cols) * t
-            original = os.path.join(args.extracted, kind, f"{n:04d}.png")
-            if not os.path.exists(original):
-                continue
-            tile = crop(big, x, y, t, t)
-            if kind == "tile16m" and is_empty(tile):
-                continue
-            name = f"{kind}/{n:04d}.png"
-            write_png(os.path.join(args.art, name), t, t, tile)
-            manifest.append(f"{kind} {n} {name}")
-            review.append((kind, n, os.path.relpath(original, args.art), name))
+
+        def cut(big, kind=kind, cols=cols, count=count):
+            t = 16 * DENSITY
+            for n in range(count):
+                x, y = (n % cols) * t, (n // cols) * t
+                original = os.path.join(args.extracted, kind, f"{n:04d}.png")
+                if not os.path.exists(original):
+                    continue
+                tile = crop(big, x, y, t, t)
+                if kind == "tile16m" and is_empty(tile):
+                    continue
+                name = f"{kind}/{n:04d}.png"
+                write_png(os.path.join(args.art, name), t, t, tile)
+                manifest[(kind, n)] = f"{kind} {n} {name}"
+                review[(kind, n)] = (kind, n, os.path.relpath(original, args.art), name)
+
+        up.submit(rows, cut, model_mask=False)
+
+    # Each tile again with its real neighbours from the levels (keen4-extract
+    # context patches); the centre of the result replaces the sheet version.
+    for kind in ("tile16", "tile16m"):
+        cdir = os.path.join(args.extracted, "context", kind)
+        if kind not in kinds or not os.path.isdir(cdir):
+            continue
+        names = sorted(f for f in os.listdir(cdir) if f.endswith(".png"))
+        print(f"{kind}: {len(names)} tiles upscaled with their level neighbours", flush=True)
+        for fname in names:
+            n = int(fname[:4])
+            _, _, rows = read_png(os.path.join(cdir, fname))
+
+            def centre(big, kind=kind, n=n):
+                t = 16 * DENSITY
+                tile = crop(big, t, t, t, t)
+                if kind == "tile16m" and is_empty(tile):
+                    return
+                name = f"{kind}/{n:04d}.png"
+                write_png(os.path.join(args.art, name), t, t, tile)
+                manifest[(kind, n)] = f"{kind} {n} {name}"
+                original = os.path.join(args.extracted, kind, f"{n:04d}.png")
+                review[(kind, n)] = (kind, n, os.path.relpath(original, args.art), name)
+
+            up.submit(rows, centre, model_mask=False)
 
     if "sprite" in kinds:
-        print(f"sprite: upscaling {len(strips)} animation strips...", flush=True)
+        print(f"sprite: {len(strips)} animation strips", flush=True)
         for strip in strips:
             frames = [read_png(os.path.join(args.extracted, "sprite", f"{c:04d}.png")) for c in strip]
             fw, fh = frames[0][0], frames[0][1]
@@ -268,21 +358,25 @@ def main():
                 ox = STRIP_PAD + i * (fw + STRIP_PAD)
                 for y in range(fh):
                     sheet[STRIP_PAD + y][ox:ox + fw] = rows[y]
-            big = upscale(sheet, args.method, ai)
-            for i, c in enumerate(strip):
-                ox = (STRIP_PAD + i * (fw + STRIP_PAD)) * DENSITY
-                img = crop(big, ox, STRIP_PAD * DENSITY, fw * DENSITY, fh * DENSITY)
-                name = f"sprite/{c:04d}.png"
-                write_png(os.path.join(args.art, name), fw * DENSITY, fh * DENSITY, img)
-                manifest.append(f"sprite {c} {name}")
-                review.append(("sprite", c, os.path.relpath(os.path.join(args.extracted, "sprite", f"{c:04d}.png"),
-                                                            args.art), name))
 
+            def split(big, strip=strip, fw=fw, fh=fh):
+                for i, c in enumerate(strip):
+                    ox = (STRIP_PAD + i * (fw + STRIP_PAD)) * DENSITY
+                    img = crop(big, ox, STRIP_PAD * DENSITY, fw * DENSITY, fh * DENSITY)
+                    name = f"sprite/{c:04d}.png"
+                    write_png(os.path.join(args.art, name), fw * DENSITY, fh * DENSITY, img)
+                    manifest[("sprite", c)] = f"sprite {c} {name}"
+                    review[("sprite", c)] = ("sprite", c, os.path.relpath(
+                        os.path.join(args.extracted, "sprite", f"{c:04d}.png"), args.art), name)
+
+            up.submit(sheet, split)
+
+    up.flush()
     os.makedirs(args.art, exist_ok=True)
     with open(os.path.join(args.art, "manifest.txt"), "w") as f:
         f.write(f"# keen4-upscale --method {args.method}" + (f" --model {args.model}" if ai else "") + "\n")
         f.write("# kind number file [anchor ax ay] [bad]  (art at 4x density)\n")
-        f.write("\n".join(manifest) + "\n")
+        f.write("\n".join(manifest[k] for k in sorted(manifest)) + "\n")
 
     with open(os.path.join(args.art, "review.html"), "w") as f:
         f.write("<!doctype html><meta charset=utf-8><title>keen4-upscale review</title><style>"
@@ -290,7 +384,7 @@ def main():
                 "text-align:center}img{image-rendering:pixelated;background:#707;margin:2px}</style>\n"
                 "<p>Original (scaled 4x) and result. Add <b>bad</b> to the asset's line in manifest.txt "
                 "to fall back to the built-in upscale.</p>\n")
-        for kind, n, original, name in review:
+        for kind, n, original, name in (review[k] for k in sorted(review)):
             f.write(f'<div><img src="{original}" style="zoom:4"><img src="{name}"><br>{kind} {n}</div>\n')
 
     print(f"wrote {len(manifest)} images, manifest.txt and review.html to {args.art}")

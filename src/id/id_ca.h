@@ -75,6 +75,7 @@ void CA_ClearAllMarks();
 inline void CA_MarkGrChunk(int chunk) { grneeded[chunk] |= ca_levelbit; }
 void CA_CacheGrChunk(int chunk);
 void CA_CacheMap(int mapnum);
+bool CA_MapExists(int mapnum);  // port, for tools
 void CA_CacheMarks(const char* title);
 // Loading dialog hooks (DGROUP 7AE0..7AEA), set by the game.
 extern void (*drawcachebox)(const char* title, word numcache);

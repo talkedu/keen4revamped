@@ -39,14 +39,20 @@ keen4 --art art
 ```
 
 - **keen4-extract** writes every tile, foreground tile, sprite and picture as a 1x PNG,
-  sheets of all tiles laid out 18 wide as the levels use them, and `index.txt` with the
-  sheets and sprite animation strips.
-- **keen4-upscale** builds the 4x set: tiles are upscaled as whole sheets and cut back
-  into 64 px tiles so edges match; sprites per animation strip; transparency on its own,
-  re-thresholded to a hard edge. `--method realesrgan` runs the Real-ESRGAN program
+  sheets of all tiles laid out 18 wide as the levels use them, `index.txt` with the
+  sheets and sprite animation strips, and a context patch per tile: the tile with the 8
+  tiles around its first use in a level.
+- **keen4-upscale** builds the 4x set: tiles are upscaled with their real level
+  neighbours (the centre of each context patch, falling back to the sheets for tiles no
+  level uses) so edges match; sprites per animation strip; sprite transparency on its
+  own, re-thresholded to a hard edge; foreground tiles keep the original outline. `--method realesrgan` runs the Real-ESRGAN program
   (`realesrgan-ncnn-vulkan`, model `realesrgan-x4plus-anime` by default); check a
   model's licence before using its output. It also writes `review.html` with each
   original next to its result.
+- Real-ESRGAN runs once per image size: the program returned corrupted images when one
+  run mixed sizes. A Windows `realesrgan-ncnn-vulkan.exe` can be driven from WSL. The
+  full set (about 2,900 images in 127 runs) takes about 7 minutes on an RTX 5070 and needs about
+  15 GB of RAM for the large tile sheets.
 - Extracted and generated art is derived from the game data and stays out of the
   repository, like the data itself.
 
