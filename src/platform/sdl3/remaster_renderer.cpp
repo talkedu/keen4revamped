@@ -177,7 +177,7 @@ void RemasterRenderer::DrawView(const View& v, bool lerp, double now) {
     float density = static_cast<float>(img->width) / static_cast<float>(img->origw);
     if (img->fromManifest) density = 4;
     SDL_FRect dst{wx + offx + img->ox, wy + offy + img->oy, img->width / density, img->height / density};
-    if (show_hitboxes && kind == render::AssetKind::Sprite)
+    if (show_hitboxes && (kind == render::AssetKind::Sprite || kind == render::AssetKind::Sprite2))
       outlines.push_back({dst, wx + offx, wy + offy, number, img->layer});
     if (dst.x > v.rect.x + v.rect.w || dst.y > v.rect.y + v.rect.h || dst.x + dst.w < v.rect.x ||
         dst.y + dst.h < v.rect.y)
@@ -215,7 +215,9 @@ void RemasterRenderer::DrawView(const View& v, bool lerp, double now) {
     if (sp.view >= 0 && sp.view != v.index) continue;
     float x = static_cast<float>(sp.x), y = static_cast<float>(sp.y);
     if (lerp && interpolate) motion_.Position(sp, now, &x, &y);
-    drawImage(render::AssetKind::Sprite, sp.chunk, x, y, sp.data);
+    // Tom (co-op) has sprites of his own
+    render::AssetKind kind = sp.variant == 1 && !sp.data ? render::AssetKind::Sprite2 : render::AssetKind::Sprite;
+    drawImage(kind, sp.chunk, x, y, sp.data);
   }
   if (!frontdone) drawTiles(true);
 

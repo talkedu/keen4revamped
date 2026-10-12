@@ -236,11 +236,12 @@ int main() {
                                                         "tile16 7 seven.png bad\n";
     std::ofstream(root / "ai" / "manifest.txt") << "sprite 124 ai124.png\n"
                                                    "sprite 125 ai125.png\n"
+                                                   "sprite2 124 tom124.png\n"
                                                    "tile16 7 ai7.png\r\n";
     keen4::render::ArtLibrary art;
     art.SetDirectories({(root / "curated").string(), (root / "ai").string()});
     art.Reload();
-    CHECK(art.layers() == 2 && art.layerEntries(0) == 2 && art.layerEntries(1) == 3);
+    CHECK(art.layers() == 2 && art.layerEntries(0) == 2 && art.layerEntries(1) == 4);
     keen4::render::ArtLibrary::Source src;
     using keen4::render::AssetKind;
     CHECK(art.Find(AssetKind::Sprite, 124, &src) && src.layer == 0 && src.ax == 8 && src.ay == 4 &&
@@ -250,6 +251,9 @@ int main() {
     CHECK(art.Find(AssetKind::Tile16, 7, &src) && src.layer == 1 && fs::path(src.path).filename() == "ai7.png");
     CHECK(!art.Find(AssetKind::Tile16M, 7, &src));
     CHECK(!art.Find(AssetKind::Sprite, 126, &src));
+    // Tom's copy of a sprite (co-op) is an asset of its own
+    CHECK(art.Find(AssetKind::Sprite2, 124, &src) && src.layer == 1 && fs::path(src.path).filename() == "tom124.png");
+    CHECK(!art.Find(AssetKind::Sprite2, 125, &src));
     fs::remove_all(root);
   }
 

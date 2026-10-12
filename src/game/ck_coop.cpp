@@ -6,6 +6,7 @@
 
 #include "engine/lang.h"
 #include "game/ck_def.h"
+#include "render/art.h"
 
 namespace {
 
@@ -25,26 +26,6 @@ constexpr word s_keensuitdie2 = 0x0D4C;
 
 constexpr int SCOREBOXSPR = 253;
 
-// Tom's colours: a red helmet (Keen's is green), a green shirt (magenta) and
-// gray pants (blue). EGA colour indices, as Keen's sprites use them.
-constexpr byte kTomColours[16] = {
-    0,   // black
-    8,   // dark blue pants -> dark gray
-    4,   // dark green helmet -> dark red
-    3,   //
-    4,   // red shoes stay red
-    2,   // dark magenta shirt -> dark green
-    6,   //
-    7,   //
-    8,   //
-    7,   // light blue pants -> light gray
-    12,  // light green helmet -> light red
-    11,  //
-    12,  //
-    10,  // light magenta shirt -> light green
-    14,  //
-    15,  //
-};
 
 std::vector<byte> tomscorebox;
 int peakactors;
@@ -280,7 +261,7 @@ boolean CoopInPlay(int player) {
 }
 
 void CoopStartLevel() {
-  RF_SetVariantRemap(1, kTomColours);
+  RF_SetVariantRemap(1, keen4::render::TomColours());
   RF_SetOverlayHook(DrawBadges);
   RF_SetViews(nullptr, 0);
   split = CoopSplit{};

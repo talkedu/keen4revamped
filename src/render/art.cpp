@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "exe/keen4exe.h"
 #include "id/id_ca.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -74,9 +75,29 @@ const char* KindName(AssetKind kind) {
   switch (kind) {
     case AssetKind::Tile16: return "tile16";
     case AssetKind::Tile16M: return "tile16m";
+    case AssetKind::Sprite2: return "sprite2";
     default: return "sprite";
   }
 }
+
+constexpr std::uint8_t kTomColours[16] = {
+    0,   // black
+    8,   // dark blue pants -> dark gray
+    4,   // dark green helmet -> dark red
+    3,   //
+    4,   // red shoes stay red
+    2,   // dark magenta shirt -> dark green
+    6,   //
+    7,   //
+    8,   //
+    7,   // light blue pants -> light gray
+    12,  // light green helmet -> light red
+    15,  // light cyan pants highlights -> white (foam on the world map)
+    12,  //
+    10,  // light magenta shirt -> light green
+    14,  //
+    15,  //
+};
 
 }  // namespace
 
@@ -87,8 +108,26 @@ std::uint32_t EgaColor(int index) {
   return colors[index & 15];
 }
 
+const std::uint8_t* TomColours() { return kTomColours; }
+
+bool IsKeenSprite(int chunk) {
+  // the sprite lumps (DGROUP 1860 first chunk, 18AA last) of Keen on foot,
+  // on the world map and in the wetsuit
+  for (int lump : {1, 10, 32}) {
+    int first = exe::g_exe.Word(static_cast<std::uint16_t>(0x1860 + lump * 2));
+    int last = exe::g_exe.Word(static_cast<std::uint16_t>(0x18AA + lump * 2));
+    if (chunk >= first && chunk <= last) return true;
+  }
+  return false;
+}
+
 bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::vector<std::uint8_t>* indices) {
   switch (kind) {
+    case AssetKind::Sprite2:
+      if (!DecodeOriginal(AssetKind::Sprite, number, width, height, indices)) return false;
+      for (std::uint8_t& c : *indices)
+        if (c < 16) c = kTomColours[c];
+      return true;
     case AssetKind::Tile16: {
       if (number < 0 || number >= NUMTILE16) return false;
       CA_CacheGrChunk(STARTTILE16 + number);
@@ -162,6 +201,8 @@ void ArtLibrary::Reload() {
         k = static_cast<int>(AssetKind::Tile16M);
       else if (kind == "sprite")
         k = static_cast<int>(AssetKind::Sprite);
+      else if (kind == "sprite2")
+        k = static_cast<int>(AssetKind::Sprite2);
       else
         continue;
       Entry e;
