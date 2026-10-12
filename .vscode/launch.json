@@ -1,0 +1,75 @@
+{
+  // F5 builds the debug preset and starts the game under gdb.
+  // Ctrl+F5 runs the same config without the debugger.
+  // The game runs from the repository root, so it finds ./gamedata and ./art on its own.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Keen 4",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/keen4",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build debug",
+      "MIMode": "gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Keen 4 (classic 320x200)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/keen4",
+      "args": ["--classic"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build debug",
+      "MIMode": "gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Keen 4 (jump to level)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/keen4",
+      "args": ["/TEDLEVEL", "${input:level}", "${input:difficulty}"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build debug",
+      "MIMode": "gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Keen 4 (release)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/release/keen4",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build release",
+      "MIMode": "gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "level",
+      "type": "promptString",
+      "description": "Level number (0 is the world map)",
+      "default": "1"
+    },
+    {
+      "id": "difficulty",
+      "type": "pickString",
+      "description": "Difficulty",
+      "options": ["EASY", "NORMAL", "HARD"],
+      "default": "NORMAL"
+    }
+  ]
+}
