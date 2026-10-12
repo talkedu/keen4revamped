@@ -11,7 +11,7 @@
 #include "id/id_vw.h"
 #include "platform/headless/headless_platform.h"
 #include "render/art.h"
-#include "render/scene.h"
+#include "render/motion.h"
 
 // The engine reports fatal errors through Quit, normally from CK_MAIN.
 [[noreturn]] void Quit(const char* error) {
@@ -63,18 +63,43 @@ int main() {
   {
     using keen4::render::Scene;
     using keen4::render::SceneSprite;
+    using keen4::render::SpriteMotion;
     int worm = 0, other = 0;
-    Scene prev, cur;
-    prev.sprites.push_back(SceneSprite{&worm, 333, 100, 50, 0, 8, 2, false});
-    cur.sprites.push_back(SceneSprite{&worm, 334, 116, 46, 8, 4, 2, false});
+    Scene a, b;
+    a.map = b.map = 1;
+    a.sprites.push_back(SceneSprite{&worm, 333, 100, 50, 0, 8, 2, false});
+    b.sprites.push_back(SceneSprite{&worm, 334, 116, 46, 8, 4, 2, false});
+    SpriteMotion motion;
     float x = -1, y = -1;
-    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 0, 48, &x, &y) && x == 108 && y == 46);
-    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 1, 48, &x, &y) && x == 116 && y == 46);
-    CHECK(keen4::render::InterpolateSprite(prev, cur.sprites[0], 0.5f, 48, &x, &y) && x == 112);
+    motion.Update(a, 0.0);
+    CHECK(motion.Position(a.sprites[0], 0.0, &x, &y) && x == 100 && y == 50);
+    // a step half a second after the last one glides over half a second,
+    // and the hump's head (right edge) starts where the flat frame's was
+    motion.Update(a, 0.125);
+    motion.Update(b, 0.5);
+    CHECK(motion.Position(b.sprites[0], 0.5, &x, &y) && x == 108 && y == 46);
+    CHECK(motion.Position(b.sprites[0], 0.75, &x, &y) && x == 112);
+    CHECK(motion.Position(b.sprites[0], 1.0, &x, &y) && x == 116);
+    CHECK(motion.Position(b.sprites[0], 2.0, &x, &y) && x == 116);
+    // after a pause the next step glides at the usual pace
+    motion.Update(b, 2.0);
+    motion.Update(a, 2.125);
+    CHECK(motion.Position(a.sprites[0], 2.375, &x, &y) && x == 104);
+    CHECK(motion.Position(a.sprites[0], 2.625, &x, &y) && x == 100);
+    // an actor that speeds up is followed at once
+    SpriteMotion quick;
+    quick.Update(a, 0.0);
+    quick.Update(b, 0.5);
+    quick.Update(a, 0.5625);
+    CHECK(quick.Position(a.sprites[0], 0.625, &x, &y) && x == 100);
+    // a jump bigger than kMaxStep is not smoothed
+    Scene far = b;
+    far.sprites[0].x = 400;
+    motion.Update(far, 3.0);
+    CHECK(motion.Position(far.sprites[0], 3.0, &x, &y) && x == 400);
     x = -1;
-    CHECK(!keen4::render::InterpolateSprite(prev, cur.sprites[0], 0.5f, 4, &x, &y) && x == -1);
     SceneSprite stranger{&other, 334, 116, 46, 8, 4, 2, false};
-    CHECK(!keen4::render::InterpolateSprite(prev, stranger, 0.5f, 48, &x, &y) && x == -1);
+    CHECK(!motion.Position(stranger, 3.0, &x, &y) && x == -1);
   }
 
   // Art layers: curated art wins over the AI set, `bad` falls through to the

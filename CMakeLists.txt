@@ -44,6 +44,7 @@ add_library(keen4_engine STATIC
   src/id/id_us_2.cpp
   src/id/id_vw.cpp
   src/render/art.cpp
+  src/render/motion.cpp
   src/render/scene.cpp
   src/audio/audio_file.cpp
   src/audio/remaster_audio.cpp
