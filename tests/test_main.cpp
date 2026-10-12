@@ -8,6 +8,7 @@
 #include "engine/lang.h"
 #include "engine/version.h"
 #include "id/id_ca.h"
+#include "id/id_in.h"
 #include "id/id_vw.h"
 #include "platform/headless/headless_platform.h"
 #include "render/art.h"
@@ -42,6 +43,57 @@ int main() {
   platform.PushKey(0x39, true);
   CHECK(platform.PollKey(&event) && event.scancode == 0x39 && event.down);
   CHECK(!platform.PollKey(&event));
+
+  // Gamepad: plugging one in switches control to it, its buttons type menu
+  // keys outside the play loop, a key press or unplugging goes back to the
+  // keyboard.
+  {
+    using namespace keen4::platform;
+    Set(&platform);
+    Controls[0] = ctrl_Keyboard1;
+    GamepadState pad;
+    pad.connected = true;
+    pad.name = "Test Pad";
+    platform.SetGamepad(pad);
+    IN_PumpEvents();
+    CHECK(JoysPresent[0] && Controls[0] == ctrl_Joystick1 && IN_GamepadActive());
+
+    IN_ClearKeysDown();
+    pad.buttons = kPadA;
+    platform.SetGamepad(pad);
+    IN_PumpEvents();
+    CHECK(LastScan == sc_Return && Keyboard[sc_Return] && IN_JoyButtons() == 1);
+    pad.buttons = 0;
+    pad.y = 0.9f;  // stick down
+    platform.SetGamepad(pad);
+    IN_PumpEvents();
+    CHECK(!Keyboard[sc_Return] && Keyboard[sc_DownArrow] && LastScan == sc_DownArrow);
+
+    // held through a clear, a button does nothing until pressed again
+    pad.y = 0;
+    pad.buttons = kPadB;
+    platform.SetGamepad(pad);
+    IN_PumpEvents();
+    CHECK(Keyboard[sc_Escape]);
+    IN_ClearKeysDown();
+    IN_PumpEvents();
+    CHECK(!Keyboard[sc_Escape] && IN_JoyButtons() == 0);
+
+    platform.PushKey(sc_Space, true);
+    IN_PumpEvents();
+    CHECK(Controls[0] == ctrl_Keyboard1 && !IN_GamepadActive());
+    platform.PushKey(sc_Space, false);
+    pad.buttons = kPadX;
+    platform.SetGamepad(pad);
+    IN_PumpEvents();
+    CHECK(Controls[0] == ctrl_Joystick1);
+
+    platform.SetGamepad(GamepadState{});
+    IN_PumpEvents();
+    CHECK(!JoysPresent[0] && Controls[0] == ctrl_Keyboard1 && IN_JoyButtons() == 0);
+    IN_ClearKeysDown();
+    Set(nullptr);
+  }
 
   // Scale4x: 4x the size, no new colours, and a flat image stays flat.
   {

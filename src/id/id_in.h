@@ -80,5 +80,19 @@ void IN_Ack();
 boolean IN_IsUserInput();
 boolean IN_UserInput(longword delay, boolean clear);
 
-// Port: drains platform key events into the state above (the keyboard ISR).
+// Port: drains platform key events into the state above (the keyboard ISR),
+// and reads the gamepad.
 void IN_PumpEvents();
+
+// Port: gamepad support. The newest connected SDL gamepad is joystick 1, and
+// Controls[0] switches to it when it connects or is used, and back to the
+// keyboard when a key is pressed or the pad is unplugged.
+// The play loop calls this every frame; while it does, the pad steers Keen.
+// Elsewhere its buttons type the keys menus wait for (stick and d-pad as
+// arrows, A Return, B and Start Escape).
+void IN_NoteGameplay();
+// True while a gamepad is connected and Controls[0] is a joystick.
+boolean IN_GamepadActive();
+// Face buttons held, numbered like a four-button Gravis pad: bit 0 A, 1 B,
+// 2 X, 3 Y.
+word IN_JoyButtons();
