@@ -220,6 +220,37 @@ const ArtImage& ArtLibrary::Get(AssetKind kind, int number) {
   return cache_[key] = Build(kind, number);
 }
 
+const ArtImage& ArtLibrary::GetData(int number, const std::uint8_t* data) {
+  auto& [sum, img] = data_images_[data];
+  if (number < STARTSPRITES || number >= STARTSPRITES + NUMSPRITES || !spritetable) return img;
+  const spritetabletype& spr = spritetable[number - STARTSPRITES];
+  const std::uint32_t size = static_cast<std::uint32_t>(spr.width) * spr.height * 5;
+  std::uint32_t now = 0;
+  for (std::uint32_t i = 0; i < size; i++) now = now * 31 + data[i];
+  if (img.origw && sum == now) return img;
+  sum = now;
+  const std::uint32_t revision = img.revision + 1;
+  int w = spr.width * 8, h = spr.height;
+  std::vector<std::uint8_t> indices;
+  Unplane(data + spr.width * spr.height, data, spr.width, spr.height, &indices);
+  std::vector<std::uint8_t> big = fallback_ == Fallback::Scale4x ? Scale4x(indices, w, h) : std::vector<std::uint8_t>();
+  if (big.empty()) {
+    big.resize(static_cast<std::size_t>(w) * h * 16);
+    for (int y = 0; y < h * 4; y++)
+      for (int x = 0; x < w * 4; x++)
+        big[static_cast<std::size_t>(y) * w * 4 + x] = indices[static_cast<std::size_t>(y / 4) * w + x / 4];
+  }
+  img = ArtImage{};
+  img.origw = w;
+  img.origh = h;
+  img.width = w * 4;
+  img.height = h * 4;
+  img.pixels.resize(big.size());
+  for (std::size_t i = 0; i < big.size(); i++) img.pixels[i] = Rgba(big[i]);
+  img.revision = revision;
+  return img;
+}
+
 ArtImage ArtLibrary::Build(AssetKind kind, int number) {
   ArtImage img;
   int w = 0, h = 0;

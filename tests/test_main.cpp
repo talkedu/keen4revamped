@@ -7,6 +7,7 @@
 
 #include "engine/lang.h"
 #include "engine/version.h"
+#include "game/coop_split.h"
 #include "id/id_ca.h"
 #include "id/id_in.h"
 #include "id/id_vw.h"
@@ -130,6 +131,37 @@ int main() {
     CHECK(Controls[0] == ctrl_Keyboard1);
     IN_ClearKeysDown();
     Set(nullptr);
+  }
+
+  // Co-op split screen: one view until the Keens are too far apart for it,
+  // split side by side or stacked by where they are further apart, back to
+  // one view after they fit again for half a second and the divider slid away.
+  {
+    CoopSplit s{};
+    auto box = [](int x, int y) { return CoopBox{x, y, x + 16, y + 32}; };
+    CoopSplitStep(&s, box(100, 100), box(300, 100), 3);  // 216 apart: fits in 256
+    CHECK(s.mode == coop_shared);
+    CoopSplitStep(&s, box(100, 100), box(360, 120), 3);  // 276 across
+    CHECK(s.mode == coop_sidebyside && CoopSplitSize(s) == 160);
+    CoopSplitStep(&s, box(100, 100), box(330, 100), 3);  // closer, but not by the margin
+    CHECK(s.mode == coop_sidebyside && s.fittics == 0);
+    CoopSplit t{};
+    CoopSplitStep(&t, box(100, 0), box(110, 170), 3);  // 202 up and down
+    CHECK(t.mode == coop_stacked && CoopSplitSize(t) == 100);
+    int tics = 0;
+    while (s.mode != coop_shared && tics < 200) {
+      CoopSplitStep(&s, box(100, 100), box(200, 100), 3);
+      tics += 3;
+      if (s.slidetics) CHECK(CoopSplitSize(s) >= 160 && CoopSplitSize(s) <= 320);
+    }
+    CHECK(s.mode == coop_shared && tics >= COOP_MERGETICS + COOP_SLIDETICS);
+    CHECK(tics < COOP_MERGETICS + COOP_SLIDETICS + 9);
+    // moving apart again while the divider slides keeps the split
+    CoopSplitStep(&s, box(0, 100), box(400, 100), 3);
+    for (int i = 0; i < 14; i++) CoopSplitStep(&s, box(100, 100), box(200, 100), 3);
+    CHECK(s.slidetics > 0);
+    CoopSplitStep(&s, box(0, 100), box(400, 100), 3);
+    CHECK(s.mode == coop_sidebyside && s.slidetics == 0 && CoopSplitSize(s) == 160);
   }
 
   // Scale4x: 4x the size, no new colours, and a flat image stays flat.

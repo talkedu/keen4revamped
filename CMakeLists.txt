@@ -66,6 +66,7 @@ add_library(keen4_game STATIC
   src/game/ck_keen.cpp
   src/game/ck_keen2.cpp
   src/game/ck_coop.cpp
+  src/game/coop_split.cpp
   src/game/ck_states.cpp
   src/game/k4_spec.cpp
   src/game/k4_act1.cpp

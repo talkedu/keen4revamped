@@ -339,18 +339,23 @@ void UpdateScore(objtype* ob) {
     changed = true;
   }
 
-  if (ob->x != originxglobal || ob->y != originyglobal) {
-    ob->x = originxglobal;
-    ob->y = originyglobal;
+  // port: in co-op each player's box has its place, and on a split screen
+  // shows only in his view
+  word x = originxglobal, y = originyglobal;
+  int view = -1;
+  if (numplayers > 1) CoopScoreBoxAt(tom ? 1 : 0, width * 8, &x, &y, &view);
+  if (ob->x != x || ob->y != y) {
+    ob->x = x;
+    ob->y = y;
     changed = true;
   }
 
   if (changed) {
-    word x = static_cast<word>(ob->x + 4 * PIXGLOBAL);
-    if (tom) x = static_cast<word>(ob->x + (SCREENWIDTH - 4 - width * 8) * PIXGLOBAL);
-    RF_PlaceSprite(&ob->sprite, x, static_cast<word>(ob->y + 4 * PIXGLOBAL), SCOREBOXSPR, spritedraw, 3);
+    RF_PlaceSprite(&ob->sprite, static_cast<word>(ob->x + 4 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL),
+                   SCOREBOXSPR, spritedraw, 3);
     if (tom) RF_SetSpriteVariant(ob->sprite, 1, shape);
   }
+  if (numplayers > 1) RF_SetSpriteView(ob->sprite, view);
 }
 
 // 0D8F:050A

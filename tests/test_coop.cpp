@@ -39,7 +39,8 @@ struct Event {
 
 struct Run {
   std::vector<Event> events;
-  std::string end;  // the "map ... ends" line
+  std::vector<std::string> lines;  // every co-op line
+  std::string end;                 // the "map ... ends" line
 };
 
 // Keys pressed together at `tic` for 5 tics.
@@ -73,6 +74,7 @@ Run Play(const std::string& keys, int tics) {
   while (std::fgets(line, sizeof line, p)) {
     if (std::strncmp(line, "co-op: ", 7)) continue;
     std::string text(line + 7);
+    run.lines.push_back(text);
     if (text.find(" ends ") != std::string::npos) {
       if (run.end.empty()) run.end = text;
       continue;
@@ -143,6 +145,19 @@ int main() {
     const Event* second = Find(run, 2, "reached the exit");
     CHECK(first && second && first->tic < second->tic && second->tic - first->tic > 200);
     CHECK(run.end.find("(playstate 2)") != std::string::npos);  // ex_completed
+  }
+
+  // Billy walks away to the left: the screen splits side by side, and when he
+  // comes back it is one view again.
+  {
+    Run run = Play("300:75:1,700:75:0,800:77:1,1150:77:0", 1600);
+    std::size_t split = run.lines.size(), merged = run.lines.size();
+    for (std::size_t i = 0; i < run.lines.size(); i++) {
+      if (split == run.lines.size() && run.lines[i].find("screen splits side by side") != std::string::npos) split = i;
+      if (split < i && run.lines[i].find("screen is one view") != std::string::npos) merged = i;
+    }
+    CHECK(split < run.lines.size());
+    CHECK(merged < run.lines.size());
   }
 
   // Points are each player's own: the free-items cheat gives Billy 3000.

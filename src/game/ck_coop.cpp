@@ -1,8 +1,10 @@
 // Port: two-player co-op. Billy (player 1) and his twin brother Tom (player 2)
 // play the same level; see the co-op section of ck_def.h for the rules.
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
+#include "engine/lang.h"
 #include "game/ck_def.h"
 
 namespace {
@@ -136,6 +138,135 @@ boolean CameraTarget(objtype* target) {
   return true;
 }
 
+CoopSplit split;
+
+CoopBox BoxOf(const objtype* ob) {
+  return CoopBox{ob->left >> G_P_SHIFT, ob->top >> G_P_SHIFT, ob->right >> G_P_SHIFT, ob->bottom >> G_P_SHIFT};
+}
+
+// The current camera follows `ob` by the original rules.
+void Follow(objtype* ob) {
+  if (mapon != 0 && mapon != 17)
+    ScrollCamera(ob);
+  else
+    WorldScrollScreen(ob);
+}
+
+// The size of camera i's view on a split screen.
+void ViewSize(int i, int* width, int* height) {
+  const int size = CoopSplitSize(split);
+  if (split.mode == coop_stacked) {
+    *width = SCREENWIDTH;
+    *height = i ? SCREENHEIGHT - size : size;
+  } else {
+    *width = i ? SCREENWIDTH - size : size;
+    *height = SCREENHEIGHT;
+  }
+}
+
+// Moves the part of camera i's 320x200 view that its half shows so that the
+// Keen stays in its middle, as the camera itself keeps him in the middle of
+// the whole view.
+void FollowWindow(int i, const objtype* ob) {
+  Camera& cam = cameras[i];
+  int w, h;
+  ViewSize(i, &w, &h);
+  const int kx = (ob->left + ob->right) / 2 / PIXGLOBAL - cam.originxglobal / PIXGLOBAL;
+  const int ky = ob->bottom / PIXGLOBAL - cam.originyglobal / PIXGLOBAL;
+  if (kx - cam.windowx < w / 2 - 24) cam.windowx = kx - (w / 2 - 24);
+  if (kx - cam.windowx > w / 2 + 24) cam.windowx = kx - (w / 2 + 24);
+  if (ky - cam.windowy < h / 2) cam.windowy = ky - h / 2;
+  if (ky - cam.windowy > h * 4 / 5) cam.windowy = ky - h * 4 / 5;
+  cam.windowx = std::clamp(cam.windowx, 0, SCREENWIDTH - w);
+  cam.windowy = std::clamp(cam.windowy, 0, SCREENHEIGHT - h);
+}
+
+void SetSplitViews() {
+  const int size = CoopSplitSize(split);
+  RF_View views[2];
+  for (int i = 0; i < 2; i++) {
+    Camera& cam = cameras[i];
+    ViewSize(i, &cam.width, &cam.height);
+    cam.x = split.mode == coop_sidebyside && i ? size : 0;
+    cam.y = split.mode == coop_stacked && i ? size : 0;
+    cam.windowx = std::clamp(cam.windowx, 0, SCREENWIDTH - cam.width);
+    cam.windowy = std::clamp(cam.windowy, 0, SCREENHEIGHT - cam.height);
+    views[i] = RF_View{cam.originxglobal, cam.originyglobal, cam.windowx, cam.windowy,
+                       cam.x,             cam.y,             cam.width,   cam.height};
+  }
+  RF_SetViews(views, 2);
+}
+
+// The screen splits: both cameras start where the shared one is, each
+// showing the half its Keen is in (player 1 left or on top); a Keen out of
+// the whole view (came out of a door) gets his camera centred on him.
+void StartSplit() {
+  std::fprintf(stderr, "co-op: tic %lu screen splits %s\n", static_cast<unsigned long>(TimeCount),
+               split.mode == coop_stacked ? "stacked" : "side by side");
+  StoreCamera();
+  cameras[1] = cameras[0];
+  numcameras = 2;
+  const int size = CoopSplitSize(split);
+  cameras[0].windowx = cameras[0].windowy = 0;
+  cameras[1].windowx = split.mode == coop_sidebyside ? size : 0;
+  cameras[1].windowy = split.mode == coop_stacked ? size : 0;
+  for (int i = 0; i < 2; i++) {
+    const objtype* ob = players[i].ob;
+    const Camera& cam = cameras[i];
+    const bool inview = ob->right > cam.originxglobal &&
+                        ob->left < static_cast<word>(cam.originxglobal + SCREENWIDTH * PIXGLOBAL) &&
+                        ob->bottom > cam.originyglobal &&
+                        ob->top < static_cast<word>(cam.originyglobal + SCREENHEIGHT * PIXGLOBAL);
+    if (inview) continue;
+    SelectCamera(i);
+    CenterActor(players[i].ob);
+    StoreCamera();
+    SelectCamera(0);
+  }
+  for (int i = 0; i < 2; i++) FollowWindow(i, players[i].ob);
+}
+
+// Back to one view, camera `keep`'s.
+void EndSplit(int keep) {
+  std::fprintf(stderr, "co-op: tic %lu screen is one view\n", static_cast<unsigned long>(TimeCount));
+  StoreCamera();
+  if (keep != 0) cameras[0] = cameras[keep];
+  curcamera = 0;
+  LoadCamera();
+  numcameras = 1;
+  split = CoopSplit{};
+  RF_SetViews(nullptr, 0);
+}
+
+// The overlay: who is out, and for how long.
+void DrawBadges() {
+  int row = 0;
+  for (int i = 0; i < numplayers; i++) {
+    const PlayerState& ps = players[i];
+    char text[64];
+    const char* name = i ? "TOM" : "BILLY";
+    if (ps.status == coop_respawning) {
+      std::int32_t left = static_cast<std::int32_t>(ps.respawntime - lasttimecount);
+      std::snprintf(text, sizeof text, "%s %ld", name, static_cast<long>((left + 69) / 70));
+    } else if (ps.status == coop_atexit) {
+      std::snprintf(text, sizeof text, "%s: %s", name, keen4::lang::Tr("WAITING"));
+    } else {
+      continue;
+    }
+    word w, h;
+    VW_MeasurePropString(text, &w, &h);
+    int x = (SCREENWIDTH - w) / 2, y = 4 + row * (h + 4);
+    VWB_Bar(x - 3, y - 1, w + 6, h + 2, 0);
+    px = static_cast<sword>(x);
+    py = static_cast<sword>(y);
+    byte color = fontcolor;
+    fontcolor = 15;
+    VWB_DrawPropString(text);
+    fontcolor = color;
+    row++;
+  }
+}
+
 }  // namespace
 
 boolean CoopHidden(const objtype* ob) {
@@ -150,6 +281,11 @@ boolean CoopInPlay(int player) {
 
 void CoopStartLevel() {
   RF_SetVariantRemap(1, kTomColours);
+  RF_SetOverlayHook(DrawBadges);
+  RF_SetViews(nullptr, 0);
+  split = CoopSplit{};
+  numcameras = 1;
+  curcamera = 0;
   peakactors = 0;
   for (int i = 0; i < numplayers; i++) {
     PlayerState& ps = players[i];
@@ -245,13 +381,63 @@ void CoopScroll() {
       if (CoopInPlay(i)) LeftTheMap(players[i].ob);
   }
   if (playstate != ex_stillplaying) return;
-  objtype target;
-  if (!CameraTarget(&target)) return;
-  if (mapon != 0 && mapon != 17)
-    ScrollCamera(&target);
-  else
-    WorldScrollScreen(&target);
+
+  // one view or two
+  const int before = split.mode;
+  if (CoopInPlay(0) && CoopInPlay(1)) {
+    CoopSplitStep(&split, BoxOf(players[0].ob), BoxOf(players[1].ob), tics);
+    if (!before && split.mode) StartSplit();
+    if (before && !split.mode) EndSplit(0);
+  } else if (split.mode) {
+    // a Keen out of play has no view: the other's takes the screen
+    EndSplit(CoopInPlay(1) ? 1 : 0);
+  }
+
+  if (!split.mode) {
+    objtype target;
+    if (CameraTarget(&target)) Follow(&target);
+    return;
+  }
+
+  // each half follows its own Keen; while the divider slides away, player
+  // 1's half already follows both
+  for (int i = 0; i < 2; i++) {
+    SelectCamera(i);
+    objtype target;
+    objtype* follow = players[i].ob;
+    if (i == 0 && split.slidetics && CameraTarget(&target)) follow = &target;
+    Follow(follow);
+    StoreCamera();
+    FollowWindow(i, follow);
+  }
+  SelectCamera(0);
+  SetSplitViews();
 }
+
+void CoopCenterOn(objtype* ob) {
+  int i = PlayerIndex(ob);
+  if (numcameras < 2 || i < 0) return;
+  SelectCamera(i);
+  CenterActor(ob);
+  StoreCamera();
+  SelectCamera(0);
+}
+
+void CoopScoreBoxAt(int who, int boxwidth, word* x, word* y, int* view) {
+  if (numcameras > 1) {
+    StoreCamera();
+    const Camera& cam = cameras[who];
+    *x = static_cast<word>(cam.originxglobal + cam.windowx * PIXGLOBAL);
+    *y = static_cast<word>(cam.originyglobal + cam.windowy * PIXGLOBAL);
+    *view = who;
+    return;
+  }
+  // one view: Billy's box top left, Tom's top right
+  *x = static_cast<word>(originxglobal + (who ? (SCREENWIDTH - 8 - boxwidth) * PIXGLOBAL : 0));
+  *y = originyglobal;
+  *view = -1;
+}
+
 
 void CoopCenter() {
   objtype target;
@@ -284,6 +470,9 @@ int CoopStatusPlayer() {
 }
 
 void CoopEndLevel() {
+  RF_SetOverlayHook(nullptr);
+  RF_SetViews(nullptr, 0);
+  if (numcameras > 1) EndSplit(0);
   std::fprintf(stderr, "co-op: tic %lu map %d ends (playstate %d), scores %ld %ld, lives %d, at most %d of %d actors\n",
                static_cast<unsigned long>(TimeCount), mapon, static_cast<int>(playstate),
                static_cast<long>(players[0].score), static_cast<long>(players[1].score), gamestate.lives, peakactors,

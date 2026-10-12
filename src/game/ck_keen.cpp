@@ -390,7 +390,11 @@ void KeenEnterThink(objtype* ob) {
   ob->needtoclip = cl_noclip;
   ChangeState(ob, ob->state->nextstate);
   ob->needtoclip = cl_midclip;
-  CenterActor(ob);
+  // port: on a split screen only his own camera follows him
+  if (numplayers > 1 && numcameras > 1)
+    CoopCenterOn(ob);
+  else
+    CenterActor(ob);
 }
 
 // 0B80:08B9

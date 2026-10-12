@@ -57,6 +57,7 @@ struct spritelisttype {
   word priority;
   int variant;        // port: 0, or 1 for player 2's look in co-op
   const byte* data;   // port: graphics to draw instead of the chunk's
+  int view;           // port: the only split-screen view it shows in, or -1
   spritelisttype** prevptr;
   spritelisttype* next;
 };
@@ -72,6 +73,13 @@ void (*refreshvector)();
 word panx, pany;
 
 const byte* variantremap[2];
+
+// Port: split-screen views (co-op). With fewer than two, the classic view.
+RF_View views[2];
+int numviews;
+boolean viewactive;          // drawing one view of several
+int viewshiftx, viewshifty;  // its world pixel at screen (0, 0)
+void (*overlayhook)();
 
 word ReadInfo(const byte* table, int index) { return table[index]; }
 sword ReadInfoSigned(const byte* table, int index) { return static_cast<signed char>(table[index]); }
@@ -350,7 +358,7 @@ void DrawTileCell(int sx, int sy, word bgtile, word fgtile) {
   }
   for (int row = 0; row < 16; row++) {
     int y = sy + row;
-    if (static_cast<unsigned>(y) >= SCREENHEIGHT) continue;
+    if (y < vw_clipy0 || y >= vw_clipy1) continue;
     for (int b = 0; b < 2; b++) {
       int idx = row * 2 + b;
       byte planes[4];
@@ -361,7 +369,7 @@ void DrawTileCell(int sx, int sy, word bgtile, word fgtile) {
       }
       for (int bit = 0; bit < 8; bit++) {
         int x = sx + b * 8 + bit;
-        if (static_cast<unsigned>(x) >= SCREENWIDTH) continue;
+        if (x < vw_clipx0 || x >= vw_clipx1) continue;
         byte sel = static_cast<byte>(0x80 >> bit);
         vw_screen[y * SCREENWIDTH + x] = static_cast<byte>(((planes[0] & sel) ? 1 : 0) | ((planes[1] & sel) ? 2 : 0) |
                                                            ((planes[2] & sel) ? 4 : 0) | ((planes[3] & sel) ? 8 : 0));
@@ -377,12 +385,12 @@ void MaskForegroundTile(int sx, int sy, word fgtile) {
   if (!fg) return;
   for (int row = 0; row < 16; row++) {
     int y = sy + row;
-    if (static_cast<unsigned>(y) >= SCREENHEIGHT) continue;
+    if (y < vw_clipy0 || y >= vw_clipy1) continue;
     for (int b = 0; b < 2; b++) {
       int idx = row * 2 + b;
       for (int bit = 0; bit < 8; bit++) {
         int x = sx + b * 8 + bit;
-        if (static_cast<unsigned>(x) >= SCREENWIDTH) continue;
+        if (x < vw_clipx0 || x >= vw_clipx1) continue;
         byte sel = static_cast<byte>(0x80 >> bit);
         byte& pixel = vw_screen[y * SCREENWIDTH + x];
         byte out = 0;
@@ -397,8 +405,8 @@ void MaskForegroundTile(int sx, int sy, word fgtile) {
   }
 }
 
-int ViewPixelX() { return originxglobal >> G_P_SHIFT; }
-int ViewPixelY() { return originyglobal >> G_P_SHIFT; }
+int ViewPixelX() { return viewactive ? viewshiftx : originxglobal >> G_P_SHIFT; }
+int ViewPixelY() { return viewactive ? viewshifty : originyglobal >> G_P_SHIFT; }
 
 void DrawTiles() {
   int px0 = originxtile * 16 - ViewPixelX();
@@ -427,11 +435,12 @@ void MaskForegroundTiles() {
   }
 }
 
-// 1654:1A6E
-void RFL_UpdateSprites() {
+// 1654:1A6E. Port: `view` is the split-screen view being drawn, or -1.
+void RFL_UpdateSprites(int view = -1) {
   for (int priority = 0; priority < PRIORITIES; priority++) {
     if (priority == MASKEDTILEPRIORITY) MaskForegroundTiles();
     for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
+      if (view >= 0 && sprite->view >= 0 && sprite->view != view) continue;
       const byte* data = sprite->data ? sprite->data : grsegs[sprite->grchunk];
       if (!data) continue;
       int sx = sprite->worldx - ViewPixelX();
@@ -446,6 +455,67 @@ void RFL_UpdateSprites() {
   }
 }
 
+// Port: draws every view of a split screen in its own rectangle, then the
+// divider between them.
+void DrawViews() {
+  const word savedx = originxglobal, savedy = originyglobal;
+  for (int v = 0; v < numviews; v++) {
+    const RF_View& view = views[v];
+    if (view.width <= 0 || view.height <= 0) continue;
+    RFL_CalcOriginStuff(view.originx, view.originy);
+    viewactive = true;
+    viewshiftx = (view.originx >> G_P_SHIFT) + view.windowx - view.x;
+    viewshifty = (view.originy >> G_P_SHIFT) + view.windowy - view.y;
+    vw_clipx0 = view.x;
+    vw_clipy0 = view.y;
+    vw_clipx1 = view.x + view.width;
+    vw_clipy1 = view.y + view.height;
+    DrawTiles();
+    RFL_UpdateSprites(v);
+  }
+  viewactive = false;
+  vw_clipx0 = vw_clipy0 = 0;
+  vw_clipx1 = SCREENWIDTH;
+  vw_clipy1 = SCREENHEIGHT;
+  RFL_CalcOriginStuff(savedx, savedy);
+  if (numviews == 2 && views[0].width > 0 && views[1].width > 0 && views[0].height > 0 && views[1].height > 0) {
+    if (views[1].x > views[0].x)
+      VW_Bar(views[1].x - 1, 0, 2, SCREENHEIGHT, 0);
+    else
+      VW_Bar(0, views[1].y - 1, SCREENWIDTH, 2, 0);
+  }
+}
+
+// Tiles around a view, for the remaster renderer: `viewx`, `viewy` is the
+// world pixel at the classic view's top-left, `width` x `height` its size in
+// the remaster view, which is wider than the classic one and centred on it.
+void CaptureTiles(int viewx, int viewy, int classicwidth, int width, int height, int* tilex0, int* tiley0,
+                  int* cols, int* rows, std::vector<std::uint16_t>* bgs, std::vector<std::uint16_t>* fgs,
+                  std::vector<std::uint8_t>* fronts) {
+  // one spare tile on each side for smooth scrolling
+  *tilex0 = (viewx - (width - classicwidth) / 2) / 16 - 1;
+  *tiley0 = viewy / 16 - 1;
+  *cols = width / 16 + 4;
+  *rows = height / 16 + 4;
+  const std::size_t cells = static_cast<std::size_t>(*cols) * *rows;
+  bgs->assign(cells, 0);
+  fgs->assign(cells, 0);
+  fronts->assign(cells, 0);
+  for (int ty = 0; ty < *rows; ty++) {
+    int my = *tiley0 + ty;
+    if (my < 0 || my >= mapheight) continue;
+    for (int tx = 0; tx < *cols; tx++) {
+      int mx = *tilex0 + tx;
+      if (mx < 0 || mx >= mapwidth) continue;
+      std::size_t i = static_cast<std::size_t>(ty) * *cols + tx;
+      (*bgs)[i] = *MapPlane(0, mx, my);
+      word fg = *MapPlane(1, mx, my);
+      (*fgs)[i] = fg;
+      (*fronts)[i] = (fg && (tinf[INTILE + fg] & 0x80)) ? 1 : 0;
+    }
+  }
+}
+
 // Port: records the frame just drawn for the remaster renderer.
 void CaptureScene() {
   keen4::render::Scene& s = keen4::render::BeginCapture();
@@ -454,33 +524,35 @@ void CaptureScene() {
   s.viewy = ViewPixelY();
   s.minx = originxmin >> G_P_SHIFT;
   s.maxx = (originxmax >> G_P_SHIFT) + keen4::render::kClassicWidth;
-  // tiles under the wide view, one spare on each side for smooth scrolling
-  s.tilex0 = (s.viewx - keen4::render::kWideMargin) / 16 - 1;
-  s.tiley0 = s.viewy / 16 - 1;
-  s.cols = keen4::render::kWideWidth / 16 + 4;
-  s.rows = keen4::render::kClassicHeight / 16 + 4;
-  const std::size_t cells = static_cast<std::size_t>(s.cols) * s.rows;
-  s.bg.assign(cells, 0);
-  s.fg.assign(cells, 0);
-  s.fgfront.assign(cells, 0);
-  for (int ty = 0; ty < s.rows; ty++) {
-    int my = s.tiley0 + ty;
-    if (my < 0 || my >= mapheight) continue;
-    for (int tx = 0; tx < s.cols; tx++) {
-      int mx = s.tilex0 + tx;
-      if (mx < 0 || mx >= mapwidth) continue;
-      std::size_t i = static_cast<std::size_t>(ty) * s.cols + tx;
-      s.bg[i] = *MapPlane(0, mx, my);
-      word fg = *MapPlane(1, mx, my);
-      s.fg[i] = fg;
-      s.fgfront[i] = (fg && (tinf[INTILE + fg] & 0x80)) ? 1 : 0;
+  using keen4::render::kClassicWidth;
+  using keen4::render::kWideWidth;
+  s.views.clear();
+  if (numviews > 1) {
+    // split screen: each view's tiles; a view shows in a remaster rectangle as
+    // much wider than its classic one as the whole remaster view is
+    for (int v = 0; v < numviews; v++) {
+      const RF_View& view = views[v];
+      keen4::render::SceneView& sv = s.views.emplace_back();
+      sv.viewx = (view.originx >> G_P_SHIFT) + view.windowx;
+      sv.viewy = (view.originy >> G_P_SHIFT) + view.windowy;
+      sv.x = view.x;
+      sv.y = view.y;
+      sv.w = view.width;
+      sv.h = view.height;
+      int wide = view.width * kWideWidth / kClassicWidth;
+      CaptureTiles(sv.viewx, sv.viewy, view.width, wide, view.height, &sv.tilex0, &sv.tiley0, &sv.cols, &sv.rows,
+                   &sv.bg, &sv.fg, &sv.fgfront);
     }
+  } else {
+    CaptureTiles(s.viewx, s.viewy, kClassicWidth, kWideWidth, keen4::render::kClassicHeight, &s.tilex0, &s.tiley0,
+                 &s.cols, &s.rows, &s.bg, &s.fg, &s.fgfront);
   }
   for (int priority = 0; priority < PRIORITIES; priority++) {
     for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
       if (!grsegs[sprite->grchunk]) continue;
       s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, sprite->artx, sprite->arty,
-                           priority, sprite->draw != spritedraw, sprite->variant, sprite->data});
+                           priority, sprite->draw != spritedraw, sprite->variant, sprite->data,
+                           numviews > 1 ? sprite->view : -1});
     }
   }
   std::memcpy(s.classic.data(), vw_screen, s.classic.size());
@@ -524,6 +596,7 @@ void RF_NewMap() {
   RFL_InitSpriteList();
   RFL_InitAnimList();
   numcameras = numprevcameras = 0;
+  numviews = 0;
   rebuildanims = false;
   hscrolledge = vscrolledge = 0;
 
@@ -712,6 +785,7 @@ void RF_PlaceSprite(void** user, word globalx, word globaly, word spritenumber, 
     spritefreeptr = spritefreeptr->next;
     sprite->variant = 0;
     sprite->data = nullptr;
+    sprite->view = -1;
   }
   if (link) {
     spritelisttype* next = prioritystart[priority];
@@ -788,16 +862,21 @@ void RF_CalcTics() {
 void RF_Refresh() {
   if (cameramode) RFL_UpdateCameraAnims();
   RFL_AnimateTiles();
-  if (masteractive)
+  if (masteractive) {
     std::memcpy(vw_screen, masterscreen, sizeof masterscreen);
-  else
+    RFL_UpdateSprites();
+  } else if (numviews > 1) {
+    DrawViews();
+  } else {
     DrawTiles();
-  RFL_UpdateSprites();
+    RFL_UpdateSprites();
+  }
   // A background drawn on (the high score table) has no tile scene to redraw.
   if (masteractive)
     keen4::render::InvalidateScene();
   else
     CaptureScene();
+  if (overlayhook) overlayhook();
   if (refreshvector) refreshvector();
   VW_UpdateScreen();
   RF_CalcTics();
@@ -837,6 +916,22 @@ void RF_SetSpriteVariant(void* sprite, int variant, const byte* data) {
   s->variant = variant;
   s->data = data;
 }
+
+void RF_SetSpriteView(void* sprite, int view) {
+  if (sprite) static_cast<spritelisttype*>(sprite)->view = view;
+}
+
+void RF_SetViews(const RF_View* list, int count) {
+  numviews = count < 2 ? count : 2;
+  RF_Origin origins[2];
+  for (int i = 0; i < numviews; i++) {
+    views[i] = list[i];
+    origins[i] = RF_Origin{list[i].originx, list[i].originy};
+  }
+  if (numviews) RF_SetCameras(origins, numviews);
+}
+
+void RF_SetOverlayHook(void (*func)()) { overlayhook = func; }
 
 void RF_SetCameraMode(boolean on) {
   if (on == cameramode) return;

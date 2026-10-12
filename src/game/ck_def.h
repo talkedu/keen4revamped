@@ -14,6 +14,8 @@
 #include "id/id_us.h"
 #include "id/id_vw.h"
 
+#include "game/coop_split.h"
+
 // ---------------------------------------------------------------------------
 // Objects and states
 
@@ -241,6 +243,13 @@ int CoopStatusPlayer();
 void CoopEndLevel();
 // F10 + 1/2 kills Billy/Tom, F10 + 3/4 sends him off the map (to test co-op).
 void CoopDebugKeys();
+// A Keen came out of a door: on a split screen his camera jumps there.
+void CoopCenterOn(objtype* ob);
+// Where player `who`'s score box goes (global units, before its 4-pixel
+// margin) and the split-screen view it belongs to (-1 for all).
+void CoopScoreBoxAt(int who, int boxwidth, word* x, word* y, int* view);
+
+// The split screen: see game/coop_split.h.
 
 extern PlayerState players[MAXPLAYERS];
 extern int numplayers;  // 1, or 2 in co-op
@@ -275,6 +284,10 @@ struct Camera {
   word inactivateleft, inactivateright, inactivatetop, inactivatebottom;
   word centerlevel;
   boolean lockscroll;
+  // Port: on a split screen, the part of the camera's 320x200 view shown
+  // (from windowx, windowy) and where on the screen (x, y, width, height).
+  int windowx, windowy;
+  int x, y, width, height;
 };
 
 extern Camera cameras[MAXCAMERAS];
@@ -283,6 +296,10 @@ extern int curcamera;
 
 // Stores the current camera's globals and makes camera `i` current.
 void SelectCamera(int i);
+// Stores the current camera's globals in cameras[curcamera], or loads them
+// from there.
+void StoreCamera();
+void LoadCamera();
 
 // Tile bounds of one camera's view and of where its actors stay awake.
 struct ViewBounds {

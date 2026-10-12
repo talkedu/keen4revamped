@@ -74,6 +74,23 @@ byte* RF_MasterScreen();
 void RF_SetVariantRemap(int variant, const byte* remap);
 void RF_SetSpriteVariant(void* sprite, int variant, const byte* data = nullptr);
 
+// Port: a split screen (co-op). Each view shows part of a camera's 320x200
+// view: the window from (windowx, windowy) of the size of the view, drawn at
+// (x, y) on the screen. Two views get a 2-pixel divider between them; fewer
+// than two means the classic full view. RF_SetViews also names the cameras
+// (RF_SetCameras). A sprite can be kept to one view (its owner's score box);
+// placing it anew lets it show in every view again.
+struct RF_View {
+  word originx, originy;
+  int windowx, windowy;
+  int x, y, width, height;
+};
+void RF_SetViews(const RF_View* views, int count);
+void RF_SetSpriteView(void* sprite, int view);
+// Port: drawn over each refreshed frame after the scene is recorded, so the
+// remaster renderer shows it from the classic frame (co-op badges).
+void RF_SetOverlayHook(void (*func)());
+
 // Port: several cameras (co-op).
 //
 // The original has one view, and only tiles in it animate: the animated-tile

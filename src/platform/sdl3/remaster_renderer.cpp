@@ -84,18 +84,84 @@ SDL_Texture* RemasterRenderer::Texture(render::AssetKind kind, int number, const
 
 void RemasterRenderer::DrawScene(float alpha, double now) {
   const render::Scene& s = cur_;
-  const bool lerp = have_prev_ && prev_.map == s.map && std::abs(prev_.viewx - s.viewx) <= kMaxLerp &&
-                    std::abs(prev_.viewy - s.viewy) <= kMaxLerp;
-  float camx = lerp ? Lerp(static_cast<float>(prev_.viewx), static_cast<float>(s.viewx), alpha) : s.viewx;
-  float camy = lerp ? Lerp(static_cast<float>(prev_.viewy), static_cast<float>(s.viewy), alpha) : s.viewy;
+  if (s.views.empty()) {
+    const bool lerp = have_prev_ && prev_.map == s.map && prev_.views.empty() &&
+                      std::abs(prev_.viewx - s.viewx) <= kMaxLerp && std::abs(prev_.viewy - s.viewy) <= kMaxLerp;
+    View view;
+    view.camx = lerp ? Lerp(static_cast<float>(prev_.viewx), static_cast<float>(s.viewx), alpha) : s.viewx;
+    view.camy = lerp ? Lerp(static_cast<float>(prev_.viewy), static_cast<float>(s.viewy), alpha) : s.viewy;
+    view.classicw = render::kClassicWidth;
+    view.rect = SDL_FRect{0, 0, kViewW, kViewH};
+    view.tilex0 = s.tilex0;
+    view.tiley0 = s.tiley0;
+    view.cols = s.cols;
+    view.rows = s.rows;
+    view.bg = &s.bg;
+    view.fg = &s.fg;
+    view.fgfront = &s.fgfront;
+    DrawView(view, lerp, now);
+    return;
+  }
+
+  // Split screen (co-op): each view in its rectangle, which is as much wider
+  // than its classic one as the whole remaster view is, then the divider.
+  const bool sameviews = have_prev_ && prev_.map == s.map && prev_.views.size() == s.views.size();
+  for (std::size_t i = 0; i < s.views.size(); i++) {
+    const render::SceneView& sv = s.views[i];
+    if (sv.w <= 0 || sv.h <= 0) continue;
+    const bool lerp = sameviews && std::abs(prev_.views[i].viewx - sv.viewx) <= kMaxLerp &&
+                      std::abs(prev_.views[i].viewy - sv.viewy) <= kMaxLerp;
+    View view;
+    view.index = static_cast<int>(i);
+    view.camx = lerp ? Lerp(static_cast<float>(prev_.views[i].viewx), static_cast<float>(sv.viewx), alpha) : sv.viewx;
+    view.camy = lerp ? Lerp(static_cast<float>(prev_.views[i].viewy), static_cast<float>(sv.viewy), alpha) : sv.viewy;
+    view.classicw = sv.w;
+    float x0 = WideX(sv.x), x1 = WideX(sv.x + sv.w);
+    view.rect = SDL_FRect{x0, static_cast<float>(sv.y), x1 - x0, static_cast<float>(sv.h)};
+    view.tilex0 = sv.tilex0;
+    view.tiley0 = sv.tiley0;
+    view.cols = sv.cols;
+    view.rows = sv.rows;
+    view.bg = &sv.bg;
+    view.fg = &sv.fg;
+    view.fgfront = &sv.fgfront;
+    DrawView(view, lerp, now);
+  }
+  if (s.views.size() == 2 && s.views[0].w > 0 && s.views[1].w > 0 && s.views[0].h > 0 && s.views[1].h > 0) {
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_FRect divider = s.views[1].x > s.views[0].x
+                            ? SDL_FRect{WideX(s.views[1].x) - 1, 0, 2, kViewH}
+                            : SDL_FRect{0, static_cast<float>(s.views[1].y) - 1, kViewW, 2};
+    SDL_RenderFillRect(renderer_, &divider);
+  }
+}
+
+// A classic x on the remaster view (the whole classic width maps to the whole
+// remaster width, so the halves of a split screen are 178 pixels wide).
+float RemasterRenderer::WideX(int classicx) {
+  return static_cast<float>(classicx) * kViewW / static_cast<float>(render::kClassicWidth);
+}
+
+void RemasterRenderer::DrawView(const View& v, bool lerp, double now) {
+  const render::Scene& s = cur_;
+  // the classic view is centred in the rectangle
+  const float margin = (v.rect.w - static_cast<float>(v.classicw)) / 2;
+  float camx = v.camx, camy = v.camy;
   // the wider view must not show the map border the classic camera never shows
-  if (s.maxx - s.minx >= render::kWideWidth) {
-    camx = std::max(camx, s.minx + kMargin);
-    camx = std::min(camx, s.maxx - render::kClassicWidth - kMargin);
+  if (s.maxx - s.minx >= v.rect.w) {
+    camx = std::max(camx, s.minx + margin);
+    camx = std::min(camx, s.maxx - v.classicw - margin);
   }
   // keep the tile grid on whole device pixels so no seams show between tiles
   camx = std::round(camx * snap_) / snap_;
   camy = std::round(camy * snap_) / snap_;
+  const float offx = v.rect.x + margin - camx, offy = v.rect.y - camy;
+  const bool clip = v.index >= 0;
+  if (clip) {
+    SDL_Rect r{static_cast<int>(std::lround(v.rect.x)), static_cast<int>(std::lround(v.rect.y)),
+               static_cast<int>(std::lround(v.rect.w)), static_cast<int>(std::lround(v.rect.h))};
+    SDL_SetRenderClipRect(renderer_, &r);
+  }
 
   struct Outline {
     SDL_FRect art;
@@ -104,17 +170,18 @@ void RemasterRenderer::DrawScene(float alpha, double now) {
   };
   std::vector<Outline> outlines;
 
-  auto drawImage = [&](render::AssetKind kind, int number, float wx, float wy) {
+  auto drawImage = [&](render::AssetKind kind, int number, float wx, float wy, const std::uint8_t* data = nullptr) {
     const render::ArtImage* img = nullptr;
-    SDL_Texture* tex = Texture(kind, number, &img);
+    SDL_Texture* tex = data ? DataTexture(number, data, &img) : Texture(kind, number, &img);
     if (!tex || img->origw == 0) return;
     float density = static_cast<float>(img->width) / static_cast<float>(img->origw);
     if (img->fromManifest) density = 4;
-    SDL_FRect dst{wx - camx + kMargin + img->ox, wy - camy + img->oy, img->width / density,
-                  img->height / density};
+    SDL_FRect dst{wx + offx + img->ox, wy + offy + img->oy, img->width / density, img->height / density};
     if (show_hitboxes && kind == render::AssetKind::Sprite)
-      outlines.push_back({dst, wx - camx + kMargin, wy - camy, number, img->layer});
-    if (dst.x > kViewW || dst.y > kViewH || dst.x + dst.w < 0 || dst.y + dst.h < 0) return;
+      outlines.push_back({dst, wx + offx, wy + offy, number, img->layer});
+    if (dst.x > v.rect.x + v.rect.w || dst.y > v.rect.y + v.rect.h || dst.x + dst.w < v.rect.x ||
+        dst.y + dst.h < v.rect.y)
+      return;
     // snap both edges to device pixels, so neighbouring tiles meet without gaps
     float x0 = std::round(dst.x * snap_), y0 = std::round(dst.y * snap_);
     float x1 = std::round((dst.x + dst.w) * snap_), y1 = std::round((dst.y + dst.h) * snap_);
@@ -123,16 +190,16 @@ void RemasterRenderer::DrawScene(float alpha, double now) {
   };
 
   auto drawTiles = [&](bool frontonly) {
-    for (int ty = 0; ty < s.rows; ty++) {
-      for (int tx = 0; tx < s.cols; tx++) {
-        std::size_t i = static_cast<std::size_t>(ty) * s.cols + tx;
-        float wx = static_cast<float>((s.tilex0 + tx) * 16), wy = static_cast<float>((s.tiley0 + ty) * 16);
+    for (int ty = 0; ty < v.rows; ty++) {
+      for (int tx = 0; tx < v.cols; tx++) {
+        std::size_t i = static_cast<std::size_t>(ty) * v.cols + tx;
+        float wx = static_cast<float>((v.tilex0 + tx) * 16), wy = static_cast<float>((v.tiley0 + ty) * 16);
         if (frontonly) {
-          if (s.fgfront[i]) drawImage(render::AssetKind::Tile16M, s.fg[i], wx, wy);
+          if ((*v.fgfront)[i]) drawImage(render::AssetKind::Tile16M, (*v.fg)[i], wx, wy);
           continue;
         }
-        drawImage(render::AssetKind::Tile16, s.bg[i], wx, wy);
-        if (s.fg[i]) drawImage(render::AssetKind::Tile16M, s.fg[i], wx, wy);
+        drawImage(render::AssetKind::Tile16, (*v.bg)[i], wx, wy);
+        if ((*v.fg)[i]) drawImage(render::AssetKind::Tile16M, (*v.fg)[i], wx, wy);
       }
     }
   };
@@ -145,9 +212,10 @@ void RemasterRenderer::DrawScene(float alpha, double now) {
       frontdone = true;
     }
     if (sp.inverse) continue;  // drawn from the classic frame
+    if (sp.view >= 0 && sp.view != v.index) continue;
     float x = static_cast<float>(sp.x), y = static_cast<float>(sp.y);
     if (lerp && interpolate) motion_.Position(sp, now, &x, &y);
-    drawImage(render::AssetKind::Sprite, sp.chunk, x, y);
+    drawImage(render::AssetKind::Sprite, sp.chunk, x, y, sp.data);
   }
   if (!frontdone) drawTiles(true);
 
@@ -168,6 +236,30 @@ void RemasterRenderer::DrawScene(float alpha, double now) {
     SDL_SetRenderDrawColor(renderer_, 255, 40, 40, 255);
     SDL_RenderRect(renderer_, &box);
   }
+  if (clip) SDL_SetRenderClipRect(renderer_, nullptr);
+}
+
+SDL_Texture* RemasterRenderer::DataTexture(int chunk, const std::uint8_t* data, const render::ArtImage** image) {
+  const render::ArtImage& img = art_->GetData(chunk, data);
+  *image = &img;
+  auto key = std::make_pair(-1, chunk);
+  auto found = textures_.find(key);
+  if (found != textures_.end()) {
+    if (found->second.revision == img.revision) return found->second.texture;
+    if (found->second.texture) SDL_DestroyTexture(found->second.texture);
+    textures_.erase(found);
+  }
+  SDL_Texture* tex = nullptr;
+  if (img.width > 0) {
+    tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, img.width, img.height);
+    if (tex) {
+      SDL_UpdateTexture(tex, nullptr, img.pixels.data(), img.width * 4);
+      SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+      SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+    }
+  }
+  textures_[key] = CachedTexture{tex, img.revision};
+  return tex;
 }
 
 void RemasterRenderer::DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette,

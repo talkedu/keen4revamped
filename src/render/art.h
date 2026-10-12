@@ -72,6 +72,10 @@ class ArtLibrary {
   bool Find(AssetKind kind, int number, Source* source, int from_layer = 0) const;
 
   const ArtImage& Get(AssetKind kind, int number);
+  // Sprite `number` drawn from `data` (planar, as the chunk) instead of the
+  // chunk: the game's own copy it draws into (Tom's score box). Like the
+  // score box, rebuilt from the data whenever it changes.
+  const ArtImage& GetData(int number, const std::uint8_t* data);
 
  private:
   struct Entry {
@@ -85,6 +89,7 @@ class ArtLibrary {
   // digits drawn into it), so they always come from the current original data.
   static bool IsLive(AssetKind kind, int number);
   std::map<Key, std::uint32_t> live_checksums_;
+  std::map<const std::uint8_t*, std::pair<std::uint32_t, ArtImage>> data_images_;
 
   std::vector<std::string> dirs_;
   Fallback fallback_ = Fallback::Scale4x;

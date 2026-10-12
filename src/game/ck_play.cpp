@@ -743,12 +743,22 @@ void StatusWindow(int who) {
 }
 
 // Port: cameras.
-void SelectCamera(int i) {
-  if (i == curcamera) return;
-  cameras[curcamera] = Camera{originxglobal,   originyglobal,   originxtilemax, originytilemax,
-                              inactivateleft,  inactivateright, inactivatetop,  inactivatebottom,
-                              centerlevel,     lockscroll};
-  const Camera& cam = cameras[i];
+void StoreCamera() {
+  Camera& cam = cameras[curcamera];
+  cam.originxglobal = originxglobal;
+  cam.originyglobal = originyglobal;
+  cam.originxtilemax = originxtilemax;
+  cam.originytilemax = originytilemax;
+  cam.inactivateleft = inactivateleft;
+  cam.inactivateright = inactivateright;
+  cam.inactivatetop = inactivatetop;
+  cam.inactivatebottom = inactivatebottom;
+  cam.centerlevel = centerlevel;
+  cam.lockscroll = lockscroll;
+}
+
+void LoadCamera() {
+  const Camera& cam = cameras[curcamera];
   RF_SetOrigin(cam.originxglobal, cam.originyglobal);
   originxtilemax = cam.originxtilemax;
   originytilemax = cam.originytilemax;
@@ -758,7 +768,13 @@ void SelectCamera(int i) {
   inactivatebottom = cam.inactivatebottom;
   centerlevel = cam.centerlevel;
   lockscroll = cam.lockscroll;
+}
+
+void SelectCamera(int i) {
+  if (i == curcamera) return;
+  StoreCamera();
   curcamera = i;
+  LoadCamera();
 }
 
 int GetViewBounds(ViewBounds* out) {
