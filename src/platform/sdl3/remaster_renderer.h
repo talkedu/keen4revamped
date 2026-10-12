@@ -51,6 +51,7 @@ class RemasterRenderer {
   };
   std::map<std::pair<int, int>, CachedTexture> textures_;
   SDL_Texture* classic_ = nullptr;
+  SDL_Texture* view_ = nullptr;  // the scene at art density, scaled to the window
   std::vector<std::uint32_t> classic_pixels_;
 
   render::Scene prev_, cur_;

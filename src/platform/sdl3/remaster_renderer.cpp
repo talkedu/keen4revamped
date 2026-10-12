@@ -19,6 +19,8 @@ constexpr int kMaxLerp = 48;
 // Time per frame for turning art into textures ahead of need. Loading it
 // when a new column of tiles scrolled in stalled that frame by 10-30 ms.
 constexpr Uint64 kPrepareBudgetNs = 1500000;
+// Pixels per view pixel of the offscreen view: the density art is made at.
+constexpr float kViewDensity = 4;
 
 double Seconds(Uint64 ns) { return static_cast<double>(ns) * 1e-9; }
 
@@ -30,6 +32,7 @@ RemasterRenderer::RemasterRenderer(SDL_Renderer* renderer, render::ArtLibrary* a
 RemasterRenderer::~RemasterRenderer() {
   DropTextures();
   if (classic_) SDL_DestroyTexture(classic_);
+  if (view_) SDL_DestroyTexture(view_);
 }
 
 void RemasterRenderer::DropTextures() {
@@ -254,6 +257,23 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
     return;
   }
 
+  // The scene is drawn at the art's own density, every texel on one pixel of
+  // an offscreen view, and that view is then scaled to the window as a whole.
+  // Drawn straight to the window at its non-whole scale, each tile was
+  // resampled anew as it moved (57 or 58 pixels for 64 texels), so textures
+  // looked different while scrolling than when the view stood still.
+  if (!view_) {
+    view_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET,
+                              render::kWideWidth * kViewDensity, render::kClassicHeight * kViewDensity);
+    if (view_) SDL_SetTextureScaleMode(view_, SDL_SCALEMODE_LINEAR);
+  }
+  if (view_) {
+    SDL_SetRenderTarget(renderer_, view_);
+    SDL_SetRenderScale(renderer_, kViewDensity, kViewDensity);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_RenderClear(renderer_);
+    snap_ = kViewDensity;
+  }
   DrawScene(Seconds(now_ns));
   Prepare(kPrepareBudgetNs);
 
@@ -272,6 +292,11 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
     SDL_RenderFillRect(renderer_, &all);
   }
 
+  if (view_) {
+    SDL_SetRenderTarget(renderer_, nullptr);
+    SDL_FRect all{0, 0, kViewW, kViewH};
+    SDL_RenderTexture(renderer_, view_, nullptr, &all);
+  }
   if (overlay) DrawClassicFrame(pixels, palette, true);
 }
 
