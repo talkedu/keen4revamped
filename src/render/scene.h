@@ -31,6 +31,7 @@ struct SceneSprite {
 
 struct Scene {
   std::uint64_t serial = 0;  // increases with every captured frame
+  double time = 0;           // game time the scene shows, in seconds of the 70 Hz clock
   int map = -1;              // map number, to tell levels apart
   int viewx = 0, viewy = 0;  // camera: world pixel at the classic view's top-left
   // World x range the classic camera can show (the map border stays hidden).

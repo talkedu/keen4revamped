@@ -114,50 +114,61 @@ int main() {
   // Smooth motion follows the object, not the image corner: an inchworm
   // stepping 8 pixels right swaps its flat frame (art at +0) for its hump
   // (art at +8), and the hump must not start 8 pixels behind and slide.
+  // Scenes arrive right on the game clock here, so the view shows game time
+  // `t` at wall time t + kLag.
   {
     using keen4::render::Scene;
     using keen4::render::SceneSprite;
     using keen4::render::SpriteMotion;
+    auto at = [](double t) { return t + SpriteMotion::kLag; };
+    auto near = [](float v, float want) { return std::abs(v - want) < 0.001f; };
     int worm = 0, other = 0;
     Scene a, b;
     a.map = b.map = 1;
     a.sprites.push_back(SceneSprite{&worm, 333, 100, 50, 0, 8, 2, false});
     b.sprites.push_back(SceneSprite{&worm, 334, 116, 46, 8, 4, 2, false});
+    auto update = [](SpriteMotion& m, Scene& s, double t) {
+      s.time = t;
+      m.Update(s, t);
+    };
     SpriteMotion motion;
     float x = -1, y = -1;
-    motion.Update(a, 0.0);
-    CHECK(motion.Position(a.sprites[0], 0.0, &x, &y) && x == 100 && y == 50);
-    // a step half a second after the last one glides over half a second,
-    // and the hump's head (right edge) starts where the flat frame's was
-    motion.Update(a, 0.125);
-    motion.Update(b, 0.5);
-    CHECK(motion.Position(b.sprites[0], 0.5, &x, &y) && x == 108 && y == 46);
-    CHECK(motion.Position(b.sprites[0], 0.75, &x, &y) && x == 112);
-    CHECK(motion.Position(b.sprites[0], 1.0, &x, &y) && x == 116);
-    CHECK(motion.Position(b.sprites[0], 2.0, &x, &y) && x == 116);
+    update(motion, a, 0.0);
+    CHECK(motion.Position(a.sprites[0], at(0.0), &x, &y) && near(x, 100) && near(y, 50));
+    // a step half a second after the last one glides over half a second from
+    // the frame before it, and the hump's head (right edge) starts where the
+    // flat frame's was
+    update(motion, a, 0.125);
+    update(motion, b, 0.5);
+    CHECK(motion.Position(b.sprites[0], at(0.125), &x, &y) && near(x, 108) && near(y, 46));
+    CHECK(motion.Position(b.sprites[0], at(0.375), &x, &y) && near(x, 112));
+    CHECK(motion.Position(b.sprites[0], at(0.625), &x, &y) && near(x, 116));
+    CHECK(motion.Position(b.sprites[0], at(2.0), &x, &y) && near(x, 116));
     // after a pause the next step glides at the usual pace
-    motion.Update(b, 2.0);
-    motion.Update(a, 2.125);
-    CHECK(motion.Position(a.sprites[0], 2.375, &x, &y) && x == 104);
-    CHECK(motion.Position(a.sprites[0], 2.625, &x, &y) && x == 100);
+    update(motion, b, 2.0);
+    update(motion, a, 2.125);
+    CHECK(motion.Position(a.sprites[0], at(2.25), &x, &y) && near(x, 104));
+    CHECK(motion.Position(a.sprites[0], at(2.5), &x, &y) && near(x, 100));
     // an actor that speeds up is followed at once
     SpriteMotion quick;
-    quick.Update(a, 0.0);
-    quick.Update(b, 0.5);
-    quick.Update(a, 0.5625);
-    CHECK(quick.Position(a.sprites[0], 0.625, &x, &y) && x == 100);
+    update(quick, a, 0.0);
+    update(quick, b, 0.5);
+    update(quick, a, 0.5625);
+    CHECK(quick.Position(a.sprites[0], at(0.5625), &x, &y) && near(x, 100));
     // a jump bigger than kMaxStep is not smoothed
     Scene far = b;
     far.sprites[0].x = 400;
-    motion.Update(far, 3.0);
-    CHECK(motion.Position(far.sprites[0], 3.0, &x, &y) && x == 400);
+    update(motion, far, 3.0);
+    CHECK(motion.Position(far.sprites[0], at(3.0), &x, &y) && near(x, 400));
     x = -1;
     SceneSprite stranger{&other, 334, 116, 46, 8, 4, 2, false};
-    CHECK(!motion.Position(stranger, 3.0, &x, &y) && x == -1);
+    CHECK(!motion.Position(stranger, at(3.0), &x, &y) && x == -1);
   }
 
-  // Keen running with the camera locked on him stays put on screen, even when
-  // scenes arrive 2 and 3 tics apart: the camera glides on the sprites' clock.
+  // Keen runs at 3 pixels a tic with the camera locked on him. The game draws
+  // 2 or 3 tics apart and each frame reaches the screen a little late, by a
+  // different amount each time. Drawn on the game's clock, the camera still
+  // moves at one steady speed and Keen stays put on screen.
   {
     using keen4::render::Scene;
     using keen4::render::SceneSprite;
@@ -167,22 +178,28 @@ int main() {
     Scene s;
     s.map = 1;
     s.sprites.push_back(SceneSprite{&keen, 100, 0, 80, 0, 0, 1, false});
-    double now = 0, worst = 0;
-    const double gaps[] = {2 / 70.0, 3 / 70.0, 2 / 70.0, 2 / 70.0, 3 / 70.0, 3 / 70.0, 2 / 70.0};
+    const int gaps[] = {2, 3, 2, 2, 3, 3, 2};                   // tics between frames
+    const double late[] = {0, 0.012, 0.004, 0.009, 0, 0.013, 0.002};  // arrival after the game clock
+    int tic = 0;
+    double worst_speed = 0, worst_lock = 0;
     for (int i = 0; i < 40; i++) {
-      s.viewx = i * 6;
-      s.sprites[0].x = i * 6 + 150;
-      motion.Update(s, now);
-      const double gap = gaps[i % 7];
+      s.time = tic / 70.0;
+      s.viewx = tic * 3;
+      s.sprites[0].x = tic * 3 + 150;
+      const double arrival = s.time + late[i % 7];
+      motion.Update(s, arrival);
+      tic += gaps[i % 7];
+      const double next = tic / 70.0 + late[(i + 1) % 7];
       for (int k = 0; k < 8; k++) {
-        const double t = now + gap * k / 8;
+        const double now = arrival + (next - arrival) * k / 8;
         float cx = 0, cy = 0, kx = 0, ky = 0;
-        CHECK(motion.Camera(t, &cx, &cy) && motion.Position(s.sprites[0], t, &kx, &ky));
-        worst = std::max(worst, static_cast<double>(std::abs(kx - cx - 150)));
+        CHECK(motion.Camera(now, &cx, &cy) && motion.Position(s.sprites[0], now, &kx, &ky));
+        worst_lock = std::max(worst_lock, static_cast<double>(std::abs(kx - cx - 150)));
+        if (i >= 3) worst_speed = std::max(worst_speed, std::abs(cx - (now - SpriteMotion::kLag) * 210));
       }
-      now += gap;
     }
-    CHECK(worst < 0.01);
+    CHECK(worst_lock < 0.01);
+    CHECK(worst_speed < 0.01);
   }
 
   // Art layers: curated art wins over the AI set, `bad` falls through to the

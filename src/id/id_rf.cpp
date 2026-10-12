@@ -405,6 +405,7 @@ void RFL_UpdateSprites() {
 // Port: records the frame just drawn for the remaster renderer.
 void CaptureScene() {
   keen4::render::Scene& s = keen4::render::BeginCapture();
+  s.time = lasttimecount / 70.0;
   s.map = mapon;
   s.viewx = ViewPixelX();
   s.viewy = ViewPixelY();
