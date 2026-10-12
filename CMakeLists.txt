@@ -18,6 +18,11 @@ endif()
 add_library(nuked_opl3 STATIC third_party/nuked-opl3/opl3.c)
 target_include_directories(nuked_opl3 PUBLIC third_party/nuked-opl3)
 
+# Decoders for remastered audio: stb_vorbis (OGG), dr_flac and dr_wav, all
+# public domain or MIT.
+add_library(audio_codecs STATIC third_party/audio_codecs.c)
+target_include_directories(audio_codecs SYSTEM PUBLIC third_party)
+
 # Engine: exe loader, ported id modules, headless platform.
 add_library(keen4_engine STATIC
   src/engine/version.cpp
@@ -36,11 +41,13 @@ add_library(keen4_engine STATIC
   src/id/id_vw.cpp
   src/render/art.cpp
   src/render/scene.cpp
+  src/audio/audio_file.cpp
+  src/audio/remaster_audio.cpp
 )
 target_include_directories(keen4_engine PUBLIC src)
 # stb_image (public domain / MIT) loads PNG art; its own warnings are not ours.
 target_include_directories(keen4_engine SYSTEM PRIVATE third_party/stb)
-target_link_libraries(keen4_engine PUBLIC nuked_opl3)
+target_link_libraries(keen4_engine PUBLIC nuked_opl3 PRIVATE audio_codecs)
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 
 # Game: the ported CK_* and K4_* modules.
@@ -98,4 +105,7 @@ if(KEEN4_BUILD_TESTS)
   add_executable(keen4_tests tests/test_main.cpp)
   target_link_libraries(keen4_tests PRIVATE keen4_game)
   add_test(NAME keen4_tests COMMAND keen4_tests)
+  add_executable(keen4_audio_tests tests/test_audio.cpp)
+  target_link_libraries(keen4_audio_tests PRIVATE keen4_game)
+  add_test(NAME keen4_audio_tests COMMAND keen4_audio_tests)
 endif()

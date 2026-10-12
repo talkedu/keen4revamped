@@ -60,6 +60,11 @@ art from `art/manifest.txt` (or the original scaled 4x), and smooth motion betwe
 an art folder and F12 reloads it. See [docs/ART.md](docs/ART.md) for making art with
 `keen4-extract` and `tools/keen4-upscale`.
 
+Sound is the original AdLib and PC speaker sound on an emulated OPL2, with optional
+remastered songs and effects from `audio/manifest.txt` replacing them one at a time
+(`--audio DIR`, Shift+F11 switches between remastered and original, `--music-volume N` and
+`--sfx-volume N` set the volumes). See [docs/AUDIO.md](docs/AUDIO.md).
+
 Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
 `--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).
 The original's parameters still work, for example `/TEDLEVEL 3 HARD` to jump to a level.

@@ -14,8 +14,8 @@ struct KeyEvent {
   bool extended;  // preceded by the 0xE0 prefix on a real keyboard
 };
 
-// Fills `samples` mono 16-bit samples at the rate passed to StartAudio.
-using AudioCallback = void (*)(std::int16_t* samples, int count, void* user);
+// Fills `count` stereo frames (2 floats each, -1..1) at the rate StartAudio returned.
+using AudioCallback = void (*)(float* frames, int count, void* user);
 
 class IPlatform {
  public:

@@ -1,6 +1,10 @@
 // ID_SD: sound (segment 1874).
 #include "id/id_sd.h"
 
+#include <algorithm>
+#include <vector>
+
+#include "audio/remaster_audio.h"
 #include "id/id_ca.h"
 #include "id/id_sys.h"
 #include "platform/platform.h"
@@ -47,8 +51,12 @@ const word* sqHackPtr;
 word sqHackLen, sqHackSeqLen;
 longword sqHackTime, alTimeCount;
 
-// Output.
-opl3_chip opl;
+// Output. Music and sound effects each get their own emulated OPL2, so they
+// can have separate volumes and either can be replaced by a recording. The
+// original keeps effects on channel 0 and music on channels 1-8, so the sum
+// of the two chips is what one card would play.
+opl3_chip oplMusic, oplFx;
+std::vector<float> musicBuf, fxBuf;
 int sampleRate;
 int tickPhase;      // accumulates 560 Hz against the sample rate
 int serviceCount;   // 560 Hz tick counter
@@ -64,8 +72,13 @@ longword ReadLong(const byte* p) {
 }
 word ReadWord(const byte* p) { return static_cast<word>(p[0] | (p[1] << 8)); }
 
-// 1874:015E
-void alOut(byte reg, byte value) { OPL3_WriteReg(&opl, reg, value); }
+// 1874:015E, for sound effects.
+void alOut(byte reg, byte value) { OPL3_WriteReg(&oplFx, reg, value); }
+void alOutMusic(byte reg, byte value) { OPL3_WriteReg(&oplMusic, reg, value); }
+void alOutBoth(byte reg, byte value) {
+  alOut(reg, value);
+  alOutMusic(reg, value);
+}
 
 void Lock() { keen4::platform::Get().LockAudio(); }
 void Unlock() { keen4::platform::Get().UnlockAudio(); }
@@ -158,7 +171,7 @@ void SDL_ALService() {
   while (sqHackLen && sqHackTime <= alTimeCount) {
     word w = *sqHackPtr++;
     sqHackTime = alTimeCount + *sqHackPtr++;
-    alOut(static_cast<byte>(w & 0xFF), static_cast<byte>(w >> 8));
+    alOutMusic(static_cast<byte>(w & 0xFF), static_cast<byte>(w >> 8));
     sqHackLen = static_cast<word>(sqHackLen - 4);
   }
   alTimeCount++;
@@ -171,19 +184,19 @@ void SDL_ALService() {
 
 // 1874:0491
 void SDL_ShutAL() {
-  alOut(0xBD, 0);
-  alOut(0xB0, 0);
+  alOutBoth(0xBD, 0);
+  alOutBoth(0xB0, 0);
   alSound = nullptr;
 }
 
 // 1874:04CB
 void SDL_CleanAL() {
-  alOut(0xBD, 0);
-  for (int i = 1; i < 0xF5; i++) alOut(static_cast<byte>(i), 0);
+  alOutBoth(0xBD, 0);
+  for (int i = 1; i < 0xF5; i++) alOutBoth(static_cast<byte>(i), 0);
 }
 
 // 1874:0504
-void SDL_StartAL() { alOut(0xBD, 0); }
+void SDL_StartAL() { alOutBoth(0xBD, 0); }
 
 // 1874:06D7
 void SDL_ShutDevice() {
@@ -212,7 +225,11 @@ void SDL_Tick() {
   }
 }
 
-void AudioCallback(std::int16_t* samples, int count, void*) {
+// Fills `count` stereo frames: the original music and effects, or the
+// remastered recordings that replace them, each at its own volume.
+void AudioCallback(float* frames, int count, void*) {
+  musicBuf.resize(static_cast<std::size_t>(count));
+  fxBuf.resize(static_cast<std::size_t>(count));
   for (int i = 0; i < count; i++) {
     tickPhase += 560;
     while (tickPhase >= sampleRate) {
@@ -220,18 +237,33 @@ void AudioCallback(std::int16_t* samples, int count, void*) {
       SDL_Tick();
     }
     std::int16_t buf[2];
-    OPL3_GenerateResampled(&opl, buf);
-    int value = buf[0];
+    OPL3_GenerateResampled(&oplMusic, buf);
+    musicBuf[i] = buf[0] / 32768.0f;
+    OPL3_GenerateResampled(&oplFx, buf);
+    float fx = buf[0];
     if (pcDivisor) {
       double freq = 1193180.0 / pcDivisor;
       pcPhase += freq / sampleRate;
       if (pcPhase >= 1.0) pcPhase -= static_cast<int>(pcPhase);
-      value += pcPhase < 0.5 ? 4000 : -4000;
+      fx += pcPhase < 0.5 ? 4000 : -4000;
     }
-    if (value > 32767) value = 32767;
-    if (value < -32768) value = -32768;
-    samples[i] = static_cast<std::int16_t>(value);
+    fxBuf[i] = fx / 32768.0f;
   }
+  std::fill(frames, frames + count * 2, 0.0f);
+  keen4::audio::RemasterAudio& remaster = keen4::audio::Remaster();
+  if (!remaster.MixMusic(frames, count)) {
+    for (int i = 0; i < count; i++) {
+      frames[i * 2] += musicBuf[i] * remaster.music_gain();
+      frames[i * 2 + 1] += musicBuf[i] * remaster.music_gain();
+    }
+  }
+  if (!remaster.MixSound(frames, count)) {
+    for (int i = 0; i < count; i++) {
+      frames[i * 2] += fxBuf[i] * remaster.sfx_gain();
+      frames[i * 2 + 1] += fxBuf[i] * remaster.sfx_gain();
+    }
+  }
+  for (int i = 0; i < count * 2; i++) frames[i] = std::clamp(frames[i], -1.0f, 1.0f);
 }
 
 }  // namespace
@@ -293,7 +325,8 @@ boolean SD_SetMusicMode(SMMode mode) {
 // 1874:0826
 void SD_Startup() {
   if (SD_Started) return;
-  OPL3_Reset(&opl, 49716);
+  OPL3_Reset(&oplMusic, 49716);
+  OPL3_Reset(&oplFx, 49716);
   SoundUserHook = nullptr;
   TimeCount = 0;
   alTimeCount = 0;
@@ -303,7 +336,11 @@ void SD_Startup() {
 
   sampleRate = keen4::platform::Get().StartAudio(AudioCallback, nullptr);
   audioRunning = sampleRate > 0;
-  if (audioRunning) OPL3_Reset(&opl, static_cast<std::uint32_t>(sampleRate));
+  if (audioRunning) {
+    OPL3_Reset(&oplMusic, static_cast<std::uint32_t>(sampleRate));
+    OPL3_Reset(&oplFx, static_cast<std::uint32_t>(sampleRate));
+    keen4::audio::Remaster().Load(keen4::audio::AudioOptions(), sampleRate);
+  }
   // The emulated card is always there; without an audio device it is silent.
   AdLibPresent = true;
   SDL_CleanAL();
@@ -353,6 +390,7 @@ void SD_PlaySound(int sound) {
   SoundNumber = static_cast<word>(sound);
   SoundPriority = priority;
   Unlock();
+  keen4::audio::Remaster().PlaySound(sound);
 }
 
 // 1874:0A90
@@ -377,6 +415,7 @@ void SD_StopSound() {
   SoundPriority = 0;
   SoundNumber = 0;
   Unlock();
+  keen4::audio::Remaster().StopSound();
 }
 
 // 1874:0AFD
@@ -385,17 +424,21 @@ void SD_WaitSoundDone() {
 }
 
 // 1874:0B0A
-void SD_MusicOn() { sqActive = true; }
+void SD_MusicOn() {
+  sqActive = true;
+  keen4::audio::Remaster().PauseSong(false);
+}
 
 // 1874:0B15
 void SD_MusicOff() {
   if (MusicMode == smm_AdLib) {
     Lock();
-    alOut(0xBD, 0);
-    for (int i = 0; i < 10; i++) alOut(static_cast<byte>(0xB1 + i), 0);
+    alOutMusic(0xBD, 0);
+    for (int i = 0; i < 10; i++) alOutMusic(static_cast<byte>(0xB1 + i), 0);
     Unlock();
   }
   sqActive = false;
+  keen4::audio::Remaster().PauseSong(true);
 }
 
 // 1874:0B62
@@ -407,9 +450,16 @@ void SD_StartMusic(MusicGroup* music) {
     sqHackLen = sqHackSeqLen = music->length;
     sqHackTime = 0;
     alTimeCount = 0;
-    SD_MusicOn();
   }
   Unlock();
+  if (MusicMode == smm_AdLib) {
+    // the remastered version is chosen by song number
+    int song = -1;
+    for (int i = 0; i < NUMSNDCHUNKS - STARTMUSIC; i++)
+      if (audiosegs[STARTMUSIC + i] == reinterpret_cast<byte*>(music)) song = i;
+    keen4::audio::Remaster().StartSong(song);
+    SD_MusicOn();
+  }
 }
 
 // 1874:0BB4

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <vector>
 
+#include "audio/remaster_audio.h"
 #include "platform/sdl3/remaster_renderer.h"
 #include "render/art.h"
 #include "render/scene.h"
@@ -247,9 +248,9 @@ class SdlPlatform final : public IPlatform {
     callback_ = callback;
     callback_user_ = user;
     SDL_AudioSpec spec{};
-    spec.format = SDL_AUDIO_S16;
-    spec.channels = 1;
-    spec.freq = 49716;
+    spec.format = SDL_AUDIO_F32;
+    spec.channels = 2;
+    spec.freq = 48000;
     stream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, &SdlPlatform::FeedAudio, this);
     if (!stream_) {
       std::fprintf(stderr, "No audio: %s\n", SDL_GetError());
@@ -264,14 +265,14 @@ class SdlPlatform final : public IPlatform {
  private:
   static void SDLCALL FeedAudio(void* userdata, SDL_AudioStream* stream, int additional, int) {
     auto* self = static_cast<SdlPlatform*>(userdata);
-    int samples = additional / 2;
-    if (samples <= 0) return;
-    self->audio_buf_.resize(static_cast<std::size_t>(samples));
+    int frames = additional / static_cast<int>(2 * sizeof(float));
+    if (frames <= 0) return;
+    self->audio_buf_.resize(static_cast<std::size_t>(frames) * 2);
     {
       std::lock_guard<std::recursive_mutex> lock(self->audio_mutex_);
-      self->callback_(self->audio_buf_.data(), samples, self->callback_user_);
+      self->callback_(self->audio_buf_.data(), frames, self->callback_user_);
     }
-    SDL_PutAudioStreamData(stream, self->audio_buf_.data(), samples * 2);
+    SDL_PutAudioStreamData(stream, self->audio_buf_.data(), frames * static_cast<int>(2 * sizeof(float)));
   }
 
   void ApplyMode() {
@@ -308,6 +309,13 @@ class SdlPlatform final : public IPlatform {
         case SDL_EVENT_KEY_UP: {
           bool down = ev.type == SDL_EVENT_KEY_DOWN;
           if (down && ev.key.scancode == SDL_SCANCODE_F11 && !ev.key.repeat) {
+            if (ev.key.mod & SDL_KMOD_SHIFT) {
+              // Shift+F11: switch between remastered and original sound
+              audio::RemasterAudio& sound = audio::Remaster();
+              sound.SetEnabled(!sound.enabled());
+              std::fprintf(stderr, "audio: %s sound\n", sound.enabled() ? "remastered" : "original");
+              break;
+            }
             // F11: switch between the remaster and the classic renderer
             remaster_ = !remaster_;
             ApplyMode();
@@ -365,7 +373,7 @@ class SdlPlatform final : public IPlatform {
   SDL_AudioStream* stream_ = nullptr;
   AudioCallback callback_ = nullptr;
   void* callback_user_ = nullptr;
-  std::vector<std::int16_t> audio_buf_;
+  std::vector<float> audio_buf_;
   std::recursive_mutex audio_mutex_;
 };
 
