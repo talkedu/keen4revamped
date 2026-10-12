@@ -34,6 +34,7 @@ struct GamepadState {
   std::uint32_t buttons = 0;  // GamepadButton bits
   float x = 0, y = 0;         // left stick, -1..1, y pointing down
   const char* name = "";
+  std::uint32_t id = 0;       // stays the same while the pad is plugged in; never 0
 };
 
 // Fills `count` stereo frames (2 floats each, -1..1) at the rate StartAudio returned.
@@ -56,6 +57,18 @@ class IPlatform {
   virtual bool PollKey(KeyEvent* event) = 0;
   // The most recently connected gamepad; `connected` is false when there is none.
   virtual void ReadGamepad(GamepadState* state) { *state = GamepadState{}; }
+  // Every connected gamepad, oldest first (co-op gives each player its own).
+  virtual int GamepadCount() {
+    GamepadState state;
+    ReadGamepad(&state);
+    return state.connected ? 1 : 0;
+  }
+  virtual void ReadGamepadAt(int index, GamepadState* state) {
+    if (index == 0)
+      ReadGamepad(state);
+    else
+      *state = GamepadState{};
+  }
   // True once the user closed the window.
   virtual bool QuitRequested() = 0;
 

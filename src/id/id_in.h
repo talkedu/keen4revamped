@@ -96,3 +96,15 @@ boolean IN_GamepadActive();
 // Face buttons held, numbered like a four-button Gravis pad: bit 0 A, 1 B,
 // 2 X, 3 Y.
 word IN_JoyButtons();
+
+// Port: every gamepad (co-op gives each player one; the functions above keep
+// following the newest pad). Pads are listed oldest first; a pad's id stays
+// the same while it is plugged in and is never 0.
+int IN_GamepadCount();
+std::uint32_t IN_GamepadId(int index);
+// Buttons of IN_ReadGamepad beyond the four of IN_JoyButtons.
+inline constexpr word kJoyBack = 16, kJoyStart = 32;
+// Reads pad `id` as IN_ReadControl reads joystick 1 (digital stick or d-pad,
+// A is button0, B button1) and its buttons as IN_JoyButtons numbers them, plus
+// kJoyBack and kJoyStart. False, with everything zero, if it is not plugged in.
+boolean IN_ReadGamepad(std::uint32_t id, ControlInfo* info, word* buttons);

@@ -20,7 +20,9 @@ class HeadlessPlatform : public IPlatform {
                const std::uint32_t* palette) override;
 
   bool PollKey(KeyEvent* event) override;
-  void ReadGamepad(GamepadState* state) override { *state = gamepad_; }
+  void ReadGamepad(GamepadState* state) override;
+  int GamepadCount() override { return static_cast<int>(order_.size()); }
+  void ReadGamepadAt(int index, GamepadState* state) override;
   bool QuitRequested() override { return quit_; }
 
   int StartAudio(AudioCallback, void*) override { return 0; }
@@ -30,7 +32,10 @@ class HeadlessPlatform : public IPlatform {
   // Test helpers.
   void PushKey(int scancode, bool down) { keys_.push_back({scancode, down, false}); }
   void RequestQuit() { quit_ = true; }
-  void SetGamepad(const GamepadState& state) { gamepad_ = state; }
+  // Plugs in, updates or (connected false) unplugs the pad in `slot` (0..3);
+  // SetGamepad is slot 0. A slot's pad keeps its id while plugged in.
+  void SetGamepad(const GamepadState& state) { SetGamepadAt(0, state); }
+  void SetGamepadAt(int slot, const GamepadState& state);
   int frames() const { return frames_; }
   const std::vector<std::uint8_t>& last_frame() const { return frame_; }
   const std::uint32_t* last_palette() const { return palette_; }
@@ -40,7 +45,10 @@ class HeadlessPlatform : public IPlatform {
  private:
   std::uint64_t millis_ = 0;
   std::deque<KeyEvent> keys_;
-  GamepadState gamepad_;
+  static constexpr int kSlots = 4;
+  GamepadState pads_[kSlots];
+  std::vector<int> order_;  // connected slots, oldest first
+  std::uint32_t nextid_ = 1;
   bool quit_ = false;
   int frames_ = 0;
   std::vector<std::uint8_t> frame_;

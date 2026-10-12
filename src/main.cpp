@@ -7,10 +7,12 @@
 // Headless mode renders without a window, for tests and CI:
 //   keen4 --headless --frames N [--shot-every K] [--out DIR]
 //         [--tics T] [--keys "tic:scancode:down,..."] [--gamepad "tic:buttons,..."]
+//         [--gamepad2 "tic:buttons,..."]
 // writes frame_NNNNN.png every K presented frames and quits after N frames
 // (or T tics of virtual 70 Hz time). Keys are pressed at virtual times, so
 // they also reach loops that wait for input without drawing. --gamepad connects a
-// gamepad at the first tic and holds the given GamepadButton bits from each tic on.
+// gamepad at the first tic and holds the given GamepadButton bits from each tic on;
+// --gamepad2 does the same for a second pad, and buttons -1 unplug a pad.
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -61,8 +63,9 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
   int shot_every = 0;
   std::string out_dir = ".";
   std::vector<ScriptedKey> script;
-  // Gamepad button states (GamepadButton bits in `scancode`) from their tic on.
-  std::vector<ScriptedKey> pad_script;
+  // Gamepad button states (GamepadButton bits in `scancode`, -1 unplugged)
+  // from their tic on, for the first and second pad.
+  std::vector<ScriptedKey> pad_script[2];
   // Also saves the remaster renderer's view of the frame (SDL builds).
   std::function<void(const std::string& path, const std::uint8_t* pixels, const std::uint32_t* palette,
                      std::uint64_t now_ns)>
@@ -73,13 +76,17 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
       PushKey(script[next_].scancode, script[next_].down);
       next_++;
     }
-    while (next_pad_ < pad_script.size() && static_cast<std::uint64_t>(pad_script[next_pad_].tic) <= Ticks70()) {
-      keen4::platform::GamepadState pad;
-      pad.connected = true;
-      pad.name = "Headless Pad";
-      pad.buttons = static_cast<std::uint32_t>(pad_script[next_pad_].scancode);
-      SetGamepad(pad);
-      next_pad_++;
+    for (int slot = 0; slot < 2; slot++) {
+      const std::vector<ScriptedKey>& script = pad_script[slot];
+      std::size_t& next = next_pad_[slot];
+      while (next < script.size() && static_cast<std::uint64_t>(script[next].tic) <= Ticks70()) {
+        keen4::platform::GamepadState pad;
+        pad.connected = script[next].scancode >= 0;
+        pad.name = slot ? "Headless Pad 2" : "Headless Pad";
+        pad.buttons = pad.connected ? static_cast<std::uint32_t>(script[next].scancode) : 0;
+        SetGamepadAt(slot, pad);
+        next++;
+      }
     }
     if (max_tics && Ticks70() >= max_tics) RequestQuit();
     return HeadlessPlatform::PollKey(event);
@@ -103,7 +110,7 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
   }
 
  private:
-  std::size_t next_ = 0, next_pad_ = 0;
+  std::size_t next_ = 0, next_pad_[2] = {0, 0};
 
   void Save(int f) {
     char name[32];
@@ -195,7 +202,9 @@ int main(int argc, char** argv) {
     else if (a == "--keys")
       scripted->script = ParseKeys(next());
     else if (a == "--gamepad")
-      scripted->pad_script = ParseKeys(next());
+      scripted->pad_script[0] = ParseKeys(next());
+    else if (a == "--gamepad2")
+      scripted->pad_script[1] = ParseKeys(next());
     else if (a == "--tics")
       scripted->max_tics = std::strtoull(next().c_str(), nullptr, 10);
     else if (a == "--fullscreen")

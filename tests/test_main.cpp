@@ -95,6 +95,43 @@ int main() {
     Set(nullptr);
   }
 
+  // Two gamepads: each keeps its id and can be read on its own, oldest first;
+  // the newest still drives Controls[0].
+  {
+    using namespace keen4::platform;
+    HeadlessPlatform two;
+    Set(&two);
+    Controls[0] = ctrl_Keyboard1;
+    GamepadState a, b;
+    a.connected = b.connected = true;
+    two.SetGamepadAt(0, a);
+    two.SetGamepadAt(1, b);
+    IN_PumpEvents();
+    CHECK(IN_GamepadCount() == 2 && Controls[0] == ctrl_Joystick1);
+    std::uint32_t ida = IN_GamepadId(0), idb = IN_GamepadId(1);
+    CHECK(ida && idb && ida != idb && !IN_GamepadId(2));
+    b.buttons = kPadA | kPadLeft | kPadStart;
+    two.SetGamepadAt(1, b);
+    ControlInfo info;
+    word buttons;
+    CHECK(IN_ReadGamepad(idb, &info, &buttons));
+    CHECK(info.button0 && !info.button1 && info.xaxis == -1 && info.yaxis == 0);
+    CHECK(buttons == (1 | kJoyStart));
+    CHECK(IN_ReadGamepad(ida, &info, &buttons) && !info.button0 && info.xaxis == 0 && buttons == 0);
+    a.y = -0.9f;  // stick up
+    two.SetGamepadAt(0, a);
+    CHECK(IN_ReadGamepad(ida, &info, &buttons) && info.yaxis == -1);
+    // unplugging the first keeps the second's id
+    two.SetGamepadAt(0, GamepadState{});
+    CHECK(IN_GamepadCount() == 1 && IN_GamepadId(0) == idb);
+    CHECK(!IN_ReadGamepad(ida, &info, &buttons) && buttons == 0);
+    two.SetGamepadAt(1, GamepadState{});
+    IN_PumpEvents();
+    CHECK(Controls[0] == ctrl_Keyboard1);
+    IN_ClearKeysDown();
+    Set(nullptr);
+  }
+
   // Scale4x: 4x the size, no new colours, and a flat image stays flat.
   {
     std::vector<std::uint8_t> src = {1, 2, 3, 4};

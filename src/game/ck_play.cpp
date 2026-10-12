@@ -976,11 +976,30 @@ void PollPlayerControls(PlayerState& ps, boolean gravis, boolean padactive, word
 // 06BD:1F47
 void PollControls() {
   IN_NoteGameplay();  // port: the gamepad steers Keen, not the menus
-  PlayerState& ps = players[0];
-  IN_ReadControl(0, &ps.c);
-  boolean padactive = IN_GamepadActive();
-  word padbuttons = IN_JoyButtons();
-  PollPlayerControls(ps, GravisGamepad && padactive && !DemoMode, padactive, padbuttons, Keyboard[firescan]);
+  if (numplayers == 1) {
+    PlayerState& ps = players[0];
+    IN_ReadControl(0, &ps.c);
+    boolean padactive = IN_GamepadActive();
+    word padbuttons = IN_JoyButtons();
+    PollPlayerControls(ps, GravisGamepad && padactive && !DemoMode, padactive, padbuttons, Keyboard[firescan]);
+    return;
+  }
+
+  // Port: co-op. Each player reads the gamepad bound to them, or the keyboard
+  // (only player 1 may use it).
+  for (int i = 0; i < numplayers; i++) {
+    PlayerState& ps = players[i];
+    if (ps.pad) {
+      ps.padconnected = IN_ReadGamepad(ps.pad, &ps.c, &ps.padbuttons);
+      PollPlayerControls(ps, GravisGamepad, true, static_cast<word>(ps.padbuttons & 0xF), false);
+    } else {
+      Controls[1] = ctrl_Keyboard1;
+      IN_ReadControl(1, &ps.c);
+      ps.padconnected = true;
+      ps.padbuttons = 0;
+      PollPlayerControls(ps, false, false, 0, Keyboard[firescan]);
+    }
+  }
 }
 
 // 06BD:2092

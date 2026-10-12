@@ -162,6 +162,12 @@ struct PlayerState {
   objtype* ob;        // the player's Keen; players[0].ob is `player`
   objtype* scorebox;  // its score box; players[0].scorebox is `scoreobj`
 
+  // Port: in co-op, the gamepad bound to this player (its IN_GamepadId), or 0
+  // for the keyboard. Single-player reads Controls[0] as the original does.
+  std::uint32_t pad;
+  boolean padconnected;  // the bound pad answered at the last PollControls
+  word padbuttons;       // its buttons then, as IN_ReadGamepad numbers them
+
   // Controls (CK_PLAY DGROUP c, jumpbutton..upheld, oldfirecount).
   ControlInfo c;
   boolean jumpbutton, jumpheld, pogobutton, pogoheld, firebutton, fireheld, upheld;
