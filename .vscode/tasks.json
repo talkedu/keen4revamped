@@ -45,11 +45,21 @@
       "problemMatcher": []
     },
     {
-      "label": "clean build debug",
-      "detail": "Clean build/debug, then build it (used by Run and Debug)",
+      "label": "ask clean debug",
+      "detail": "Ask whether to delete build/debug before building",
+      "type": "shell",
+      "command": "if [ \"${input:cleanBuild}\" = \"Yes\" ]; then rm -rf build/debug && echo \"Deleted build/debug\"; fi",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare debug",
+      "detail": "Ask whether to clean build/debug, then build it (used by Run and Debug)",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "clean debug",
+        "ask clean debug",
         "build debug"
       ],
       "problemMatcher": []
@@ -65,11 +75,21 @@
       "problemMatcher": []
     },
     {
-      "label": "clean build release",
-      "detail": "Clean build/release, then build it (used by Run and Debug)",
+      "label": "ask clean release",
+      "detail": "Ask whether to delete build/release before building",
+      "type": "shell",
+      "command": "if [ \"${input:cleanBuild}\" = \"Yes\" ]; then rm -rf build/release && echo \"Deleted build/release\"; fi",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare release",
+      "detail": "Ask whether to clean build/release, then build it (used by Run and Debug)",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "clean release",
+        "ask clean release",
         "build release"
       ],
       "problemMatcher": []
@@ -85,24 +105,34 @@
       "problemMatcher": []
     },
     {
-      "label": "clean build windows",
-      "detail": "Clean build/windows, then build it (used by Run and Debug)",
+      "label": "ask clean windows",
+      "detail": "Ask whether to delete build/windows before building",
+      "type": "shell",
+      "command": "if [ \"${input:cleanBuild}\" = \"Yes\" ]; then rm -rf build/windows && echo \"Deleted build/windows\"; fi",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare windows",
+      "detail": "Ask whether to clean build/windows, then build it (used by Run and Debug)",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "clean windows",
+        "ask clean windows",
         "build windows"
       ],
       "problemMatcher": []
     },
     {
       "label": "run on Windows",
-      "detail": "Build keen4.exe and start it on the Windows host",
+      "detail": "Build keen4.exe (asking whether to clean first) and start it on the Windows host",
       "type": "shell",
       "command": "./build/windows/keen4.exe",
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "dependsOn": "build windows",
+      "dependsOn": "prepare windows",
       "problemMatcher": []
     },
     {
@@ -116,6 +146,18 @@
         "isDefault": true
       },
       "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "cleanBuild",
+      "type": "pickString",
+      "description": "Clean the build folder before building?",
+      "options": [
+        "No",
+        "Yes"
+      ],
+      "default": "No"
     }
   ]
 }
