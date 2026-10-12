@@ -37,14 +37,20 @@ struct CursorInfo {
   boolean button0, button1;
   sword x, y;
 };
+// The original read the hardware on every call, and the panel spins on these
+// until a button is released, so each call pumps events (and waits a moment).
 static void IN_ReadCursor(CursorInfo* info) {
   *info = CursorInfo{};
+  SYS_Idle();
   if (!IN_GamepadActive()) return;
   word buttons = IN_JoyButtons();
   info->button0 = static_cast<boolean>(buttons & 1);
   info->button1 = static_cast<boolean>((buttons & 2) != 0);
 }
-static word IN_GetJoyButtonsDB(word joy) { return joy == 1 ? 0 : IN_JoyButtons(); }
+static word IN_GetJoyButtonsDB(word joy) {
+  SYS_Idle();
+  return joy == 1 ? 0 : IN_JoyButtons();
+}
 static void IN_GetJoyAbs(word, word* x, word* y) { *x = *y = 0; }
 static void IN_SetupJoy(word, word, word, word, word) {}
 
