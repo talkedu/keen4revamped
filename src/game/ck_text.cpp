@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "engine/lang.h"
 #include "exe/keen4exe.h"
 #include "game/ck_def.h"
 #include "id/id_sys.h"
@@ -42,6 +43,10 @@ sword rowon;
 const char* text;
 word rightmargin[TEXTROWS], leftmargin[TEXTROWS];
 sword numpages, pagenum;
+
+// Port: compared unsigned, so the accented letters of a translation
+// (ISO-8859-1, above 0x7F) belong to words instead of counting as blanks.
+bool IsBlank(char ch) { return static_cast<unsigned char>(ch) <= ' '; }
 
 // 0915:000A
 void RipToEOL() {
@@ -185,7 +190,7 @@ void HandleWord() {
   char word_[WORDLIMIT];
   word_[0] = *text++;
   int wordindex = 1;
-  while (*text > ' ') {
+  while (!IsBlank(*text)) {
     word_[wordindex] = *text++;
     if (++wordindex == WORDLIMIT) Quit(g_exe.String(0x0720));  // "PageLayout: Word limit exceeded"
   }
@@ -231,7 +236,7 @@ void PageLayout(boolean shownumber) {
   rowon = 0;
   layoutdone = false;
 
-  while (*text <= ' ') text++;
+  while (IsBlank(*text)) text++;
   if (*text != '^' || std::toupper(static_cast<unsigned char>(*++text)) != 'P')
     Quit(g_exe.String(0x0740));  // "PageLayout: Text not headed with ^P"
   while (*text++ != '\n') {
@@ -241,7 +246,7 @@ void PageLayout(boolean shownumber) {
     char ch = *text;
     if (ch == '^')
       HandleCommand();
-    else if (ch <= ' ')
+    else if (IsBlank(ch))
       HandleCtrls();
     else
       HandleWord();
@@ -251,7 +256,8 @@ void PageLayout(boolean shownumber) {
 
   if (shownumber) {
     char str[40];
-    std::snprintf(str, sizeof str, "%s%d%s%d", g_exe.String(0x0764), pagenum, g_exe.String(0x0768), numpages);
+    std::snprintf(str, sizeof str, "%s%d%s%d", keen4::lang::Tr(g_exe.String(0x0764)), pagenum,
+                  keen4::lang::Tr(g_exe.String(0x0768)), numpages);
     fontcolor = 8;
     py = 186;
     px = 218;
@@ -372,6 +378,12 @@ int HelpMenu() {
 // Text chunks of the help topics (DGROUP 0716).
 int HelpChunk(int topic) { return g_exe.Word(static_cast<std::uint16_t>(0x0716 + topic * 2)); }
 
+// Port: the article to lay out, in the chosen language when it has one.
+const char* ArticleText(int chunk) {
+  const char* translated = keen4::lang::Article(chunk);
+  return translated ? translated : reinterpret_cast<const char*>(grsegs[chunk]);
+}
+
 }  // namespace
 
 // 0915:09A5
@@ -396,7 +408,7 @@ void HelpScreens() {
 
     int chunk = HelpChunk(n);
     CA_CacheGrChunk(chunk);
-    text = reinterpret_cast<const char*>(grsegs[chunk]);
+    text = ArticleText(chunk);
     CacheLayoutGraphics();
 
     boolean newpage = true;
@@ -440,7 +452,7 @@ void FinaleLayout() {
   CA_CacheGrChunk(H_FLASHARROW2PIC);
   CA_CacheGrChunk(H_FLASHARROW1PIC);
   CA_CacheGrChunk(T_ENDART1);
-  text = reinterpret_cast<const char*>(grsegs[T_ENDART1]);
+  text = ArticleText(T_ENDART1);
   CacheLayoutGraphics();
   StartMusic(7);
 

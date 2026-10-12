@@ -47,6 +47,13 @@ class Image {
   std::int16_t Int(std::uint16_t ofs) const { return static_cast<std::int16_t>(Word(ofs)); }
   // A NUL-terminated string in DGROUP.
   const char* String(std::uint16_t ofs) const { return reinterpret_cast<const char*>(DGroup(ofs)); }
+  // True if `p` points into the load image; sets *linear to its address there.
+  bool LinearOf(const void* p, std::uint32_t* linear) const {
+    const auto* b = static_cast<const std::uint8_t*>(p);
+    if (image_.empty() || b < image_.data() || b >= image_.data() + image_.size()) return false;
+    *linear = static_cast<std::uint32_t>(b - image_.data());
+    return true;
+  }
 
  private:
   std::vector<std::uint8_t> image_;
