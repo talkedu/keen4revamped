@@ -1,19 +1,33 @@
 {
-  // "Keen 4 (Windows)" plays the cross-compiled build on Windows.
+  // "Keen 4 (Windows)" plays the cross-compiled build on Windows; "Keen 4 (Windows, debug)" debugs it.
   // "Keen 4" builds the debug preset and starts the game under gdb.
   // Ctrl+F5 runs the same config without the debugger.
   // The game runs from the repository root, so it finds ./gamedata and ./art on its own.
   "version": "0.2.0",
   "configurations": [
     {
-      // Builds keen4.exe in WSL and plays it on the Windows host. No breakpoints:
-      // use the configs below to debug the Linux build under gdb.
+      // Builds keen4.exe in WSL and plays it on the Windows host, without a debugger.
       "name": "Keen 4 (Windows)",
       "type": "node-terminal",
       "request": "launch",
       "command": "./build/windows/keen4.exe",
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "build windows"
+    },
+    {
+      // Debugs keen4.exe on Windows with the WinLibs gdb (winget install BrechtSanders.WinLibs.POSIX.UCRT).
+      "name": "Keen 4 (Windows, debug)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/windows-debug/keen4.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build windows debug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "${workspaceFolder}/tools/vscode/windows-gdb.sh",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
     },
     {
       "name": "Keen 4",
