@@ -19,3 +19,7 @@ extracted/
 /art-*/
 /extracted-art/
 __pycache__/
+
+# Remastered music and effects: new works, kept out of the code repository like the art.
+/audio/
+/audio-*/

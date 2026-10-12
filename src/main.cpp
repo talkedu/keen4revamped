@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "audio/remaster_audio.h"
 #include "engine/datafiles.h"
 #include "engine/png_writer.h"
 #include "engine/version.h"
@@ -188,6 +189,14 @@ int main(int argc, char** argv) {
       scale = std::atoi(next().c_str());
     else if (a == "--nosound")
       sound = false;
+    else if (a == "--audio")
+      keen4::audio::AudioOptions().dir = next();
+    else if (a == "--original-audio")
+      keen4::audio::AudioOptions().remastered = false;
+    else if (a == "--music-volume")
+      keen4::audio::AudioOptions().music_volume = std::atoi(next().c_str());
+    else if (a == "--sfx-volume")
+      keen4::audio::AudioOptions().sfx_volume = std::atoi(next().c_str());
     else if (a == "--sim-vsync")
       scripted->vsync_hz = std::atoi(next().c_str());
     else if (a == "--vsync")
@@ -242,6 +251,10 @@ int main(int argc, char** argv) {
     for (const char* dir : {"art-curated", "art"})
       if (std::filesystem::exists(std::filesystem::path(dir) / "manifest.txt")) artdirs.push_back(dir);
   }
+
+  // Remastered songs and effects (docs/AUDIO.md); the original plays for anything not listed.
+  if (keen4::audio::AudioOptions().dir.empty() && std::filesystem::exists("audio/manifest.txt"))
+    keen4::audio::AudioOptions().dir = "audio";
 
   std::unique_ptr<keen4::platform::IPlatform> platform;
 #ifdef KEEN4_WITH_SDL3
