@@ -150,7 +150,8 @@ class SdlPlatform final : public IPlatform {
       std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
       return false;
     }
-    SDL_SetRenderVSync(renderer_, 1);
+    vsync_ = options.vsync;
+    SDL_SetRenderVSync(renderer_, vsync_ ? 1 : 0);
     // 320x200 shown with the 4:3 aspect of a CRT, as 320x240.
     SDL_SetRenderLogicalPresentation(renderer_, 320, 240, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     if (options.fullscreen) SDL_SetWindowFullscreen(window_, true);
@@ -172,6 +173,13 @@ class SdlPlatform final : public IPlatform {
       tex_w_ = width;
       tex_h_ = height;
       rgb_.resize(static_cast<std::size_t>(width) * height);
+    }
+    if (!vsync_) {
+      // Menus redraw in tight loops; keep them to the original 70 Hz.
+      const Uint64 period = 1000000000ull / 70;
+      Uint64 now = SDL_GetTicksNS();
+      if (now - last_present_ns_ < period) SDL_DelayNS(period - (now - last_present_ns_));
+      last_present_ns_ = SDL_GetTicksNS();
     }
     for (int i = 0; i < width * height; i++) rgb_[i] = palette[pixels[i] & 15];
     SDL_UpdateTexture(texture_, nullptr, rgb_.data(), width * 4);
@@ -263,6 +271,8 @@ class SdlPlatform final : public IPlatform {
   bool quit_ = false;
   bool fullscreen_ = false;
   Uint64 start_ns_ = 0;
+  Uint64 last_present_ns_ = 0;
+  bool vsync_ = false;
 
   bool audio_enabled_ = true;
   SDL_AudioStream* stream_ = nullptr;

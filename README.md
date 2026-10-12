@@ -50,11 +50,12 @@ default Steam folder. It never writes there: configuration, saved games and high
 `%APPDATA%\keen4revamped` on Windows or `~/.local/share/keen4revamped` elsewhere
 (or `--save DIR`).
 
-Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`.
+Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
+`--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).
 The original's parameters still work, for example `/TEDLEVEL 3 HARD` to jump to a level.
 
 Controls are the original defaults: arrows move, Ctrl jumps, Alt pogos, Space fires,
 Enter shows the status window, Esc opens the control panel, F1 shows help.
 
-`--headless --frames N --shot-every K --out DIR --keys "frame:scancode:down,..."` runs
+`--headless --frames N --shot-every K --out DIR --keys "tic:scancode:down,..."` runs
 without a window and saves frames as PNG, which is how the port is checked in CI and tests.
