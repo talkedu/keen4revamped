@@ -177,14 +177,20 @@ void FlagAlign(objtype* ob) {
 
 // 0D8F:0D6A: off-screen shots still stun inactive actors close by.
 void T_Shot(objtype* ob) {
-  if (ob->tileright >= originxtile && ob->tilebottom >= originytile && ob->tileleft <= originxtilemax &&
-      ob->tiletop <= originytilemax)
-    return;
-
-  if (static_cast<word>(ob->tileright + 10) < originxtile ||
-      static_cast<word>(ob->tileleft - 10) > originxtilemax ||
-      static_cast<word>(ob->tilebottom + 6) < originytile ||
-      static_cast<word>(ob->tiletop - 6) > originytilemax) {
+  // Port: by every camera's view.
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  bool far = true;
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (ob->tileright >= v.xtile && ob->tilebottom >= v.ytile && ob->tileleft <= v.xtilemax &&
+        ob->tiletop <= v.ytilemax)
+      return;
+    if (!(static_cast<word>(ob->tileright + 10) < v.xtile || static_cast<word>(ob->tileleft - 10) > v.xtilemax ||
+          static_cast<word>(ob->tilebottom + 6) < v.ytile || static_cast<word>(ob->tiletop - 6) > v.ytilemax))
+      far = false;
+  }
+  if (far) {
     RemoveObj(ob);
     return;
   }

@@ -620,11 +620,17 @@ void ChangeState(objtype* ob, statetype* state) {
 }
 
 // 09DC:1260
+// Port: on screen in any camera's view.
 boolean OnScreen(objtype* ob) {
-  if (ob->tileright < originxtile || ob->tilebottom < originytile || ob->tileleft > originxtilemax ||
-      ob->tiletop > originytilemax)
-    return false;
-  return true;
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (!(ob->tileright < v.xtile || ob->tilebottom < v.ytile || ob->tileleft > v.xtilemax ||
+          ob->tiletop > v.ytilemax))
+      return true;
+  }
+  return false;
 }
 
 namespace {

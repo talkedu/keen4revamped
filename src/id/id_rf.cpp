@@ -153,6 +153,46 @@ void RFL_RemoveAnimsInBlock(word x, word y, word width, word height) {
   });
 }
 
+// Port: camera mode (see id_rf.h).
+constexpr int MAXCAMERAS = 2;
+boolean cameramode;
+RF_Origin cameras[MAXCAMERAS], prevcameras[MAXCAMERAS];
+int numcameras, numprevcameras;
+boolean rebuildanims;
+
+bool InCamera(const RF_Origin& o, word x, word y) {
+  return static_cast<word>(x - (o.x >> G_T_SHIFT)) < PORTTILESWIDE &&
+         static_cast<word>(y - (o.y >> G_T_SHIFT)) < PORTTILESHIGH;
+}
+
+bool InCameras(const RF_Origin* list, int count, word x, word y) {
+  for (int i = 0; i < count; i++)
+    if (InCamera(list[i], x, y)) return true;
+  return false;
+}
+
+// Keeps the animated-tile list over the union of the cameras: tiles that left
+// every camera go, tiles that came into one are checked as RFL_NewRow does.
+void RFL_UpdateCameraAnims() {
+  if (rebuildanims) {
+    RFL_InitAnimList();
+    numprevcameras = 0;
+    rebuildanims = false;
+  }
+  RFL_RemoveAnimsIf([](animtiletype* a) { return !InCameras(cameras, numcameras, a->x, a->y); });
+  for (int i = 0; i < numcameras; i++) {
+    word x0 = static_cast<word>(cameras[i].x >> G_T_SHIFT), y0 = static_cast<word>(cameras[i].y >> G_T_SHIFT);
+    for (word y = y0; y < y0 + PORTTILESHIGH && y < mapheight; y++) {
+      for (word x = x0; x < x0 + PORTTILESWIDE && x < mapwidth; x++) {
+        if (InCameras(cameras, i, x, y) || InCameras(prevcameras, numprevcameras, x, y)) continue;
+        RF_CheckForAnimTile(x, y);
+      }
+    }
+  }
+  std::memcpy(prevcameras, cameras, sizeof cameras);
+  numprevcameras = numcameras;
+}
+
 // 1654:0946
 void RFL_AnimateTiles() {
   for (word i = 0; allanims[i].current; i++) {
@@ -179,9 +219,7 @@ void RFL_AnimateTiles() {
     if (tile != anim->tile) {
       anim->tile = tile;
       *anim->mapplane = tile & 0x7FFF;
-      word x = static_cast<word>(anim->x - originxtile);
-      word y = static_cast<word>(anim->y - originytile);
-      if (x >= PORTTILESWIDE || y >= PORTTILESHIGH) Quit("RFL_AnimateTiles: Out of bounds!");
+      if (!RF_TileInView(anim->x, anim->y)) Quit("RFL_AnimateTiles: Out of bounds!");
     }
   }
 }
@@ -479,6 +517,8 @@ void RF_NewMap() {
 
   RFL_InitSpriteList();
   RFL_InitAnimList();
+  numcameras = numprevcameras = 0;
+  rebuildanims = false;
   hscrolledge = vscrolledge = 0;
 
   RF_SetScrollBlock(0, 1, true);
@@ -563,6 +603,10 @@ void RF_SetScrollBlock(int x, int y, boolean horizontal) {
 // 1654:1333
 void RF_NewPosition(word x, word y) {
   RFL_NewPosition(x, y);
+  if (cameramode) {
+    rebuildanims = true;  // like the list below, at the next refresh
+    return;
+  }
   RFL_InitAnimList();
   for (word my = 0; my < PORTTILESHIGH; my++)
     for (word mx = 0; mx < PORTTILESWIDE; mx++)
@@ -577,6 +621,11 @@ void RF_Scroll(int x, int y) {
   int deltay = static_cast<sword>(originytile - oldyt);
   int absdx = deltax < 0 ? -deltax : deltax;
   int absdy = deltay < 0 ? -deltay : deltay;
+  if (cameramode) {
+    // the list follows all cameras at the next refresh
+    if (absdx > 1 || absdy > 1) RFL_NewPosition(originxglobal, originyglobal);
+    return;
+  }
   if (absdx > 1 || absdy > 1) {
     RF_NewPosition(originxglobal, originyglobal);
     return;
@@ -610,9 +659,7 @@ void RF_MapToMap(word srcx, word srcy, word destx, word desty, word width, word 
     for (word x = 0; x < width; x++) {
       for (int plane = 0; plane < 3; plane++)
         *MapPlane(plane, destx + x, desty + y) = *MapPlane(plane, srcx + x, srcy + y);
-      word sx = static_cast<word>(destx + x - originxtile);
-      word sy = static_cast<word>(desty + y - originytile);
-      if (sy < PORTTILESHIGH && sx < PORTTILESWIDE)
+      if (RF_TileInView(static_cast<word>(destx + x), static_cast<word>(desty + y)))
         RF_CheckForAnimTile(static_cast<word>(destx + x), static_cast<word>(desty + y));
     }
   }
@@ -624,9 +671,7 @@ void RF_MemToMap(const word* source, word plane, word destx, word desty, word wi
   for (word y = 0; y < height; y++) {
     for (word x = 0; x < width; x++) {
       *MapPlane(plane, destx + x, desty + y) = *source++;
-      word sx = static_cast<word>(destx + x - originxtile);
-      word sy = static_cast<word>(desty + y - originytile);
-      if (sy < PORTTILESHIGH && sx < PORTTILESWIDE)
+      if (RF_TileInView(static_cast<word>(destx + x), static_cast<word>(desty + y)))
         RF_CheckForAnimTile(static_cast<word>(destx + x), static_cast<word>(desty + y));
     }
   }
@@ -733,6 +778,7 @@ void RF_CalcTics() {
 
 // 1654:1C6E
 void RF_Refresh() {
+  if (cameramode) RFL_UpdateCameraAnims();
   RFL_AnimateTiles();
   if (masteractive)
     std::memcpy(vw_screen, masterscreen, sizeof masterscreen);
@@ -772,3 +818,29 @@ void RF_ForceRefresh() {
 
 // 1654:0C50
 void RF_SetRefreshHook(void (*func)()) { refreshvector = func; }
+
+void RF_SetCameraMode(boolean on) {
+  if (on == cameramode) return;
+  cameramode = on;
+  // either way, start the list again from what is in view
+  numcameras = numprevcameras = 0;
+  if (on) {
+    rebuildanims = true;
+  } else {
+    RF_NewPosition(originxglobal, originyglobal);
+  }
+}
+
+boolean RF_CameraMode() { return cameramode; }
+
+void RF_SetCameras(const RF_Origin* origins, int count) {
+  numcameras = count < MAXCAMERAS ? count : MAXCAMERAS;
+  for (int i = 0; i < numcameras; i++) cameras[i] = origins[i];
+}
+
+void RF_SetOrigin(word x, word y) { RFL_CalcOriginStuff(x, y); }
+
+boolean RF_TileInView(word x, word y) {
+  if (cameramode) return InCameras(cameras, numcameras, x, y);
+  return static_cast<word>(x - originxtile) < PORTTILESWIDE && static_cast<word>(y - originytile) < PORTTILESHIGH;
+}

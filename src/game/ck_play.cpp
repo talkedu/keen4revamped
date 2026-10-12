@@ -39,6 +39,10 @@ word inactivateleft, inactivateright, inactivatetop, inactivatebottom;
 sword lastlevel;
 word centerlevel;
 
+Camera cameras[MAXCAMERAS];
+int numcameras = 1;
+int curcamera;
+
 void SizeText(const char* text, word* width, word* height);  // CK_MAIN
 void ScanInfoPlane();
 
@@ -389,6 +393,21 @@ void ScrollStatusWindow() {
   VW_UpdateScreen();
 }
 
+// The tile bounds of the view and of where actors stay awake, from the origin
+// (repeated after every scroll in the original).
+void CalcViewBounds() {
+  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
+  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
+  inactivateleft = static_cast<word>(originxtile - 4);
+  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
+  inactivateright = static_cast<word>(originxtilemax + 4);
+  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
+  inactivatetop = static_cast<word>(originytile - 4);
+  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
+  inactivatebottom = static_cast<word>(originytilemax + 4);
+  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+}
+
 // 06BD:1983
 void WorldScrollScreen(objtype* ob) {
   if (lockscroll) return;
@@ -419,16 +438,7 @@ void WorldScrollScreen(objtype* ob) {
     yscroll = -0xFF;
 
   RF_Scroll(xscroll, yscroll);
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
 
 // Keen states the camera treats specially (DGROUP addresses).
@@ -530,16 +540,7 @@ void ScrollScreen(objtype* ob) {
     yscroll = -0xFF;
 
   RF_Scroll(xscroll, yscroll);
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
 
 // 06BD:0CD5
@@ -705,6 +706,89 @@ void StatusWindow() {
   scoreobj->x = 0;  // force scorebox to redraw if it's not there
 }
 
+// Port: cameras.
+void SelectCamera(int i) {
+  if (i == curcamera) return;
+  cameras[curcamera] = Camera{originxglobal,   originyglobal,   originxtilemax, originytilemax,
+                              inactivateleft,  inactivateright, inactivatetop,  inactivatebottom,
+                              centerlevel,     lockscroll};
+  const Camera& cam = cameras[i];
+  RF_SetOrigin(cam.originxglobal, cam.originyglobal);
+  originxtilemax = cam.originxtilemax;
+  originytilemax = cam.originytilemax;
+  inactivateleft = cam.inactivateleft;
+  inactivateright = cam.inactivateright;
+  inactivatetop = cam.inactivatetop;
+  inactivatebottom = cam.inactivatebottom;
+  centerlevel = cam.centerlevel;
+  lockscroll = cam.lockscroll;
+  curcamera = i;
+}
+
+int GetViewBounds(ViewBounds* out) {
+  for (int i = 0; i < numcameras; i++) {
+    ViewBounds& v = out[i];
+    if (i == curcamera) {
+      v = ViewBounds{originxtile,    originytile,     originxtilemax, originytilemax,
+                     inactivateleft, inactivateright, inactivatetop,  inactivatebottom};
+    } else {
+      const Camera& cam = cameras[i];
+      v = ViewBounds{static_cast<word>(cam.originxglobal >> G_T_SHIFT),
+                     static_cast<word>(cam.originyglobal >> G_T_SHIFT),
+                     cam.originxtilemax,
+                     cam.originytilemax,
+                     cam.inactivateleft,
+                     cam.inactivateright,
+                     cam.inactivatetop,
+                     cam.inactivatebottom};
+    }
+  }
+  return numcameras;
+}
+
+namespace {
+
+// In camera mode, tells ID_RF where every camera is before it refreshes.
+void SyncCameras() {
+  if (!RF_CameraMode()) return;
+  RF_Origin origins[MAXCAMERAS];
+  for (int i = 0; i < numcameras; i++) {
+    if (i == curcamera)
+      origins[i] = RF_Origin{originxglobal, originyglobal};
+    else
+      origins[i] = RF_Origin{cameras[i].originxglobal, cameras[i].originyglobal};
+  }
+  RF_SetCameras(origins, numcameras);
+}
+
+// An asleep actor wakes when it is within a tile of any view.
+bool NearAView(const objtype* obj) {
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (obj->tileright >= static_cast<word>(v.xtile - 1) && obj->tileleft <= static_cast<word>(v.xtilemax + 1) &&
+        obj->tiletop <= static_cast<word>(v.ytilemax + 1) && obj->tilebottom >= static_cast<word>(v.ytile - 1))
+      return true;
+  }
+  return false;
+}
+
+// An awake actor may sleep when it is outside every view's inactivate bounds.
+bool FarFromViews(const objtype* obj) {
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (!(obj->tileright < v.inactivateleft || obj->tileleft > v.inactivateright ||
+          obj->tiletop > v.inactivatebottom || obj->tilebottom < v.inactivatetop))
+      return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 // 06BD:18A5
 void CenterActor(objtype* ob) {
   centerlevel = 140;
@@ -717,16 +801,7 @@ void CenterActor(objtype* ob) {
 
   if (!scorescreenkludge) RF_NewPosition(orgx, orgy);
 
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
 
 // 06BD:1D9E
@@ -950,16 +1025,12 @@ void PlayLoop() {
 
     // go through state changes and propose movements
     for (objtype* obj = player; obj; obj = obj->next) {
-      if (!obj->active && obj->tileright >= static_cast<word>(originxtile - 1) &&
-          obj->tileleft <= static_cast<word>(originxtilemax + 1) &&
-          obj->tiletop <= static_cast<word>(originytilemax + 1) &&
-          obj->tilebottom >= static_cast<word>(originytile - 1)) {
+      if (!obj->active && NearAView(obj)) {
         obj->needtoreact = true;
         obj->active = ac_yes;
       }
       if (obj->active) {
-        if (obj->tileright < inactivateleft || obj->tileleft > inactivateright ||
-            obj->tiletop > inactivatebottom || obj->tilebottom < inactivatetop) {
+        if (FarFromViews(obj)) {
           if (obj->active == ac_removable) {
             RemoveObj(obj);
             continue;
@@ -1026,6 +1097,7 @@ void PlayLoop() {
     UpdateScore(scoreobj);
     if (loadedgame) loadedgame = false;
 
+    SyncCameras();
     RF_Refresh();
 
     for (int i = 0; i < numplayers; i++) {

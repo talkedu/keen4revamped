@@ -18,7 +18,8 @@ inline constexpr int SCREENTILESHIGH = 13;
 inline constexpr int PORTTILESWIDE = 21;
 inline constexpr int PORTTILESHIGH = 14;
 inline constexpr int MAXSPRITES = 60;
-inline constexpr int MAXANIMTILES = 90;
+// The original has room for 90; two views can show twice as many.
+inline constexpr int MAXANIMTILES = 180;
 inline constexpr int MAXANIMTYPES = 65;
 inline constexpr int MAXMAPHEIGHT = 200;
 inline constexpr int PRIORITIES = 4;
@@ -64,3 +65,25 @@ void RF_SetRefreshHook(void (*func)());
 void RFL_InitAnimList();
 // Port: the persistent background the game can draw on (see id_rf.cpp).
 byte* RF_MasterScreen();
+
+// Port: several cameras (co-op).
+//
+// The original has one view, and only tiles in it animate: the animated-tile
+// list follows the view as it scrolls, and animating writes the new tile into
+// the map plane, which the game logic reads. In camera mode the game instead
+// names the origin of every camera each frame (RF_SetCameras), the scroll
+// routines leave the list alone, and RF_Refresh keeps it over the union of
+// the cameras: a tile joins the list when it comes into any camera and leaves
+// when it is in none. Single-player never turns camera mode on.
+struct RF_Origin {
+  word x, y;  // originxglobal, originyglobal of the camera
+};
+void RF_SetCameraMode(boolean on);
+boolean RF_CameraMode();
+void RF_SetCameras(const RF_Origin* origins, int count);
+// Moves the current origin to (x, y) without touching the animated tiles, to
+// make another camera the current one.
+void RF_SetOrigin(word x, word y);
+// True if map tile (x, y) is in the tile window of any camera (camera mode),
+// or of the current view.
+boolean RF_TileInView(word x, word y);

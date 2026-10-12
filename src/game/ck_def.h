@@ -195,6 +195,41 @@ objtype* PlayerRiding(const objtype* plat);
 void ResetPlayers();
 
 // ---------------------------------------------------------------------------
+// Cameras (port)
+//
+// The original's view is ID_RF's origin plus what CK_PLAY derives from it: the
+// last tile in view (originxtilemax/ytilemax), the bounds outside which actors
+// go to sleep (inactivate*), the look up/down level and lockscroll. These
+// globals are the current camera's. Co-op can have a second camera, made
+// current with SelectCamera; actors wake, sleep and count as on screen by the
+// union of all cameras. Single-player has one camera and never switches.
+
+inline constexpr int MAXCAMERAS = 2;
+
+struct Camera {
+  word originxglobal, originyglobal;
+  word originxtilemax, originytilemax;
+  word inactivateleft, inactivateright, inactivatetop, inactivatebottom;
+  word centerlevel;
+  boolean lockscroll;
+};
+
+extern Camera cameras[MAXCAMERAS];
+extern int numcameras;  // 1, or 2 when co-op splits the screen
+extern int curcamera;
+
+// Stores the current camera's globals and makes camera `i` current.
+void SelectCamera(int i);
+
+// Tile bounds of one camera's view and of where its actors stay awake.
+struct ViewBounds {
+  word xtile, ytile, xtilemax, ytilemax;
+  word inactivateleft, inactivateright, inactivatetop, inactivatebottom;
+};
+// Fills `out` (MAXCAMERAS entries) with every camera's bounds; returns how many.
+int GetViewBounds(ViewBounds* out);
+
+// ---------------------------------------------------------------------------
 // CK_PLAY
 
 inline constexpr int MAXACTORS = 100;
