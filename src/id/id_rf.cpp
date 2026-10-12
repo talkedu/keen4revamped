@@ -8,6 +8,7 @@
 #include "id/id_sd.h"
 #include "id/id_sys.h"
 #include "id/id_vw.h"
+#include "render/scene.h"
 
 word mapwidth, mapheight, mapbyteswide;
 word mapbwidthtable[MAXMAPHEIGHT];
@@ -48,6 +49,7 @@ animtiletype* animhead;
 
 struct spritelisttype {
   int worldx, worldy;  // pixel position after the original's shift granularity
+  int exactx;          // pixel position before that rounding (remaster renderer)
   int width, height;   // width in bytes
   word grchunk;
   drawtype draw;
@@ -399,6 +401,47 @@ void RFL_UpdateSprites() {
   }
 }
 
+// Port: records the frame just drawn for the remaster renderer.
+void CaptureScene() {
+  keen4::render::Scene& s = keen4::render::BeginCapture();
+  s.map = mapon;
+  s.viewx = ViewPixelX();
+  s.viewy = ViewPixelY();
+  s.minx = originxmin >> G_P_SHIFT;
+  s.maxx = (originxmax >> G_P_SHIFT) + keen4::render::kClassicWidth;
+  // tiles under the wide view, one spare on each side for smooth scrolling
+  s.tilex0 = (s.viewx - keen4::render::kWideMargin) / 16 - 1;
+  s.tiley0 = s.viewy / 16 - 1;
+  s.cols = keen4::render::kWideWidth / 16 + 4;
+  s.rows = keen4::render::kClassicHeight / 16 + 4;
+  const std::size_t cells = static_cast<std::size_t>(s.cols) * s.rows;
+  s.bg.assign(cells, 0);
+  s.fg.assign(cells, 0);
+  s.fgfront.assign(cells, 0);
+  for (int ty = 0; ty < s.rows; ty++) {
+    int my = s.tiley0 + ty;
+    if (my < 0 || my >= mapheight) continue;
+    for (int tx = 0; tx < s.cols; tx++) {
+      int mx = s.tilex0 + tx;
+      if (mx < 0 || mx >= mapwidth) continue;
+      std::size_t i = static_cast<std::size_t>(ty) * s.cols + tx;
+      s.bg[i] = *MapPlane(0, mx, my);
+      word fg = *MapPlane(1, mx, my);
+      s.fg[i] = fg;
+      s.fgfront[i] = (fg && (tinf[INTILE + fg] & 0x80)) ? 1 : 0;
+    }
+  }
+  for (int priority = 0; priority < PRIORITIES; priority++) {
+    for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
+      if (!grsegs[sprite->grchunk]) continue;
+      s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, priority,
+                           sprite->draw != spritedraw});
+    }
+  }
+  std::memcpy(s.classic.data(), vw_screen, s.classic.size());
+  keen4::render::EndCapture();
+}
+
 }  // namespace
 
 // 1654:000F
@@ -636,6 +679,7 @@ void RF_PlaceSprite(void** user, word globalx, word globaly, word spritenumber, 
   // right of the byte, but only 8/shifts-pixel steps exist.
   int step = spr.shifts == 4 ? 2 : spr.shifts == 2 ? 4 : 8;
   sprite->worldx = (pixx >> 3) * 8 + (shift * 2 / step) * step;
+  sprite->exactx = pixx;
   sprite->worldy = static_cast<word>(globaly >> G_P_SHIFT);
   sprite->width = spr.width;
   sprite->height = spr.height;
@@ -691,6 +735,11 @@ void RF_Refresh() {
   else
     DrawTiles();
   RFL_UpdateSprites();
+  // A background drawn on (the high score table) has no tile scene to redraw.
+  if (masteractive)
+    keen4::render::InvalidateScene();
+  else
+    CaptureScene();
   if (refreshvector) refreshvector();
   VW_UpdateScreen();
   RF_CalcTics();

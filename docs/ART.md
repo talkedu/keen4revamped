@@ -1,0 +1,71 @@
+# Art pipeline and the remaster renderer
+
+Milestone 6 adds a second renderer next to the classic one. The game logic is the
+same; only how frames are drawn changes.
+
+| | Classic (`--classic`) | Remaster (default) |
+| --- | --- | --- |
+| View | 320x200, 4:3 like a CRT | 356x200, 16:9 at the original height |
+| Resolution | 320x200 scaled up | native window resolution |
+| Art | original EGA graphics | `art/manifest.txt`, else the original scaled 4x (Scale4x) |
+| Motion | 35 frames/s, as on DOS | interpolated between game frames at the display's refresh rate |
+
+Press **F11** to switch renderers while playing and **F12** to reload the art manifest.
+
+## How the remaster renderer works
+
+1. Every refresh of the tile scroller (`RF_Refresh`) records a scene: the camera, the
+   tiles around the view and the sprites in draw order (`src/render/scene.h`). The
+   classic 320x200 frame is drawn exactly as before; frame hashes of the four demos
+   are unchanged.
+2. The SDL backend redraws that scene with textures at the window's resolution
+   (`src/platform/sdl3/remaster_renderer.cpp`): background tiles, foreground tiles,
+   sprites by priority, then the foreground tiles that cover sprites.
+3. Camera and sprites move smoothly between the last two scenes. Anything the game
+   draws over the play view (status window, dialogs) is found by comparing the frame
+   with the scene and shown from the classic frame; screens without a play view
+   (title, menus, help) are shown classic.
+4. The wider view never shows the map border the classic camera hides.
+5. Collision boxes always come from the original sprite table; art cannot change
+   gameplay.
+
+## Making art
+
+```sh
+keen4-extract --data path/to/keen4 --out extracted-art
+python3 tools/keen4-upscale/keen4_upscale.py extracted-art art            # Scale4x
+python3 tools/keen4-upscale/keen4_upscale.py extracted-art art --method realesrgan
+keen4 --art art
+```
+
+- **keen4-extract** writes every tile, foreground tile, sprite and picture as a 1x PNG,
+  sheets of all tiles laid out 18 wide as the levels use them, and `index.txt` with the
+  sheets and sprite animation strips.
+- **keen4-upscale** builds the 4x set: tiles are upscaled as whole sheets and cut back
+  into 64 px tiles so edges match; sprites per animation strip; transparency on its own,
+  re-thresholded to a hard edge. `--method realesrgan` runs the Real-ESRGAN program
+  (`realesrgan-ncnn-vulkan`, model `realesrgan-x4plus-anime` by default); check a
+  model's licence before using its output. It also writes `review.html` with each
+  original next to its result.
+- Extracted and generated art is derived from the game data and stays out of the
+  repository, like the data itself.
+
+## manifest.txt
+
+One line per asset, art at 4x density, paths relative to the manifest:
+
+```
+tile16 120 tile16/0120.png
+tile16m 45 tile16m/0045.png
+sprite 140 sprite/0140.png anchor 8 4
+sprite 141 sprite/0141.png bad
+```
+
+- `tile16` background tiles, `tile16m` foreground tiles, `sprite` sprite chunks, by
+  their original numbers.
+- `anchor ax ay`: where the original's top-left sits in the new image, in art pixels,
+  for art bigger than the original (default 0 0).
+- `bad`: ignore this entry and use the built-in Scale4x until the asset is redone.
+- Assets not listed use the built-in Scale4x (`--nearest` for plain 4x pixels).
+- The score box (sprite 253) always comes from the original: the game draws the score
+  into it.

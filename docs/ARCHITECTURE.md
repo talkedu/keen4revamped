@@ -26,5 +26,5 @@ Key decisions (2026-10-11):
 3. C++ port boots headless on Windows, Linux and macOS
 4. First pixels
 5. Classic mode playable (demos match DOS)
-6. Remaster renderer with AI-upscaled art
+6. Remaster renderer with AI-upscaled art (renderer, manifest and pipeline: [ART.md](ART.md))
 7. Curated HD art and audio, remaster 1.0
