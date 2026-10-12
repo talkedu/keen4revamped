@@ -7,10 +7,11 @@ same; only how frames are drawn changes.
 | --- | --- | --- |
 | View | 320x200, 4:3 like a CRT | 356x200, 16:9 at the original height |
 | Resolution | 320x200 scaled up | native window resolution |
-| Art | original EGA graphics | `art/manifest.txt`, else the original scaled 4x (Scale4x) |
+| Art | original EGA graphics | `art-curated/`, then `art/`, else the original scaled 4x (Scale4x) |
 | Motion | 35 frames/s, as on DOS | interpolated between game frames at the display's refresh rate |
 
-Press **F11** to switch renderers while playing and **F12** to reload the art manifest.
+Press **F11** to switch renderers while playing, **F12** to reload the art manifests and
+**Shift+F12** to show sprite hitboxes over the art.
 
 ## How the remaster renderer works
 
@@ -56,9 +57,40 @@ keen4 --art art
 - Extracted and generated art is derived from the game data and stays out of the
   repository, like the data itself.
 
+## Curated art over the AI set
+
+Art folders are layered. Hand-drawn or hand-fixed art goes in its own folder, listed
+before the generated set, and replaces it one tile or sprite at a time:
+
+```sh
+python3 tools/keen4-curate/keen4_curate.py add sprite 130-139 --from art-ai --to art-curated
+# paint over art-curated/sprite/0130.png ... then press F12 in the game
+keen4 --art art-curated --art art-ai
+```
+
+- `--art` can be given several times; the first folder whose manifest lists an asset
+  provides it. Without `--art` the game uses `art-curated/` and then `art/`, whichever
+  have a `manifest.txt`.
+- `bad` in a curated manifest line skips that folder for the asset, so it shows the next
+  folder's art; a missing or unreadable file does the same, with a message on stderr.
+- **keen4-curate** `add` copies an asset's current image and anchor from the generated set
+  into the curated folder and lists it there, so the artist starts from the AI version;
+  `remove` drops the line again (the file stays); `list` shows what is curated. Numbers can
+  be ranges (`130-139`).
+- Curated art may be bigger than the original (a scarf, a glow): set `anchor ax ay` to where
+  the original's top-left sits in the new image.
+- Hitboxes never come from the art. **Shift+F12** (or `--hitboxes`) outlines every sprite's
+  art, yellow from the first folder, cyan from later ones and grey for the built-in
+  upscale, with the original hitbox from the sprite table in red. Art that reaches well
+  outside its red box, or leaves parts of it empty, will look wrong when Keen touches it.
+- `keen4 --headless --hd-shots --hitboxes --art art-curated --art art-ai ...` renders the
+  same view to PNG files for review without a window.
+- Curated art stays out of this repository like the generated set (`/art-*/` is ignored).
+
 ## manifest.txt
 
-One line per asset, art at 4x density, paths relative to the manifest:
+One line per asset, art at 4x density, paths relative to the manifest (the same format in
+every art folder):
 
 ```
 tile16 120 tile16/0120.png

@@ -2,10 +2,12 @@
 
 // Art for the remaster renderer.
 //
-// New art is found through a manifest keyed by the original graphics numbers
-// (see docs/ART.md). Anything the manifest does not list, or flags as bad,
-// falls back to the original image scaled up 4x, so the renderer always has a
-// picture for every tile and sprite.
+// New art is found through manifests keyed by the original graphics numbers
+// (see docs/ART.md). Art folders are layered, hand-curated art before the
+// AI-upscaled set: the first folder that lists an asset (and does not flag it
+// as bad) provides it. Anything no folder provides falls back to the original
+// image scaled up 4x, so the renderer always has a picture for every tile and
+// sprite.
 
 #include <cstdint>
 #include <map>
@@ -25,6 +27,7 @@ struct ArtImage {
   int origw = 0, origh = 0;
   float ox = 0, oy = 0;
   bool fromManifest = false;
+  int layer = -1;              // art folder it came from (0 = first), -1 = built-in
   std::uint32_t revision = 0;  // changes when a live asset is rebuilt
 };
 
@@ -36,20 +39,37 @@ std::uint32_t EgaColor(int index);
 // Decodes an original asset to palette indices (16 = transparent).
 bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::vector<std::uint8_t>* indices);
 
+// A sprite's collision box from the original sprite table, in original pixels
+// relative to the image's top-left. New art never changes it.
+bool SpriteHitbox(int chunk, float* x0, float* y0, float* x1, float* y1);
+
 // Scale2x applied twice: smooths diagonal edges of pixel art without new colours.
 std::vector<std::uint8_t> Scale4x(const std::vector<std::uint8_t>& src, int width, int height);
 
 class ArtLibrary {
  public:
-  void SetDirectory(const std::string& dir) { dir_ = dir; }
-  const std::string& directory() const { return dir_; }
+  // Art folders in order of precedence: curated art before the AI set.
+  void SetDirectories(const std::vector<std::string>& dirs) { dirs_ = dirs; }
+  void SetDirectory(const std::string& dir) { dirs_ = {dir}; }
+  const std::vector<std::string>& directories() const { return dirs_; }
   void SetFallback(Fallback f) { fallback_ = f; }
 
-  // (Re)reads manifest.txt and drops every cached image.
+  // (Re)reads every manifest.txt and drops every cached image.
   void Reload();
   // Increases on every Reload, so renderers know to drop their textures.
   std::uint64_t generation() const { return generation_; }
-  int manifestEntries() const { return static_cast<int>(entries_.size()); }
+  int manifestEntries() const;
+  int layers() const { return static_cast<int>(layers_.size()); }
+  int layerEntries(int layer) const { return static_cast<int>(layers_[layer].size()); }
+
+  // Where an asset's art comes from: the first layer from `from_layer` on that
+  // lists it without `bad`. False if none does (the built-in fallback is used).
+  struct Source {
+    std::string path;
+    float ax = 0, ay = 0;  // anchor offset in art pixels
+    int layer = -1;
+  };
+  bool Find(AssetKind kind, int number, Source* source, int from_layer = 0) const;
 
   const ArtImage& Get(AssetKind kind, int number);
 
@@ -66,9 +86,9 @@ class ArtLibrary {
   static bool IsLive(AssetKind kind, int number);
   std::map<Key, std::uint32_t> live_checksums_;
 
-  std::string dir_;
+  std::vector<std::string> dirs_;
   Fallback fallback_ = Fallback::Scale4x;
-  std::map<Key, Entry> entries_;
+  std::vector<std::map<Key, Entry>> layers_;  // one manifest per folder
   std::map<Key, ArtImage> cache_;
   std::uint64_t generation_ = 0;
 };

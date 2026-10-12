@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "platform/platform.h"
 
@@ -18,12 +19,16 @@ struct SdlOptions {
 
   // Remaster renderer (milestone 6): new art in a 16:9 view at native
   // resolution, with motion interpolated between game frames. F11 switches
-  // to the classic renderer and back, F12 reloads the art manifest.
+  // to the classic renderer and back, F12 reloads the art manifests and
+  // Shift+F12 shows sprite hitboxes over the art.
   bool remaster = true;
   bool remaster_vsync = true;  // interpolation hides the uneven frame steps
   bool interpolate = true;
   bool nearest = false;        // fallback art: nearest-neighbour instead of Scale4x
-  std::string art_dir;         // folder with manifest.txt, empty for none
+  // Folders with a manifest.txt, curated art first; the first that lists an
+  // asset provides it.
+  std::vector<std::string> art_dirs;
+  bool hitboxes = false;
 };
 
 // Creates the SDL3 backend, or returns nullptr (with a message on stderr) if
