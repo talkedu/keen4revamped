@@ -37,21 +37,10 @@ void Chunk(std::vector<std::uint8_t>* out, const char* type, const std::vector<s
   Put32(out, Crc(out->data() + start, out->size() - start) ^ 0xFFFFFFFFu);
 }
 
-}  // namespace
 
-bool WritePng(const std::string& path, const std::uint8_t* pixels, int width, int height,
-              const std::uint32_t* palette) {
-  std::vector<std::uint8_t> raw;
-  raw.reserve(static_cast<std::size_t>(height) * (width * 3 + 1));
-  for (int y = 0; y < height; y++) {
-    raw.push_back(0);
-    for (int x = 0; x < width; x++) {
-      std::uint32_t c = palette[pixels[y * width + x]];
-      raw.push_back(static_cast<std::uint8_t>(c >> 16));
-      raw.push_back(static_cast<std::uint8_t>(c >> 8));
-      raw.push_back(static_cast<std::uint8_t>(c));
-    }
-  }
+// Writes filtered scanlines (filter byte + pixels) as a stored-deflate PNG.
+bool WriteRaw(const std::string& path, const std::vector<std::uint8_t>& raw, int width, int height,
+              std::uint8_t colortype) {
   std::vector<std::uint8_t> z = {0x78, 0x01};
   std::size_t pos = 0;
   while (pos < raw.size() || raw.empty()) {
@@ -78,7 +67,7 @@ bool WritePng(const std::string& path, const std::uint8_t* pixels, int width, in
   std::vector<std::uint8_t> ihdr;
   Put32(&ihdr, static_cast<std::uint32_t>(width));
   Put32(&ihdr, static_cast<std::uint32_t>(height));
-  ihdr.insert(ihdr.end(), {8, 2, 0, 0, 0});
+  ihdr.insert(ihdr.end(), {8, colortype, 0, 0, 0});
   Chunk(&png, "IHDR", ihdr);
   Chunk(&png, "IDAT", z);
   Chunk(&png, "IEND", {});
@@ -88,6 +77,55 @@ bool WritePng(const std::string& path, const std::uint8_t* pixels, int width, in
   bool ok = std::fwrite(png.data(), 1, png.size(), f) == png.size();
   std::fclose(f);
   return ok;
+}
+
+}  // namespace
+
+bool WritePng(const std::string& path, const std::uint8_t* pixels, int width, int height,
+              const std::uint32_t* palette) {
+  std::vector<std::uint8_t> raw;
+  raw.reserve(static_cast<std::size_t>(height) * (width * 3 + 1));
+  for (int y = 0; y < height; y++) {
+    raw.push_back(0);
+    for (int x = 0; x < width; x++) {
+      std::uint32_t c = palette[pixels[y * width + x]];
+      raw.push_back(static_cast<std::uint8_t>(c >> 16));
+      raw.push_back(static_cast<std::uint8_t>(c >> 8));
+      raw.push_back(static_cast<std::uint8_t>(c));
+    }
+  }
+  return WriteRaw(path, raw, width, height, 2);
+}
+
+bool WritePngRgb(const std::string& path, const std::uint32_t* pixels, int width, int height) {
+  std::vector<std::uint8_t> raw;
+  raw.reserve(static_cast<std::size_t>(height) * (width * 3 + 1));
+  for (int y = 0; y < height; y++) {
+    raw.push_back(0);
+    for (int x = 0; x < width; x++) {
+      std::uint32_t c = pixels[static_cast<std::size_t>(y) * width + x];
+      raw.push_back(static_cast<std::uint8_t>(c >> 16));
+      raw.push_back(static_cast<std::uint8_t>(c >> 8));
+      raw.push_back(static_cast<std::uint8_t>(c));
+    }
+  }
+  return WriteRaw(path, raw, width, height, 2);
+}
+
+bool WritePngRgba(const std::string& path, const std::uint32_t* pixels, int width, int height) {
+  std::vector<std::uint8_t> raw;
+  raw.reserve(static_cast<std::size_t>(height) * (width * 4 + 1));
+  for (int y = 0; y < height; y++) {
+    raw.push_back(0);
+    for (int x = 0; x < width; x++) {
+      std::uint32_t c = pixels[static_cast<std::size_t>(y) * width + x];
+      raw.push_back(static_cast<std::uint8_t>(c >> 16));
+      raw.push_back(static_cast<std::uint8_t>(c >> 8));
+      raw.push_back(static_cast<std::uint8_t>(c));
+      raw.push_back(static_cast<std::uint8_t>(c >> 24));
+    }
+  }
+  return WriteRaw(path, raw, width, height, 6);
 }
 
 }  // namespace keen4

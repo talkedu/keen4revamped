@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -32,7 +33,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>  // provides WinMain on Windows
 
+#include "platform/sdl3/remaster_renderer.h"
 #include "platform/sdl3/sdl_platform.h"
+#include "render/art.h"
+#include "render/scene.h"
 #endif
 
 void CK_InitStates();
@@ -54,6 +58,10 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
   int shot_every = 0;
   std::string out_dir = ".";
   std::vector<ScriptedKey> script;
+  // Also saves the remaster renderer's view of the frame (SDL builds).
+  std::function<void(const std::string& path, const std::uint8_t* pixels, const std::uint32_t* palette,
+                     std::uint64_t now_ns)>
+      remaster_shot;
 
   bool PollKey(keen4::platform::KeyEvent* event) override {
     while (next_ < script.size() && static_cast<std::uint64_t>(script[next_].tic) <= Ticks70()) {
@@ -89,6 +97,11 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
     std::snprintf(name, sizeof name, "frame_%05d.png", f);
     keen4::WritePng((std::filesystem::path(out_dir) / name).string(), last_frame().data(), frame_width(),
                     frame_height(), last_palette());
+    if (remaster_shot) {
+      std::snprintf(name, sizeof name, "hd_%05d.png", f);
+      remaster_shot((std::filesystem::path(out_dir) / name).string(), last_frame().data(), last_palette(),
+                    Millis() * 1000000ull);
+    }
   }
 };
 
@@ -143,6 +156,8 @@ std::string FindDataDir(const std::string& requested) {
 int main(int argc, char** argv) {
   std::string datadir, savedir;
   bool headless = false, fullscreen = false, sound = true, vsync = false;
+  bool classic = false, nearest = false, interpolate = true, hdshots = false;
+  std::string artdir;
   int scale = 3;
   auto scripted = std::make_unique<ScriptedHeadless>();
   std::vector<char*> gameargs = {argv[0]};
@@ -176,6 +191,16 @@ int main(int argc, char** argv) {
       scripted->vsync_hz = std::atoi(next().c_str());
     else if (a == "--vsync")
       vsync = true;
+    else if (a == "--classic")
+      classic = true;
+    else if (a == "--art")
+      artdir = next();
+    else if (a == "--nearest")
+      nearest = true;
+    else if (a == "--no-interpolation")
+      interpolate = false;
+    else if (a == "--hd-shots")
+      hdshots = true;
     else if (a == "--version") {
       std::printf("%s\n", keen4::VersionString());
       return 0;
@@ -209,6 +234,8 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  if (artdir.empty() && std::filesystem::exists("art/manifest.txt")) artdir = "art";
+
   std::unique_ptr<keen4::platform::IPlatform> platform;
 #ifdef KEEN4_WITH_SDL3
   if (!headless) {
@@ -217,6 +244,10 @@ int main(int argc, char** argv) {
     options.fullscreen = fullscreen;
     options.audio = sound;
     options.vsync = vsync;
+    options.remaster = !classic;
+    options.interpolate = interpolate;
+    options.nearest = nearest;
+    options.art_dir = artdir;
     platform = keen4::platform::CreateSdlPlatform(options);
     if (!platform) return 1;
   }
@@ -225,6 +256,40 @@ int main(int argc, char** argv) {
   (void)sound;
   (void)scale;
   headless = true;
+#endif
+#ifdef KEEN4_WITH_SDL3
+  // Headless remaster frames: the same renderer on SDL's software renderer.
+  static keen4::render::ArtLibrary hdart;
+  static SDL_Surface* hdsurface = nullptr;
+  static SDL_Renderer* hdrenderer = nullptr;
+  static std::unique_ptr<keen4::platform::RemasterRenderer> hd;
+  if (headless && hdshots) {
+    hdart.SetDirectory(artdir);
+    hdart.SetFallback(nearest ? keen4::render::Fallback::Nearest : keen4::render::Fallback::Scale4x);
+    hdart.Reload();
+    hdsurface = SDL_CreateSurface(1280, 720, SDL_PIXELFORMAT_ARGB8888);
+    hdrenderer = SDL_CreateSoftwareRenderer(hdsurface);
+    SDL_SetRenderLogicalPresentation(hdrenderer, keen4::render::kWideWidth, keen4::render::kClassicHeight,
+                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    hd = std::make_unique<keen4::platform::RemasterRenderer>(hdrenderer, &hdart);
+    hd->interpolate = interpolate;
+    scripted->remaster_shot = [](const std::string& path, const std::uint8_t* pixels,
+                                 const std::uint32_t* palette, std::uint64_t now) {
+      hd->Update(keen4::render::LatestScene(), now);
+      hd->Draw(pixels, palette, now);
+      SDL_RenderPresent(hdrenderer);
+      std::vector<std::uint32_t> rgb(static_cast<std::size_t>(hdsurface->w) * hdsurface->h);
+      for (int y = 0; y < hdsurface->h; y++)
+        std::memcpy(&rgb[static_cast<std::size_t>(y) * hdsurface->w],
+                    static_cast<const std::uint8_t*>(hdsurface->pixels) + y * hdsurface->pitch, hdsurface->w * 4);
+      keen4::WritePngRgb(path, rgb.data(), hdsurface->w, hdsurface->h);
+    };
+  }
+#else
+  (void)hdshots;
+  (void)nearest;
+  (void)interpolate;
+  (void)classic;
 #endif
   if (headless) platform = std::move(scripted);
   keen4::platform::Set(platform.get());

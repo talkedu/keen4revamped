@@ -34,8 +34,12 @@ add_library(keen4_engine STATIC
   src/id/id_us_1.cpp
   src/id/id_us_2.cpp
   src/id/id_vw.cpp
+  src/render/art.cpp
+  src/render/scene.cpp
 )
 target_include_directories(keen4_engine PUBLIC src)
+# stb_image (public domain / MIT) loads PNG art; its own warnings are not ours.
+target_include_directories(keen4_engine SYSTEM PRIVATE third_party/stb)
 target_link_libraries(keen4_engine PUBLIC nuked_opl3)
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 
@@ -76,13 +80,18 @@ if(KEEN4_WITH_SDL3)
       GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(SDL3)
   endif()
-  target_sources(keen4 PRIVATE src/platform/sdl3/sdl_platform.cpp)
+  target_sources(keen4 PRIVATE src/platform/sdl3/sdl_platform.cpp src/platform/sdl3/remaster_renderer.cpp)
   target_link_libraries(keen4 PRIVATE SDL3::SDL3)
   target_compile_definitions(keen4 PRIVATE KEEN4_WITH_SDL3=1)
   if(WIN32)
     set_target_properties(keen4 PROPERTIES WIN32_EXECUTABLE ON)
   endif()
 endif()
+
+# Art pipeline: exports the original graphics as PNG for artists and keen4-upscale.
+add_executable(keen4-extract tools/keen4-extract/extract.cpp)
+target_link_libraries(keen4-extract PRIVATE keen4_engine)
+target_compile_options(keen4-extract PRIVATE ${KEEN4_WARNINGS})
 
 if(KEEN4_BUILD_TESTS)
   enable_testing()

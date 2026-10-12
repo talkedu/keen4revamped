@@ -2,10 +2,17 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <vector>
+
+#include "platform/sdl3/remaster_renderer.h"
+#include "render/art.h"
+#include "render/scene.h"
 
 namespace keen4::platform {
 
@@ -126,6 +133,7 @@ XtCode ToXt(SDL_Scancode sc) {
 class SdlPlatform final : public IPlatform {
  public:
   ~SdlPlatform() override {
+    remaster_renderer_.reset();
     if (stream_) SDL_DestroyAudioStream(stream_);
     if (texture_) SDL_DestroyTexture(texture_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
@@ -140,7 +148,10 @@ class SdlPlatform final : public IPlatform {
       return false;
     }
     int scale = options.scale > 0 ? options.scale : 3;
-    window_ = SDL_CreateWindow("Commander Keen 4", 320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
+    remaster_ = options.remaster;
+    // the remaster view is 16:9, the classic one 4:3
+    int winw = remaster_ ? 427 * scale : 320 * scale;
+    window_ = SDL_CreateWindow("Commander Keen 4", winw, 240 * scale, SDL_WINDOW_RESIZABLE);
     if (!window_) {
       std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
       return false;
@@ -151,9 +162,19 @@ class SdlPlatform final : public IPlatform {
       return false;
     }
     vsync_ = options.vsync;
-    SDL_SetRenderVSync(renderer_, vsync_ ? 1 : 0);
-    // 320x200 shown with the 4:3 aspect of a CRT, as 320x240.
-    SDL_SetRenderLogicalPresentation(renderer_, 320, 240, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    remaster_vsync_ = options.remaster_vsync;
+    art_.SetDirectory(options.art_dir);
+    art_.SetFallback(options.nearest ? render::Fallback::Nearest : render::Fallback::Scale4x);
+    art_.Reload();
+    if (art_.manifestEntries())
+      std::fprintf(stderr, "art: %d manifest entries from %s\n", art_.manifestEntries(), options.art_dir.c_str());
+    remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
+    remaster_renderer_->interpolate = options.interpolate;
+    SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+    const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
+    float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
+    refresh_ns_ = static_cast<Uint64>(1e9 / hz);
+    ApplyMode();
     if (options.fullscreen) SDL_SetWindowFullscreen(window_, true);
     start_ns_ = SDL_GetTicksNS();
     return true;
@@ -161,10 +182,31 @@ class SdlPlatform final : public IPlatform {
 
   std::uint64_t Ticks70() override { return (SDL_GetTicksNS() - start_ns_) * 70 / 1000000000ull; }
   std::uint64_t Millis() override { return (SDL_GetTicksNS() - start_ns_) / 1000000ull; }
-  void Delay(int ms) override { SDL_Delay(static_cast<Uint32>(ms > 0 ? ms : 1)); }
+  void Delay(int ms) override {
+    // While the game waits for its next frame, keep drawing in-between frames
+    // so motion stays smooth at the display's refresh rate.
+    if (remaster_ && have_frame_ && remaster_renderer_->interpolate) {
+      Uint64 now = SDL_GetTicksNS();
+      if (now - last_draw_ns_ >= refresh_ns_) {
+        DrawRemaster(now);
+        return;
+      }
+    }
+    SDL_Delay(static_cast<Uint32>(ms > 0 ? ms : 1));
+  }
 
   void Present(const std::uint8_t* pixels, int width, int height,
                const std::uint32_t* palette) override {
+    if (remaster_ && width == render::kClassicWidth && height == render::kClassicHeight) {
+      frame_.assign(pixels, pixels + width * height);
+      std::memcpy(palette_, palette, sizeof palette_);
+      have_frame_ = true;
+      Uint64 now = SDL_GetTicksNS();
+      remaster_renderer_->Update(render::LatestScene(), now);
+      DrawRemaster(now);
+      Pump();
+      return;
+    }
     if (!texture_ || tex_w_ != width || tex_h_ != height) {
       if (texture_) SDL_DestroyTexture(texture_);
       texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING,
@@ -232,6 +274,29 @@ class SdlPlatform final : public IPlatform {
     SDL_PutAudioStreamData(stream, self->audio_buf_.data(), samples * 2);
   }
 
+  void ApplyMode() {
+    if (remaster_) {
+      SDL_SetRenderVSync(renderer_, remaster_vsync_ ? 1 : 0);
+      SDL_SetRenderLogicalPresentation(renderer_, render::kWideWidth, render::kClassicHeight,
+                                       SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    } else {
+      SDL_SetRenderVSync(renderer_, vsync_ ? 1 : 0);
+      // 320x200 shown with the 4:3 aspect of a CRT, as 320x240.
+      SDL_SetRenderLogicalPresentation(renderer_, 320, 240, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    }
+  }
+
+  void DrawRemaster(Uint64 now) {
+    if (!remaster_vsync_) {
+      // without vsync, stay at the display's rate
+      if (now - last_draw_ns_ < refresh_ns_) SDL_DelayNS(refresh_ns_ - (now - last_draw_ns_));
+      now = SDL_GetTicksNS();
+    }
+    remaster_renderer_->Draw(frame_.data(), palette_, now);
+    SDL_RenderPresent(renderer_);
+    last_draw_ns_ = now;
+  }
+
   void Pump() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -242,6 +307,19 @@ class SdlPlatform final : public IPlatform {
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP: {
           bool down = ev.type == SDL_EVENT_KEY_DOWN;
+          if (down && ev.key.scancode == SDL_SCANCODE_F11 && !ev.key.repeat) {
+            // F11: switch between the remaster and the classic renderer
+            remaster_ = !remaster_;
+            ApplyMode();
+            break;
+          }
+          if (down && ev.key.scancode == SDL_SCANCODE_F12 && !ev.key.repeat) {
+            // F12: reload the art manifest while the game runs
+            art_.Reload();
+            std::fprintf(stderr, "art: reloaded, %d manifest entries\n", art_.manifestEntries());
+            break;
+          }
+          if (ev.key.scancode == SDL_SCANCODE_F11 || ev.key.scancode == SDL_SCANCODE_F12) break;
           if (down && ev.key.scancode == SDL_SCANCODE_RETURN && (ev.key.mod & SDL_KMOD_ALT)) {
             fullscreen_ = !fullscreen_;
             SDL_SetWindowFullscreen(window_, fullscreen_);
@@ -273,6 +351,15 @@ class SdlPlatform final : public IPlatform {
   Uint64 start_ns_ = 0;
   Uint64 last_present_ns_ = 0;
   bool vsync_ = false;
+  bool remaster_ = false;
+  bool remaster_vsync_ = true;
+  render::ArtLibrary art_;
+  std::unique_ptr<RemasterRenderer> remaster_renderer_;
+  std::vector<std::uint8_t> frame_;
+  std::uint32_t palette_[16] = {};
+  bool have_frame_ = false;
+  Uint64 last_draw_ns_ = 0;
+  Uint64 refresh_ns_ = 16666667;
 
   bool audio_enabled_ = true;
   SDL_AudioStream* stream_ = nullptr;

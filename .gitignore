@@ -13,3 +13,7 @@ CMakeUserPresets.json
 /decomp-work/
 listings/
 extracted/
+
+# Art derived from the game data (keen4-extract / keen4-upscale output).
+/art/
+/extracted-art/
