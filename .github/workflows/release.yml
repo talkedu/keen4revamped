@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to create, e.g. v1.0
+        description: Release tag to create, e.g. v1.1
         required: true
-        default: v1.0
+        default: v1.1
   push:
     tags: ['v*']
 
@@ -52,15 +52,19 @@ jobs:
         shell: pwsh
         run: |
           $dir = "keen4revamped-$env:TAG-${{ matrix.name }}"
-          New-Item -ItemType Directory $dir | Out-Null
-          Copy-Item build/release/Release/keen4.exe, README.md $dir
+          New-Item -ItemType Directory $dir, "$dir/docs", "$dir/tools/keen4-upscale" | Out-Null
+          Copy-Item build/release/Release/keen4.exe, build/release/Release/keen4-extract.exe, README.md $dir
+          Copy-Item docs/ART.md "$dir/docs"
+          Copy-Item tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           Compress-Archive -Path $dir -DestinationPath "$dir.zip"
       - name: Package (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
-          mkdir "$dir"
-          cp build/release/keen4 README.md "$dir"
+          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale"
+          cp build/release/keen4 build/release/keen4-extract README.md "$dir"
+          cp docs/ART.md "$dir/docs"
+          cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           tar czf "$dir.tar.gz" "$dir"
       - uses: actions/upload-artifact@v4
         with:
@@ -84,12 +88,16 @@ jobs:
           name: keen4revamped ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           body: |
-            First playable release of keen4revamped, a C++ port of Commander Keen 4 (v1.4 EGA) built from our own decompilation.
+            keen4revamped v1.1 adds the remaster renderer: Keen 4 in 16:9 at your screen's resolution, with smooth motion and a pipeline for new art. Levels and physics are unchanged.
 
-            - The whole game at the original 320x200: title, demos, control panel, world map, all levels and enemies, save/load, high scores, help screens, AdLib music and sound effects.
-            - Not ported yet: the scrolling intro, the story crawl, mouse and DOS joystick input.
-            - Builds for Windows, Linux and macOS (Apple Silicon) below.
+            - The remaster view is now the default: 356x200 in 16:9 at the window's native resolution, the original map border kept hidden, and the camera and sprites interpolated between game frames at the display's refresh rate. The status window and dialogs are drawn as in the original.
+            - F11 switches between the remaster and the classic 320x200 view (or start with `--classic`). The classic view is unchanged from v1.0.
+            - Art: the remaster loads new art from `art/manifest.txt` (`--art DIR`, F12 reloads it). Anything without new art is the original scaled 4x (Scale4x, or `--nearest` for plain pixels). Collision boxes always come from the original, so art cannot change gameplay.
+            - New tools for making that art from your own copy of the game: `keen4-extract` exports every tile, sprite and picture as PNG, and `tools/keen4-upscale/keen4_upscale.py` builds a 4x set with Scale4x or the Real-ESRGAN AI upscaler, upscaling tiles together with their level neighbours so edges match, and writes a review page. See docs/ART.md.
+            - Builds for Windows, Linux and macOS (Apple Silicon) below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
 
-            Game data is not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. See README.md.
+            Game data and art are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Art made from it with the tools stays on your machine. See README.md.
+
+            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.0...${{ env.TAG }}
           files: dist/*
           fail_on_unmatched_files: true
