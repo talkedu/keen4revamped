@@ -5,7 +5,10 @@
 #include <fstream>
 #include <vector>
 
+#include "engine/lang.h"
 #include "engine/version.h"
+#include "id/id_ca.h"
+#include "id/id_vw.h"
 #include "platform/headless/headless_platform.h"
 #include "render/art.h"
 
@@ -81,6 +84,73 @@ int main() {
     CHECK(!art.Find(AssetKind::Tile16M, 7, &src));
     CHECK(!art.Find(AssetKind::Sprite, 126, &src));
     fs::remove_all(root);
+  }
+
+  // Translations: UTF-8 becomes ISO-8859-1, unknown text passes through, and
+  // --lang wins over the config.
+  {
+    using namespace keen4::lang;
+    CHECK(ToLatin1("ação É") == "a\xE7\xE3o \xC9");
+    CHECK(ToLatin1("€") == "?");
+    Language l;
+    CHECK(Parse("PT-br", &l) && l == Language::Portuguese);
+    CHECK(Parse("en", &l) && l == Language::English);
+    CHECK(!Parse("xx", &l));
+
+    const char* paused = "PAUSED";
+    CHECK(Tr(paused) == paused);
+    CHECK(Article(4739) == nullptr);
+    Set(Language::Portuguese);
+    CHECK(std::strcmp(Tr(paused), "PAUSADO") == 0);
+    CHECK(std::strcmp(Tr("LEVEL"), "N\xCDVEL") == 0);
+    const char* unknown = "no such text";
+    CHECK(Tr(unknown) == unknown);
+    CHECK(Article(4739) && std::strncmp(Article(4739), "^P", 2) == 0);
+    CHECK(std::strcmp(MenuLabel(), "IDIOMA: PORTUGU\xCAS") == 0);
+    Next();
+    CHECK(Current() == Language::English);
+
+    SetFromCommandLine(Language::English);
+    SetFromConfig(Language::Portuguese);
+    CHECK(Current() == Language::English);
+  }
+
+  // Accented letters are drawn from the plain letter of the font plus a mark,
+  // which may rise above the font's first row.
+  {
+    static byte font[0x302 + 6] = {};
+    font[0] = 6;  // height
+    font[2 + 'A' * 2] = 0x02;
+    font[3 + 'A' * 2] = 0x03;  // glyph at 0x302
+    font[0x202 + 'A'] = 5;     // width
+    const byte rows[6] = {0x70, 0x88, 0xF8, 0x88, 0x88, 0x00};
+    std::memcpy(font + 0x302, rows, sizeof rows);
+    byte* saved = grsegs[STARTFONT];
+    grsegs[STARTFONT] = font;
+    fontnumber = 0;
+
+    word w, h;
+    VW_MeasurePropString("\xC1", &w, &h);  // Á
+    CHECK(w == 5 && h == 6);
+    VW_MeasurePropString("\xC6", &w, &h);  // Æ has no plain letter
+    CHECK(w == 0);
+
+    auto ink = [](int y) {
+      int n = 0;
+      for (int x = 16; x < 32; x++) n += vw_screen[y * SCREENWIDTH + x] != 0;
+      return n;
+    };
+    VW_ClearVideo(0);
+    px = 16;
+    py = 20;
+    VW_DrawPropString("A");
+    CHECK(ink(18) == 0 && ink(19) == 0 && ink(20) == 3);
+    VW_ClearVideo(0);
+    px = 16;
+    py = 20;
+    VW_DrawPropString("\xC1");
+    CHECK(ink(17) == 0 && ink(18) == 2 && ink(19) == 2 && ink(20) == 3 && ink(22) == 5);
+    grsegs[STARTFONT] = saved;
   }
 
   if (failures == 0) std::printf("all tests passed\n");

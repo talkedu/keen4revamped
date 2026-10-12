@@ -1,7 +1,7 @@
 // Entry point: finds the game data, loads KEEN4E.EXE, sets up the platform
 // layer and runs the ported CK_MAIN.
 //
-//   keen4 [--data DIR] [--save DIR] [--fullscreen] [--scale N] [--nosound]
+//   keen4 [--data DIR] [--save DIR] [--fullscreen] [--scale N] [--nosound] [--lang en|pt-BR]
 //         [original parameters such as /NOWAIT, /TEDLEVEL n, EASY]
 //
 // Headless mode renders without a window, for tests and CI:
@@ -23,6 +23,7 @@
 
 #include "audio/remaster_audio.h"
 #include "engine/datafiles.h"
+#include "engine/lang.h"
 #include "engine/png_writer.h"
 #include "engine/version.h"
 #include "exe/keen4exe.h"
@@ -217,7 +218,15 @@ int main(int argc, char** argv) {
       hitboxes = true;
     else if (a == "--hd-shots")
       hdshots = true;
-    else if (a == "--version") {
+    else if (a == "--lang") {
+      std::string code = next();
+      keen4::lang::Language language;
+      if (!keen4::lang::Parse(code, &language)) {
+        std::fprintf(stderr, "Unknown language '%s' (use en or pt-BR)\n", code.c_str());
+        return 2;
+      }
+      keen4::lang::SetFromCommandLine(language);
+    } else if (a == "--version") {
       std::printf("%s\n", keen4::VersionString());
       return 0;
     } else

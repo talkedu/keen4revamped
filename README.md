@@ -66,6 +66,10 @@ plays the songs and effects listed in `audio/manifest.txt` instead (`--audio DIR
 folder; Shift+F11 then switches between remastered and original), and `--music-volume N` and
 `--sfx-volume N` set the volumes. See [docs/AUDIO.md](docs/AUDIO.md).
 
+The game's text is in English or Brazilian Portuguese: the LANGUAGE item of the main menu
+switches between them and the choice is saved with the configuration. `--lang en` or
+`--lang pt-BR` picks one for a single run. See [docs/LANGUAGES.md](docs/LANGUAGES.md).
+
 Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
 `--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).
 The original's parameters still work, for example `/TEDLEVEL 3 HARD` to jump to a level.

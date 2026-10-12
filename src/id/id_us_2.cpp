@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "engine/datafiles.h"
+#include "engine/lang.h"
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
 #include "id/id_in.h"
@@ -51,6 +52,7 @@ using CustomFn = boolean (*)(int msg, UserItem* item);
 enum { uii_Bad, uii_Button, uii_RadioButton, uii_Folder };
 enum { ui_Pushed = 1, ui_Selected = 2, ui_Disabled = 4, ui_Separated = 8 };
 enum { uc_None, uc_Return, uc_Abort, uc_Quit, uc_Loaded, uc_SEasy, uc_SNormal, uc_SHard };
+constexpr word uc_Language = 0x100;  // port: the main menu's language item
 enum { uic_SetupCard, uic_DrawCard, uic_TouchupCard, uic_DrawIcon, uic_Draw, uic_Hit };
 
 struct UserItemGroup;
@@ -171,6 +173,17 @@ void LoadTree() {
   optionsitems = LoadItems(0x1FAA, 0);
   keybuttonitems = LoadItems(0x1FBD, 0);
   configitems = LoadItems(0x1FCC, 0);
+
+  // Port: a language item above QUIT. With nine items the list starts
+  // right under the card's title so it still ends above the footer.
+  std::vector<UserItem>& items = itemarrays[Linear(0x1FD8, 0)];
+  UserItem language{};
+  language.type = uii_Button;
+  language.comm = uc_Language;
+  language.text = keen4::lang::MenuLabel();
+  items.insert(items.end() - 2, language);
+  rootgroup->items = rootitems = items.data();
+  rootgroup->y = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,8 +217,9 @@ byte* KeyMap(int i) {
   }
 }
 
-void Measure(const char* s, word* w, word* h) { VW_MeasurePropString(s ? s : "", w, h); }
-void DrawString(const char* s) { VWB_DrawPropString(s ? s : ""); }
+// Port: everything the panel shows goes through these, so they translate it.
+void Measure(const char* s, word* w, word* h) { VW_MeasurePropString(s ? keen4::lang::Tr(s) : "", w, h); }
+void DrawString(const char* s) { VWB_DrawPropString(s ? keen4::lang::Tr(s) : ""); }
 
 word ItemIndex(const UserItem* item, const UserItem* base) { return static_cast<word>(item - base); }
 
@@ -437,13 +451,14 @@ boolean ConfirmComm(word comm) {
 // 1A89:07C4
 void HandleError(int num) {
   char buf[64];
-  std::strcpy(buf, S(0x49C6));  // "Error: "
+  using keen4::lang::Tr;
+  std::strcpy(buf, Tr(S(0x49C6)));  // "Error: "
   if (num < 0)
-    std::strcat(buf, S(0x49CE));  // "Unknown"
+    std::strcat(buf, Tr(S(0x49CE)));  // "Unknown"
   else if (num == ENOSPC || num == 8)
-    std::strcat(buf, S(0x49D6));  // "Disk is Full"
+    std::strcat(buf, Tr(S(0x49D6)));  // "Disk is Full"
   else if (num == 11)
-    std::strcat(buf, S(0x49E3));  // "File is Incomplete"
+    std::strcat(buf, Tr(S(0x49E3)));  // "File is Incomplete"
   else
     std::strncat(buf, std::strerror(num), sizeof buf - std::strlen(buf) - 1);
   CtlDialog(buf, S(0x49F6), nullptr);  // "PRESS ANY KEY"
@@ -1184,6 +1199,12 @@ void DoItem() {
   UserItem* item = &topcard->items[topcard->cursor];
   if (item->flags & ui_Disabled) {
     SD_PlaySound(SND_NOWAY);
+    return;
+  }
+  if (item->comm == uc_Language) {
+    keen4::lang::Next();
+    item->text = keen4::lang::MenuLabel();
+    DrawCtlPanel();
     return;
   }
   switch (item->type) {

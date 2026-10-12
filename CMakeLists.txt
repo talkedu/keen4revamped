@@ -10,6 +10,8 @@ option(KEEN4_BUILD_TESTS "Build the test suite" ON)
 
 if(MSVC)
   set(KEEN4_WARNINGS /W3)
+  # Translations are UTF-8 source text.
+  add_compile_options(/utf-8)
 else()
   set(KEEN4_WARNINGS -Wall -Wextra)
 endif()
@@ -28,6 +30,8 @@ add_library(keen4_engine STATIC
   src/engine/version.cpp
   src/engine/datafiles.cpp
   src/engine/png_writer.cpp
+  src/engine/lang.cpp
+  src/lang/pt_br.cpp
   src/exe/keen4exe.cpp
   src/platform/platform.cpp
   src/platform/headless/headless_platform.cpp

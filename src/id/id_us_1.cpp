@@ -6,6 +6,7 @@
 #include <ctime>
 
 #include "engine/datafiles.h"
+#include "engine/lang.h"
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
 #include "id/id_in.h"
@@ -78,6 +79,10 @@ void USL_ReadConfig() {
       sm = static_cast<SMMode>(w[1]);
       ctl = static_cast<ControlType>(w[2]);
       gotit = ok;
+      // Port: the language follows the original fields; older files lack it.
+      byte language;
+      if (ok && std::fread(&language, 1, 1, f) == 1)
+        keen4::lang::SetFromConfig(static_cast<keen4::lang::Language>(language));
     }
     std::fclose(f);
   }
@@ -112,6 +117,8 @@ void USL_WriteConfig() {
   std::fwrite(&gamepadflag, 1, 1, f);
   std::fwrite(&GravisGamepad, 2, 1, f);
   std::fwrite(GravisMap, 8, 1, f);
+  byte language = static_cast<byte>(keen4::lang::Current());
+  std::fwrite(&language, 1, 1, f);
   std::fclose(f);
 }
 
@@ -158,6 +165,7 @@ void USL_XORICursor(int x, int y, const char* s, word cursor) {
 
 // 1931:0DC2
 void USL_PrintInCenter(const char* s, sword xl, sword yl, sword xh, sword yh) {
+  s = keen4::lang::Tr(s);
   word w, h;
   USL_MeasureString(s, &w, &h);
   word rw = static_cast<word>(xh - xl);
@@ -291,6 +299,7 @@ void US_SetPrintRoutines(void (*measure)(const char*, word*, word*), void (*prin
 
 // 1931:0CF9
 void US_Print(const char* s) {
+  s = keen4::lang::Tr(s);
   char buf[512];
   std::strncpy(buf, s, sizeof buf - 1);
   buf[sizeof buf - 1] = '\0';
@@ -339,9 +348,12 @@ void US_PrintCentered(const char* s) {
 
 // 1931:0E60
 void US_CPrintLine(const char* s) {
+  s = keen4::lang::Tr(s);
   word w, h;
   USL_MeasureString(s, &w, &h);
-  if (w > WindowW) Quit("US_CPrintLine() - String exceeds width");
+  // Port: a translated line that is a little too wide is still drawn.
+  if (w > WindowW && keen4::lang::Current() == keen4::lang::Language::English)
+    Quit("US_CPrintLine() - String exceeds width");
   px = static_cast<sword>(WindowX + (WindowW - w) / 2);
   py = static_cast<sword>(PrintY);
   USL_DrawString(s);
@@ -350,6 +362,7 @@ void US_CPrintLine(const char* s) {
 
 // 1931:0EBD
 void US_CPrint(const char* s) {
+  s = keen4::lang::Tr(s);
   char buf[512];
   std::strncpy(buf, s, sizeof buf - 1);
   buf[sizeof buf - 1] = '\0';

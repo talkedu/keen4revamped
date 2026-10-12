@@ -1,6 +1,10 @@
 // ID_VW: video (segments 1D06 and 1E0A).
 #include "id/id_vw.h"
 
+#include <map>
+#include <utility>
+#include <vector>
+
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
 #include "id/id_sys.h"
@@ -290,11 +294,138 @@ word FontLocation(const byte* font, int c) {
 }
 byte FontWidth(const byte* font, int c) { return font[0x202 + c]; }
 
+bool FontPixel(const byte* font, int c, int x, int y) {
+  int w = FontWidth(font, c);
+  if (x < 0 || x >= w || y < 0 || y >= FontHeight(font)) return false;
+  return font[FontLocation(font, c) + y * ((w + 7) / 8) + x / 8] & (0x80 >> (x & 7));
+}
+
+// Port: the original fonts stop at ASCII, so the accented letters of
+// ISO-8859-1 (0xC0-0xFF) that translations use are drawn from the plain
+// letter plus a mark. Marks above may rise kAccentRows over the first row,
+// where capitals have no room of their own.
+constexpr int kAccentRows = 2;
+
+enum Mark { kNone, kGrave, kAcute, kCircumflex, kTilde, kDiaeresis, kCedilla, kRing };
+
+struct MarkShape {
+  int width, height;
+  const char* rows;
+};
+constexpr MarkShape kMarks[] = {
+    {0, 0, ""},
+    {4, 2, "##..""..##"},  // grave
+    {4, 2, "..##""##.."},  // acute
+    {4, 2, ".##.""#..#"},  // circumflex
+    {5, 2, ".##.#""#.##."},  // tilde
+    {5, 1, "##.##"},  // diaeresis
+    {3, 2, ".##""##."},  // cedilla, below the letter
+    {3, 2, ".#.""#.#"},  // ring
+};
+
+struct Latin1Letter {
+  char base;
+  Mark mark;
+};
+// 0xC0-0xFF. Letters without a plain form (Æ, Ð, Ø, Þ, ß...) are left out.
+constexpr Latin1Letter kLatin1[64] = {
+    {'A', kGrave}, {'A', kAcute}, {'A', kCircumflex}, {'A', kTilde}, {'A', kDiaeresis}, {'A', kRing},
+    {0, kNone},    {'C', kCedilla}, {'E', kGrave}, {'E', kAcute}, {'E', kCircumflex}, {'E', kDiaeresis},
+    {'I', kGrave}, {'I', kAcute}, {'I', kCircumflex}, {'I', kDiaeresis}, {0, kNone}, {'N', kTilde},
+    {'O', kGrave}, {'O', kAcute}, {'O', kCircumflex}, {'O', kTilde}, {'O', kDiaeresis}, {0, kNone},
+    {0, kNone},    {'U', kGrave}, {'U', kAcute}, {'U', kCircumflex}, {'U', kDiaeresis}, {'Y', kAcute},
+    {0, kNone},    {0, kNone},
+    {'a', kGrave}, {'a', kAcute}, {'a', kCircumflex}, {'a', kTilde}, {'a', kDiaeresis}, {'a', kRing},
+    {0, kNone},    {'c', kCedilla}, {'e', kGrave}, {'e', kAcute}, {'e', kCircumflex}, {'e', kDiaeresis},
+    {'i', kGrave}, {'i', kAcute}, {'i', kCircumflex}, {'i', kDiaeresis}, {0, kNone}, {'n', kTilde},
+    {'o', kGrave}, {'o', kAcute}, {'o', kCircumflex}, {'o', kTilde}, {'o', kDiaeresis}, {0, kNone},
+    {0, kNone},    {'u', kGrave}, {'u', kAcute}, {'u', kCircumflex}, {'u', kDiaeresis}, {'y', kAcute},
+    {0, kNone},    {'y', kDiaeresis},
+};
+
+struct AccentedGlyph {
+  int width = 0, height = 0;
+  std::vector<byte> bits;  // (kAccentRows + height) rows of `width` pixels
+  bool Pixel(int x, int y) const {
+    if (x < 0 || x >= width || y < -kAccentRows || y >= height) return false;
+    return bits[(y + kAccentRows) * width + x];
+  }
+  void Set(int x, int y) {
+    if (x >= 0 && x < width && y >= -kAccentRows && y < height) bits[(y + kAccentRows) * width + x] = 1;
+  }
+};
+
+AccentedGlyph BuildAccented(const byte* font, int c) {
+  AccentedGlyph g;
+  const Latin1Letter letter = kLatin1[c - 0xC0];
+  if (!letter.base) return g;
+  int base = static_cast<byte>(letter.base);
+  // A font without lowercase letters (the big one) uses the capital.
+  if (!FontWidth(font, base) && base >= 'a') base -= 'a' - 'A';
+  g.width = FontWidth(font, base);
+  g.height = FontHeight(font);
+  if (!g.width) return g;
+  g.bits.assign(static_cast<std::size_t>(kAccentRows + g.height) * g.width, 0);
+
+  // A mark replaces the dot of i; its stem starts where the x-height does.
+  int stemtop = -1;
+  if (base == 'i' && letter.mark != kCedilla) {
+    for (int y = 0; y < g.height && stemtop < 0; y++)
+      for (int x = 0; x < FontWidth(font, 'x'); x++)
+        if (FontPixel(font, 'x', x, y)) stemtop = y;
+  }
+  int left = g.width, right = -1, top = g.height, bottom = -1;
+  for (int y = 0; y < g.height; y++) {
+    if (y < stemtop) continue;
+    for (int x = 0; x < g.width; x++) {
+      if (!FontPixel(font, base, x, y)) continue;
+      g.Set(x, y);
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+  }
+  if (right < 0) return g;
+
+  const MarkShape& m = kMarks[letter.mark];
+  int x0 = (left + right + 1 - m.width) / 2;
+  if (x0 + m.width > g.width) x0 = g.width - m.width;
+  if (x0 < 0) x0 = 0;
+  int y0;
+  if (letter.mark == kCedilla) {
+    y0 = bottom + 1;
+  } else {
+    // one blank row between the mark and the letter when there is room
+    y0 = top - 1 - m.height;
+    if (y0 < -kAccentRows) y0 = top - m.height;
+    if (y0 < -kAccentRows) y0 = -kAccentRows;
+  }
+  for (int y = 0; y < m.height; y++)
+    for (int x = 0; x < m.width; x++)
+      if (m.rows[y * m.width + x] == '#') g.Set(x0 + x, y0 + y);
+  return g;
+}
+
+const AccentedGlyph& Accented(const byte* font, int c) {
+  static std::map<std::pair<const byte*, int>, AccentedGlyph> cache;
+  auto key = std::make_pair(font, c);
+  auto found = cache.find(key);
+  if (found == cache.end()) found = cache.emplace(key, BuildAccented(font, c)).first;
+  return found->second;
+}
+
+int GlyphWidth(const byte* font, int c) {
+  int w = static_cast<signed char>(FontWidth(font, c));
+  if (!w && c >= 0xC0) w = Accented(font, c).width;
+  return w;
+}
+
 // 1D06:074D
 void VWL_MeasureString(const char* string, word* width, word* height, const byte* font) {
   *height = FontHeight(font);
   *width = 0;
-  for (; *string; string++) *width = static_cast<word>(*width + static_cast<signed char>(FontWidth(font, static_cast<byte>(*string))));
+  for (; *string; string++) *width = static_cast<word>(*width + GlyphWidth(font, static_cast<byte>(*string)));
 }
 
 }  // namespace
@@ -317,6 +448,8 @@ void VW_MeasureMPropString(const char* string, word* width, word* height) {
 // 1E0A:09B9. The string is assembled bit by bit starting at px&7 and written
 // in whole bytes: in the planes selected by fontcolor every pixel of those
 // bytes becomes the glyph bit (replace) or is XORed with it (pdrawmode 0x18).
+// Port: accents of translated letters may stand above the font's first row;
+// those rows only touch the accent's own pixels.
 void VW_DrawPropString(const char* string) {
   const byte* font = Font(fontnumber);
   if (!font) return;
@@ -324,32 +457,47 @@ void VW_DrawPropString(const char* string) {
   const int startbit = px & 7;
   int bit = startbit;
   // Glyph bits in a row-major buffer of up to 50 bytes (400 pixels).
-  static byte buffer[64][50 * 8];
+  static byte buffer[kAccentRows + 64][50 * 8];
   int maxheight = height < 64 ? height : 64;
-  for (int y = 0; y < maxheight; y++) std::memset(buffer[y], 0, sizeof buffer[y]);
+  for (int y = 0; y < kAccentRows + maxheight; y++) std::memset(buffer[y], 0, sizeof buffer[y]);
+  int top = 0;
   for (const char* s = string; *s; s++) {
     int c = static_cast<byte>(*s);
     int w = FontWidth(font, c);
+    if (!w && c >= 0xC0) {
+      const AccentedGlyph& g = Accented(font, c);
+      for (int y = 0; y < kAccentRows + maxheight; y++) {
+        for (int x = 0; x < g.width && bit + x < 50 * 8; x++) {
+          if (!g.Pixel(x, y - kAccentRows)) continue;
+          buffer[y][bit + x] = 1;
+          if (y - kAccentRows < top) top = y - kAccentRows;
+        }
+      }
+      bit += g.width;
+      continue;
+    }
     int rowbytes = (w + 7) / 8;
     const byte* glyph = font + FontLocation(font, c);
     for (int y = 0; y < maxheight; y++) {
       for (int x = 0; x < w; x++) {
         if (bit + x >= 50 * 8) break;
-        if (glyph[y * rowbytes + x / 8] & (0x80 >> (x & 7))) buffer[y][bit + x] = 1;
+        if (glyph[y * rowbytes + x / 8] & (0x80 >> (x & 7))) buffer[kAccentRows + y][bit + x] = 1;
       }
     }
     bit += w;
   }
   int bytes = bit / 8 + ((bit & 7) ? 1 : 0);
   int x0 = px & ~7;
-  for (int y = 0; y < maxheight; y++) {
+  for (int y = top; y < maxheight; y++) {
     int sy = py + y;
     if (static_cast<unsigned>(sy) >= SCREENHEIGHT) continue;
+    const byte* row = buffer[kAccentRows + y];
     for (int x = 0; x < bytes * 8; x++) {
       int sx = x0 + x;
       if (static_cast<unsigned>(sx) >= SCREENWIDTH) continue;
+      if (y < 0 && !row[x]) continue;
       byte& pixel = vw_screen[sy * SCREENWIDTH + sx];
-      byte g = buffer[y][x] ? fontcolor : 0;
+      byte g = row[x] ? fontcolor : 0;
       if (pdrawmode == 0x18)
         pixel ^= g;
       else

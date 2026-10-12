@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "engine/datafiles.h"
+#include "engine/lang.h"
 #include "exe/keen4exe.h"
 #include "game/ck_def.h"
 
@@ -316,12 +317,12 @@ void HandleDeathImpl() {
 const char* LevelName(int level) {
   word ofs = g_exe.Word(static_cast<std::uint16_t>(0x18F4 + level * 4));
   word seg = g_exe.Word(static_cast<std::uint16_t>(0x18F6 + level * 4));
-  return reinterpret_cast<const char*>(g_exe.At(seg, ofs));
+  return keen4::lang::Tr(reinterpret_cast<const char*>(g_exe.At(seg, ofs)));
 }
 const char* LevelEnter(int level) {
   word ofs = g_exe.Word(static_cast<std::uint16_t>(0x1958 + level * 4));
   word seg = g_exe.Word(static_cast<std::uint16_t>(0x195A + level * 4));
-  return reinterpret_cast<const char*>(g_exe.At(seg, ofs));
+  return keen4::lang::Tr(reinterpret_cast<const char*>(g_exe.At(seg, ofs)));
 }
 
 void InstallCacheBoxHooks() {
