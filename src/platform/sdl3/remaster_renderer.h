@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "render/art.h"
+#include "render/motion.h"
 #include "render/scene.h"
 
 namespace keen4::platform {
@@ -36,7 +37,7 @@ class RemasterRenderer {
 
  private:
   SDL_Texture* Texture(render::AssetKind kind, int number, const render::ArtImage** image);
-  void DrawScene(float alpha);
+  void DrawScene(float alpha, double now);
   void DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette, bool overlay_only);
 
   SDL_Renderer* renderer_;
@@ -53,6 +54,7 @@ class RemasterRenderer {
   render::Scene prev_, cur_;
   bool have_prev_ = false, have_cur_ = false;
   Uint64 prev_ns_ = 0, cur_ns_ = 0;
+  render::SpriteMotion motion_;
   float snap_ = 1;  // device pixels per view pixel, to keep tiles on whole pixels
 };
 

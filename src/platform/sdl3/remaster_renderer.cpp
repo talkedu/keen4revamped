@@ -19,6 +19,8 @@ constexpr int kMaxLerp = 48;
 
 float Lerp(float a, float b, float t) { return a + (b - a) * t; }
 
+double Seconds(Uint64 ns) { return static_cast<double>(ns) * 1e-9; }
+
 }  // namespace
 
 RemasterRenderer::RemasterRenderer(SDL_Renderer* renderer, render::ArtLibrary* art)
@@ -38,6 +40,7 @@ void RemasterRenderer::DropTextures() {
 void RemasterRenderer::Update(const render::Scene* scene, Uint64 now_ns) {
   if (!scene) {
     have_cur_ = have_prev_ = false;
+    motion_.Reset();
     return;
   }
   if (have_cur_ && scene->serial == cur_.serial) return;
@@ -49,6 +52,7 @@ void RemasterRenderer::Update(const render::Scene* scene, Uint64 now_ns) {
   cur_ = *scene;
   cur_ns_ = now_ns;
   have_cur_ = true;
+  motion_.Update(cur_, Seconds(now_ns));
 }
 
 SDL_Texture* RemasterRenderer::Texture(render::AssetKind kind, int number, const render::ArtImage** image) {
@@ -78,7 +82,7 @@ SDL_Texture* RemasterRenderer::Texture(render::AssetKind kind, int number, const
   return tex;
 }
 
-void RemasterRenderer::DrawScene(float alpha) {
+void RemasterRenderer::DrawScene(float alpha, double now) {
   const render::Scene& s = cur_;
   const bool lerp = have_prev_ && prev_.map == s.map && std::abs(prev_.viewx - s.viewx) <= kMaxLerp &&
                     std::abs(prev_.viewy - s.viewy) <= kMaxLerp;
@@ -142,7 +146,7 @@ void RemasterRenderer::DrawScene(float alpha) {
     }
     if (sp.inverse) continue;  // drawn from the classic frame
     float x = static_cast<float>(sp.x), y = static_cast<float>(sp.y);
-    if (lerp) render::InterpolateSprite(prev_, sp, alpha, kMaxLerp, &x, &y);
+    if (lerp && interpolate) motion_.Position(sp, now, &x, &y);
     drawImage(render::AssetKind::Sprite, sp.chunk, x, y);
   }
   if (!frontdone) drawTiles(true);
@@ -236,7 +240,7 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
     alpha = static_cast<float>(now_ns - cur_ns_) / static_cast<float>(cur_ns_ - prev_ns_);
     alpha = std::clamp(alpha, 0.0f, 1.0f);
   }
-  DrawScene(alpha);
+  DrawScene(alpha, Seconds(now_ns));
 
   // palette fades: darken the new art by how dark the palette is
   float sum = 0, normal = 0;
