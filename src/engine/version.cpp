@@ -2,6 +2,6 @@
 
 namespace keen4 {
 
-const char* VersionString() { return "keen4revamped 0.1.0 (scaffold)"; }
+const char* VersionString() { return "keen4revamped 1.0.0"; }
 
 }  // namespace keen4
