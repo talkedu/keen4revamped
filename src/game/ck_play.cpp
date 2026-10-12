@@ -546,8 +546,10 @@ void ScrollScreen(objtype* ob) {
 void CheckKeys() {
   if (screenfaded) return;  // don't do anything with a faded screen
 
-  // Enter: status window
-  if (Keyboard[sc_Enter]) {
+  // Enter: status window (port: or the Gravis status button; Back on a
+  // gamepad types Enter)
+  if (Keyboard[sc_Enter] ||
+      (GravisGamepad && IN_GamepadActive() && ((IN_JoyButtons() >> (GravisMap[3] & 3)) & 1))) {
     StatusWindow();
     IN_ClearKeysDown();
     RF_ForceRefresh();
@@ -797,14 +799,17 @@ void GivePoints(word points) {
 
 // 06BD:1F47
 void PollControls() {
+  IN_NoteGameplay();  // port: the gamepad steers Keen, not the menus
   IN_ReadControl(0, &c);
   if (c.yaxis != -1) upheld = false;
 
-  if (GravisGamepad && !DemoMode) {
-    // Gravis gamepad buttons are not supported by the port.
-    jumpbutton = c.button0;
-    pogobutton = c.button1;
-    firebutton = false;
+  // Port: GravisMap applies to the gamepad's A, B, X and Y, and only while it
+  // is the active control.
+  if (GravisGamepad && IN_GamepadActive() && !DemoMode) {
+    word buttons = IN_JoyButtons();
+    jumpbutton = (buttons >> (GravisMap[0] & 3)) & 1;
+    pogobutton = (buttons >> (GravisMap[1] & 3)) & 1;
+    firebutton = (buttons >> (GravisMap[2] & 3)) & 1;
     if (!jumpbutton) jumpheld = false;
     if (!pogobutton) pogoheld = false;
     if (!firebutton) fireheld = false;
@@ -835,6 +840,8 @@ void PollControls() {
     jumpbutton = c.button0;
     pogobutton = c.button1;
     firebutton = Keyboard[firescan];
+    // Port: X or Y fires on a gamepad.
+    if (IN_GamepadActive() && (IN_JoyButtons() & 0xC)) firebutton = true;
     if (!jumpbutton) jumpheld = false;
     if (!pogobutton) pogoheld = false;
     if (!firebutton) fireheld = false;

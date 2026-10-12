@@ -30,15 +30,27 @@ extern byte firescan;
 void TEDDeath();
 void HelpScreens();
 
-// Port: the original's mouse and joystick routines (ID_IN). The port has no
-// mouse or DOS joystick, so the joystick items stay disabled as on a PC
-// without one.
+// Port: the original's mouse and joystick routines (ID_IN). There is no
+// mouse; joystick 1 is an SDL gamepad (see IN_JoyButtons), which needs no
+// calibration, and joystick 2 stays disabled.
 struct CursorInfo {
   boolean button0, button1;
   sword x, y;
 };
-static void IN_ReadCursor(CursorInfo* info) { *info = CursorInfo{}; }
-static word IN_GetJoyButtonsDB(word) { return 0; }
+// The original read the hardware on every call, and the panel spins on these
+// until a button is released, so each call pumps events (and waits a moment).
+static void IN_ReadCursor(CursorInfo* info) {
+  *info = CursorInfo{};
+  SYS_Idle();
+  if (!IN_GamepadActive()) return;
+  word buttons = IN_JoyButtons();
+  info->button0 = static_cast<boolean>(buttons & 1);
+  info->button1 = static_cast<boolean>((buttons & 2) != 0);
+}
+static word IN_GetJoyButtonsDB(word joy) {
+  SYS_Idle();
+  return joy == 1 ? 0 : IN_JoyButtons();
+}
 static void IN_GetJoyAbs(word, word* x, word* y) { *x = *y = 0; }
 static void IN_SetupJoy(word, word, word, word, word) {}
 
@@ -519,7 +531,8 @@ boolean ConfigCustom(int msg, UserItem*) {
 void KeySCustom(UserItem* item, word index) {
   boolean on = false;
   longword lasttime = 0;
-  LastScan = sc_None;
+  // Port: also clears the pad, so the A that picked this item does not cancel it.
+  IN_ClearKeysDown();
   fontcolor = NohiliteColor;
   ScanCode scan;
   for (;;) {
@@ -648,6 +661,8 @@ boolean CJGet(word joy, word button, word x, word y, word* xaxis, word* yaxis) {
 
 // 1A89:0ED6
 boolean ConfigJoystick(word joy) {
+  // Port: an SDL gamepad comes calibrated.
+  if (joy < 2 && JoysPresent[joy]) return true;
   footerstrings[2] = footerstrings[1] = S(0x4C30);
   footerstrings[0] = S(0x4C31);  // "ESC to back out"
   DrawCtlPanel();
@@ -726,16 +741,16 @@ void GravisDraw(const char* s1, const char* s2, word count) {
 boolean GravisGetButton(word index, const char* name) {
   GravisDraw(S(0x4D48), name, index);  // "PRESS BUTTON FOR "
   for (;;) {
-    if (LastScan == sc_Escape) {
+    // Port: the pad is read before Escape, since B types Escape in menus, and
+    // every pass waits a moment so the pad state can change.
+    SYS_Idle();
+    word buttons = IN_GetJoyButtonsDB(2);
+    if (!buttons && LastScan == sc_Escape) {
       Keyboard[sc_Escape] = false;
       LastScan = sc_None;
       return false;
     }
-    word buttons = IN_GetJoyButtonsDB(2);
-    if (!buttons) {
-      SYS_Idle();
-      continue;
-    }
+    if (!buttons) continue;
     word button = 0;
     for (word i = 0; i < 4; i++) {
       if (buttons & (1 << i)) button = static_cast<word>(button + i + 1);
@@ -748,6 +763,7 @@ boolean GravisGetButton(word index, const char* name) {
     }
     if (used) continue;
     GravisMap[index] = button;
+    IN_ClearKeysDown();  // port: drop the key the button typed, and wait for its release
     return true;
   }
 }
