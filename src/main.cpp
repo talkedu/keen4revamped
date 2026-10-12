@@ -50,6 +50,7 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
  public:
   int max_frames = 600;
   std::uint64_t max_tics = 0;
+  int vsync_hz = 0;
   int shot_every = 0;
   std::string out_dir = ".";
   std::vector<ScriptedKey> script;
@@ -66,6 +67,12 @@ class ScriptedHeadless : public keen4::platform::HeadlessPlatform {
   void Present(const std::uint8_t* pixels, int width, int height,
                const std::uint32_t* palette) override {
     HeadlessPlatform::Present(pixels, width, height, palette);
+    if (vsync_hz > 0) {
+      // wait for the next simulated vertical blank, like a vsynced window
+      double period = 1000.0 / vsync_hz;
+      auto next = static_cast<std::uint64_t>((static_cast<std::uint64_t>(Millis() / period) + 1) * period);
+      Delay(static_cast<int>(next - Millis()));
+    }
     int f = frames();
     if (shot_every > 0 && f % shot_every == 0) Save(f);
     if (f >= max_frames) {
@@ -135,7 +142,7 @@ std::string FindDataDir(const std::string& requested) {
 
 int main(int argc, char** argv) {
   std::string datadir, savedir;
-  bool headless = false, fullscreen = false, sound = true;
+  bool headless = false, fullscreen = false, sound = true, vsync = false;
   int scale = 3;
   auto scripted = std::make_unique<ScriptedHeadless>();
   std::vector<char*> gameargs = {argv[0]};
@@ -165,6 +172,10 @@ int main(int argc, char** argv) {
       scale = std::atoi(next().c_str());
     else if (a == "--nosound")
       sound = false;
+    else if (a == "--sim-vsync")
+      scripted->vsync_hz = std::atoi(next().c_str());
+    else if (a == "--vsync")
+      vsync = true;
     else if (a == "--version") {
       std::printf("%s\n", keen4::VersionString());
       return 0;
@@ -205,6 +216,7 @@ int main(int argc, char** argv) {
     options.scale = scale;
     options.fullscreen = fullscreen;
     options.audio = sound;
+    options.vsync = vsync;
     platform = keen4::platform::CreateSdlPlatform(options);
     if (!platform) return 1;
   }
