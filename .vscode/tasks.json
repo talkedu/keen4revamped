@@ -35,6 +35,16 @@
       ]
     },
     {
+      "label": "build windows debug",
+      "detail": "Cross-compile build/windows-debug/keen4.exe with debug info",
+      "type": "shell",
+      "command": "cmake --preset windows-cross-debug && cmake --build --preset windows-cross-debug --parallel",
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
       "label": "run on Windows",
       "detail": "Build keen4.exe and start it on the Windows host",
       "type": "shell",
