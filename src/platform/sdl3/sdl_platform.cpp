@@ -191,7 +191,7 @@ class SdlPlatform final : public IPlatform {
     // so motion stays smooth at the display's refresh rate.
     if (remaster_ && have_frame_ && remaster_renderer_->interpolate) {
       Uint64 now = SDL_GetTicksNS();
-      if (now - last_draw_ns_ >= refresh_ns_) {
+      if (DrawDue(&now)) {
         DrawRemaster(now);
         return;
       }
@@ -210,7 +210,7 @@ class SdlPlatform final : public IPlatform {
       // With interpolation the new scene waits for its refresh in Delay:
       // drawing it right after the last frame queues two frames for one
       // refresh, and one of them is shown late.
-      if (!remaster_renderer_->interpolate || now - last_draw_ns_ >= refresh_ns_) DrawRemaster(now);
+      if (!remaster_renderer_->interpolate || DrawDue(&now)) DrawRemaster(now);
       Pump();
       return;
     }
@@ -333,6 +333,24 @@ class SdlPlatform final : public IPlatform {
     remaster_renderer_->Draw(frame_.data(), palette_, now);
     SDL_RenderPresent(renderer_);
     last_draw_ns_ = now;
+    // the next frame is due one refresh after this one was, not after it was
+    // drawn, so frames keep an even beat; start over after a long stall
+    next_draw_ns_ = (now > next_draw_ns_ + refresh_ns_ ? now : next_draw_ns_) + refresh_ns_;
+  }
+
+  // Whether the next remaster frame is due at `*now`. Frames go out on an
+  // even beat at the display's rate: with FreeSync or G-SYNC the monitor
+  // refreshes when a frame arrives, and frames 6 to 8 ms apart made its
+  // brightness flicker. The last couple of ms before a frame is due are waited
+  // out precisely instead of with a coarse sleep.
+  bool DrawDue(Uint64* now) {
+    constexpr Uint64 kPrecise = 2000000;
+    if (*now + kPrecise < next_draw_ns_) return false;
+    if (*now < next_draw_ns_) {
+      SDL_DelayPrecise(next_draw_ns_ - *now);
+      *now = SDL_GetTicksNS();
+    }
+    return true;
   }
 
   void Pump() {
@@ -426,6 +444,7 @@ class SdlPlatform final : public IPlatform {
   std::uint32_t palette_[16] = {};
   bool have_frame_ = false;
   Uint64 last_draw_ns_ = 0;
+  Uint64 next_draw_ns_ = 0;  // when the next remaster frame is due
   Uint64 refresh_ns_ = 16666667;
 
   bool audio_enabled_ = true;
