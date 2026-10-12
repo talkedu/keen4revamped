@@ -62,7 +62,7 @@ jobs:
           cp docs/ART.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           zip -qr "$dir.zip" "$dir"
-      - name: Package (Linux/macOS)
+      - name: Package (Linux)
         if: matrix.preset == 'release'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
@@ -99,7 +99,7 @@ jobs:
             - F11 switches between the remaster and the classic 320x200 view (or start with `--classic`). The classic view is unchanged from v1.0.
             - Art: the remaster loads new art from `art/manifest.txt` (`--art DIR`, F12 reloads it). Anything without new art is the original scaled 4x (Scale4x, or `--nearest` for plain pixels). Collision boxes always come from the original, so art cannot change gameplay.
             - New tools for making that art from your own copy of the game: `keen4-extract` exports every tile, sprite and picture as PNG, and `tools/keen4-upscale/keen4_upscale.py` builds a 4x set with Scale4x or the Real-ESRGAN AI upscaler, upscaling tiles together with their level neighbours so edges match, and writes a review page. See docs/ART.md.
-            - Builds for Windows, Linux and macOS (Apple Silicon) below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
+            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
 
             Game data and art are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Art made from it with the tools stays on your machine. See README.md.
 
