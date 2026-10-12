@@ -1,19 +1,20 @@
 {
   // "Keen 4 (Windows)" plays the cross-compiled build on Windows.
+  // Every config wipes its build folder first, then builds from scratch.
   // "Keen 4" builds the debug preset and starts the game under gdb.
   // Ctrl+F5 runs the same config without the debugger.
   // The game runs from the repository root, so it finds ./gamedata and ./art on its own.
   "version": "0.2.0",
   "configurations": [
     {
-      // Builds keen4.exe in WSL and plays it on the Windows host. No breakpoints:
+      // Cleans and builds keen4.exe in WSL and plays it on the Windows host. No breakpoints:
       // use the configs below to debug the Linux build under gdb.
       "name": "Keen 4 (Windows)",
       "type": "node-terminal",
       "request": "launch",
       "command": "./build/windows/keen4.exe",
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build windows"
+      "preLaunchTask": "clean build windows"
     },
     {
       "name": "Keen 4",
@@ -22,7 +23,7 @@
       "program": "${workspaceFolder}/build/debug/keen4",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build debug",
+      "preLaunchTask": "clean build debug",
       "MIMode": "gdb",
       "setupCommands": [
         { "text": "-enable-pretty-printing", "ignoreFailures": true }
@@ -35,7 +36,7 @@
       "program": "${workspaceFolder}/build/debug/keen4",
       "args": ["--classic"],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build debug",
+      "preLaunchTask": "clean build debug",
       "MIMode": "gdb",
       "setupCommands": [
         { "text": "-enable-pretty-printing", "ignoreFailures": true }
@@ -48,7 +49,7 @@
       "program": "${workspaceFolder}/build/debug/keen4",
       "args": ["/TEDLEVEL", "${input:level}", "${input:difficulty}"],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build debug",
+      "preLaunchTask": "clean build debug",
       "MIMode": "gdb",
       "setupCommands": [
         { "text": "-enable-pretty-printing", "ignoreFailures": true }
@@ -61,7 +62,7 @@
       "program": "${workspaceFolder}/build/release/keen4",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build release",
+      "preLaunchTask": "clean build release",
       "MIMode": "gdb",
       "setupCommands": [
         { "text": "-enable-pretty-printing", "ignoreFailures": true }
