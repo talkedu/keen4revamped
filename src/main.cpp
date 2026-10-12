@@ -159,6 +159,7 @@ int main(int argc, char** argv) {
   bool headless = false, fullscreen = false, sound = true, vsync = false;
   bool classic = false, nearest = false, interpolate = true, hdshots = false;
   std::vector<std::string> artdirs;
+  bool curated = false, remastered_audio = false;
   bool hitboxes = false;
   int scale = 3;
   auto scripted = std::make_unique<ScriptedHeadless>();
@@ -189,10 +190,13 @@ int main(int argc, char** argv) {
       scale = std::atoi(next().c_str());
     else if (a == "--nosound")
       sound = false;
-    else if (a == "--audio")
+    else if (a == "--remastered-audio")
+      remastered_audio = true;
+    else if (a == "--audio") {
       keen4::audio::AudioOptions().dir = next();
-    else if (a == "--original-audio")
-      keen4::audio::AudioOptions().remastered = false;
+      remastered_audio = true;
+    } else if (a == "--curated")
+      curated = true;
     else if (a == "--music-volume")
       keen4::audio::AudioOptions().music_volume = std::atoi(next().c_str());
     else if (a == "--sfx-volume")
@@ -246,15 +250,15 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // Without --art: hand-curated art in art-curated/ over the generated set in art/.
-  if (artdirs.empty()) {
-    for (const char* dir : {"art-curated", "art"})
-      if (std::filesystem::exists(std::filesystem::path(dir) / "manifest.txt")) artdirs.push_back(dir);
-  }
+  // By default only the upscaled set in art/; --curated puts the hand-curated
+  // art in art-curated/ in front of it (or of the --art folders).
+  if (artdirs.empty() && std::filesystem::exists("art/manifest.txt")) artdirs.push_back("art");
+  if (curated && std::find(artdirs.begin(), artdirs.end(), "art-curated") == artdirs.end())
+    artdirs.insert(artdirs.begin(), "art-curated");
 
-  // Remastered songs and effects (docs/AUDIO.md); the original plays for anything not listed.
-  if (keen4::audio::AudioOptions().dir.empty() && std::filesystem::exists("audio/manifest.txt"))
-    keen4::audio::AudioOptions().dir = "audio";
+  // By default the original sound; --remastered-audio (or --audio DIR) plays the
+  // recordings in audio/ instead, and the original for anything not listed.
+  if (remastered_audio && keen4::audio::AudioOptions().dir.empty()) keen4::audio::AudioOptions().dir = "audio";
 
   std::unique_ptr<keen4::platform::IPlatform> platform;
 #ifdef KEEN4_WITH_SDL3
