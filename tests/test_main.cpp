@@ -111,6 +111,25 @@ int main() {
     CHECK(d[0] == 0 && d[7 * 8 + 7] == 1);
   }
 
+  // Dithers: a grey/white checkerboard becomes one light grey tone, edge to
+  // edge; a lone dot and a diagonal line stay as they are.
+  {
+    using keen4::render::DitherTones;
+    std::vector<std::uint8_t> checker(36);
+    for (int i = 0; i < 36; i++) checker[i] = ((i % 6) + (i / 6)) % 2 ? 7 : 15;
+    std::vector<std::uint32_t> tones = DitherTones(checker, 6, 6);
+    const std::uint32_t tone = tones[0];
+    // gamma-correct mean of AAAAAA and FFFFFF, lighter than the plain average
+    CHECK(tone == 0xFFDADADAu);
+    for (std::uint32_t t : tones) CHECK(t == tone);
+    std::vector<std::uint8_t> dot(25, 0);
+    dot[12] = 15;
+    for (std::uint32_t t : DitherTones(dot, 5, 5)) CHECK(t == 0);
+    std::vector<std::uint8_t> line(25, 0);
+    for (int i = 0; i < 5; i++) line[i * 6] = 15;
+    for (std::uint32_t t : DitherTones(line, 5, 5)) CHECK(t == 0);
+  }
+
   // Smooth motion follows the object, not the image corner: an inchworm
   // stepping 8 pixels right swaps its flat frame (art at +0) for its hump
   // (art at +8), and the hump must not start 8 pixels behind and slide.

@@ -1,5 +1,6 @@
 #include "render/art.h"
 
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -297,6 +298,89 @@ const ArtImage& ArtLibrary::Get(AssetKind kind, int number) {
   return cache_[key] = Build(kind, number);
 }
 
+std::vector<std::uint32_t> DitherTones(const std::vector<std::uint8_t>& indices, int width, int height) {
+  std::vector<std::uint32_t> tones(indices.size(), 0);
+  auto at = [&](int x, int y) -> int {
+    if (x < 0 || y < 0 || x >= width || y >= height) return -1;
+    return indices[static_cast<std::size_t>(y) * width + x];
+  };
+  auto mix = [](std::uint32_t a, std::uint32_t b) {
+    std::uint32_t out = 0;
+    for (int shift = 0; shift <= 16; shift += 8) {
+      double ca = std::pow(((a >> shift) & 255) / 255.0, 2.2), cb = std::pow(((b >> shift) & 255) / 255.0, 2.2);
+      out |= static_cast<std::uint32_t>(std::lround(std::pow((ca + cb) / 2, 1 / 2.2) * 255)) << shift;
+    }
+    return out;
+  };
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      const int a = at(x, y);
+      if (a == kClear) continue;
+      // side neighbours all one other colour, corner neighbours all this one;
+      // neighbours past the image edge (the next tile) are not known
+      int b = -1, sides = 0, corners = 0;
+      bool checker = true, partner = false;
+      for (auto [dx, dy] : {std::pair{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+        const int c = at(x + dx, y + dy);
+        if (c < 0) continue;
+        if (b < 0) b = c;
+        checker = checker && c == b && c != a && c != kClear;
+        sides++;
+        // near the edge, make sure a neighbour is part of the pattern too, so
+        // the end of a diagonal line is not taken for a dither
+        bool around = true;
+        for (auto [ex, ey] : {std::pair{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+          const int e = at(x + dx + ex, y + dy + ey);
+          if (e >= 0) around = around && e == a;
+        }
+        partner = partner || around;
+      }
+      checker = checker && partner;
+      for (auto [dx, dy] : {std::pair{-1, -1}, {1, -1}, {-1, 1}, {1, 1}}) {
+        const int c = at(x + dx, y + dy);
+        if (c < 0) continue;
+        checker = checker && c == a;
+        corners++;
+      }
+      if (checker && sides >= 2 && corners >= 1)
+        tones[static_cast<std::size_t>(y) * width + x] = 0xFF000000u | mix(EgaColor(a), EgaColor(b));
+    }
+  }
+  return tones;
+}
+
+namespace {
+
+// Replaces checkerboard dithers in `img` with the flat tone they stand for.
+// A dither of single pixels shimmers and looks darker while it scrolls
+// smoothly, and lighter again when the view stops. Only art pixels that still
+// have one of the dither's two colours change, so drawn-over detail stays.
+void SmoothDithers(ArtImage* img, const std::vector<std::uint8_t>& indices, int w, int h, float ax, float ay) {
+  const std::vector<std::uint32_t> tones = DitherTones(indices, w, h);
+  for (int ty = 0; ty < img->height; ty++) {
+    const int oy = static_cast<int>(std::floor((ty - ay) / kDensity));
+    if (oy < 0 || oy >= h) continue;
+    for (int tx = 0; tx < img->width; tx++) {
+      const int ox = static_cast<int>(std::floor((tx - ax) / kDensity));
+      if (ox < 0 || ox >= w) continue;
+      const std::size_t o = static_cast<std::size_t>(oy) * w + ox;
+      if (!tones[o]) continue;
+      std::uint32_t& texel = img->pixels[static_cast<std::size_t>(ty) * img->width + tx];
+      if ((texel >> 24) != 255) continue;
+      // the dither's colours: this pixel's and its side neighbours'
+      const std::uint32_t own = EgaColor(indices[o]);
+      const std::uint8_t side = ox + 1 < w   ? indices[o + 1]
+                                : ox > 0     ? indices[o - 1]
+                                : oy + 1 < h ? indices[o + w]
+                                             : indices[o - w];
+      const std::uint32_t rgb = texel & 0xFFFFFF;
+      if (rgb == own || rgb == EgaColor(side)) texel = tones[o];
+    }
+  }
+}
+
+}  // namespace
+
 ArtImage ArtLibrary::Build(AssetKind kind, int number) {
   ArtImage img;
   int w = 0, h = 0;
@@ -332,6 +416,7 @@ ArtImage ArtLibrary::Build(AssetKind kind, int number) {
     img.oy = -src.ay / kDensity;
     img.fromManifest = true;
     img.layer = src.layer;
+    SmoothDithers(&img, indices, w, h, src.ax, src.ay);
     return img;
   }
 
@@ -348,6 +433,7 @@ ArtImage ArtLibrary::Build(AssetKind kind, int number) {
   img.height = h * 4;
   img.pixels.resize(big.size());
   for (std::size_t i = 0; i < big.size(); i++) img.pixels[i] = Rgba(big[i]);
+  SmoothDithers(&img, indices, w, h, 0, 0);
   return img;
 }
 

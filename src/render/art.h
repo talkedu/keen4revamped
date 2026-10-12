@@ -48,6 +48,13 @@ bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::ve
 // relative to the image's top-left. New art never changes it.
 bool SpriteHitbox(int chunk, float* x0, float* y0, float* x1, float* y1);
 
+// Checkerboard dithers in an original image (palette indices): a pixel whose
+// side neighbours all share one other colour and whose corner neighbours share
+// its own. For each such pixel, the flat 0xFFRRGGBB tone the two colours make
+// from a distance (their gamma-correct mean); 0 elsewhere. The art is drawn
+// with these tones, since a fine dither looks darker while it scrolls.
+std::vector<std::uint32_t> DitherTones(const std::vector<std::uint8_t>& indices, int width, int height);
+
 // Scale2x applied twice: smooths diagonal edges of pixel art without new colours.
 std::vector<std::uint8_t> Scale4x(const std::vector<std::uint8_t>& src, int width, int height);
 
