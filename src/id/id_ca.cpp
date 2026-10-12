@@ -319,6 +319,11 @@ void CA_CacheGrChunk(int chunk) {
 }
 
 // 12A6:1260
+// Port: whether GAMEMAPS has a map with this number (for tools).
+bool CA_MapExists(int mapnum) {
+  return mapnum >= 0 && mapnum < NUMMAPS && ReadLong(maphead + 2 + mapnum * 4) > 0;
+}
+
 void CA_CacheMap(int mapnum) {
   for (int plane = 0; plane < MAPPLANES; plane++) {
     std::free(mapsegs[plane]);

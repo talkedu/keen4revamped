@@ -151,6 +151,47 @@ int main(int argc, char** argv) {
   }
   flush();
 
+  // Context patches: each tile with the 8 tiles around its first use in a
+  // level, so the upscaler sees the neighbours the tile is actually drawn
+  // next to and its edges come out matching them.
+  int patches = 0;
+  for (int plane = 0; plane < 2; plane++) {
+    AssetKind kind = plane == 0 ? AssetKind::Tile16 : AssetKind::Tile16M;
+    fs::path dir = root / "context" / (plane == 0 ? "tile16" : "tile16m");
+    fs::create_directories(dir);
+    std::vector<bool> done(plane == 0 ? NUMTILE16 : NUMTILE16M, false);
+    for (int map = 0; map < NUMMAPS; map++) {
+      if (!CA_MapExists(map)) continue;
+      CA_CacheMap(map);
+      const int mw = mapheaderseg[map]->width, mh = mapheaderseg[map]->height;
+      const word* tiles = mapsegs[plane];
+      for (int y = 1; y < mh - 1; y++) {
+        for (int x = 1; x < mw - 1; x++) {
+          int t = tiles[y * mw + x];
+          if ((plane == 1 && t == 0) || t >= static_cast<int>(done.size()) || done[t]) continue;
+          std::vector<std::uint32_t> patch(48 * 48, 0);
+          for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+              int n = tiles[(y + dy) * mw + x + dx];
+              int tw, th;
+              std::vector<std::uint8_t> idx;
+              if ((plane == 1 && n == 0) || !keen4::render::DecodeOriginal(kind, n, &tw, &th, &idx)) continue;
+              for (int py = 0; py < 16; py++)
+                for (int px = 0; px < 16; px++)
+                  patch[static_cast<std::size_t>((dy + 1) * 16 + py) * 48 + (dx + 1) * 16 + px] =
+                      ToArgb(idx[static_cast<std::size_t>(py) * 16 + px]);
+            }
+          }
+          keen4::WritePngRgba((dir / Name(t)).string(), patch.data(), 48, 48);
+          done[t] = true;
+          patches++;
+        }
+      }
+    }
+  }
+  index << "context 48\n";
+  std::printf("Wrote %d tile context patches\n", patches);
+
   for (int n = STARTPICS; n < STARTPICS + NUMPICS; n++) count += ExportPic(n, false, root / "pic");
   for (int n = STARTPICM; n < STARTPICM + NUMPICM; n++) count += ExportPic(n, true, root / "pic");
 

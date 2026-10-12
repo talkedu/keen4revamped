@@ -16,4 +16,5 @@ extracted/
 
 # Art derived from the game data (keen4-extract / keen4-upscale output).
 /art/
+/art-*/
 /extracted-art/
