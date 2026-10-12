@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build debug",
+      "detail": "Configure and build the debug preset (build/debug)",
+      "type": "shell",
+      "command": "cmake --preset debug && cmake --build --preset debug --parallel",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "build release",
+      "detail": "Configure and build the release preset (build/release)",
+      "type": "shell",
+      "command": "cmake --preset release && cmake --build --preset release --parallel",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "test",
+      "detail": "Build debug and run the test suite",
+      "type": "shell",
+      "command": "ctest --preset debug",
+      "dependsOn": "build debug",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    }
+  ]
+}
