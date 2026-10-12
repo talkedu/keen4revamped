@@ -6,10 +6,9 @@ on:
   pull_request:
 
 # Linux and Windows build on the self-hosted runner in WSL (label "wsl");
-# Windows is cross-compiled there with MinGW-w64. macOS has no self-hosted
-# runner, so it stays on GitHub-hosted and may fail without failing the run
-# (for example when the Actions spending limit is reached). The repo is
-# private, so only collaborators' pull requests reach the self-hosted runner.
+# Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
+# it needs a GitHub-hosted runner, which the Actions spending limit blocks.
+# The repo is private, so only collaborators' pull requests reach the runner.
 jobs:
   build:
     strategy:
@@ -22,13 +21,8 @@ jobs:
           - name: windows
             runs-on: [self-hosted, Linux, X64, wsl]
             preset: windows-cross
-          - name: macos
-            runs-on: macos-latest
-            preset: release
-            optional: true
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
-    continue-on-error: ${{ matrix.optional == true }}
     steps:
       - uses: actions/checkout@v4
       - name: Install SDL3 build dependencies
