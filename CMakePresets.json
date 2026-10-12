@@ -27,6 +27,21 @@
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer"
       }
+    },
+    {
+      "name": "windows-cross",
+      "displayName": "Windows (cross-compiled with MinGW-w64)",
+      "binaryDir": "build/windows",
+      "toolchainFile": "${sourceDir}/cmake/mingw-w64-x86_64.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "KEEN4_BUILD_TESTS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -44,6 +59,11 @@
       "name": "asan",
       "configurePreset": "asan",
       "configuration": "Debug"
+    },
+    {
+      "name": "windows-cross",
+      "configurePreset": "windows-cross",
+      "configuration": "Release"
     }
   ],
   "testPresets": [

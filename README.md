@@ -28,6 +28,10 @@ cmake --build --preset debug
 ctest --preset debug
 ```
 
+To build a Windows `keen4.exe` from Linux or WSL, install MinGW-w64 (`sudo apt install mingw-w64`)
+and use `cmake --preset windows-cross && cmake --build --preset windows-cross`. In VS Code under
+WSL, the "run on Windows" task builds it and starts it on the Windows host.
+
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).
 
