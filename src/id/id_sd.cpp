@@ -367,6 +367,7 @@ void SD_Shutdown() {
   SDL_ShutDevice();
   SDL_CleanAL();
   Unlock();
+  keen4::audio::Remaster().StartSong(-1);  // closes the recording
   SD_Started = false;
 }
 

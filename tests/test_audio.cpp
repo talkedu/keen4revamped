@@ -192,7 +192,9 @@ int main() {
     SD_Shutdown();
   }
 
-  fs::remove_all(root);
+  std::error_code ec;
+  fs::remove_all(root, ec);
+  CHECK(!ec);  // nothing left open
   if (failures == 0) std::printf("all audio tests passed\n");
   return failures == 0 ? 0 : 1;
 }
