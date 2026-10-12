@@ -35,6 +35,66 @@
       ]
     },
     {
+      "label": "clean debug",
+      "detail": "Delete build/debug so the next build starts from scratch",
+      "type": "shell",
+      "command": "rm -rf build/debug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "clean build debug",
+      "detail": "Clean build/debug, then build it (used by Run and Debug)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "clean debug",
+        "build debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "clean release",
+      "detail": "Delete build/release so the next build starts from scratch",
+      "type": "shell",
+      "command": "rm -rf build/release",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "clean build release",
+      "detail": "Clean build/release, then build it (used by Run and Debug)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "clean release",
+        "build release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "clean windows",
+      "detail": "Delete build/windows so the next build starts from scratch",
+      "type": "shell",
+      "command": "rm -rf build/windows",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "clean build windows",
+      "detail": "Clean build/windows, then build it (used by Run and Debug)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "clean windows",
+        "build windows"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "run on Windows",
       "detail": "Build keen4.exe and start it on the Windows host",
       "type": "shell",
