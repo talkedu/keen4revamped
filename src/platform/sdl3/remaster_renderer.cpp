@@ -142,15 +142,7 @@ void RemasterRenderer::DrawScene(float alpha) {
     }
     if (sp.inverse) continue;  // drawn from the classic frame
     float x = static_cast<float>(sp.x), y = static_cast<float>(sp.y);
-    if (lerp) {
-      for (const render::SceneSprite& old : prev_.sprites) {
-        if (old.id == sp.id && std::abs(old.x - sp.x) <= kMaxLerp && std::abs(old.y - sp.y) <= kMaxLerp) {
-          x = Lerp(static_cast<float>(old.x), x, alpha);
-          y = Lerp(static_cast<float>(old.y), y, alpha);
-          break;
-        }
-      }
-    }
+    if (lerp) render::InterpolateSprite(prev_, sp, alpha, kMaxLerp, &x, &y);
     drawImage(render::AssetKind::Sprite, sp.chunk, x, y);
   }
   if (!frontdone) drawTiles(true);

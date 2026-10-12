@@ -50,6 +50,7 @@ animtiletype* animhead;
 struct spritelisttype {
   int worldx, worldy;  // pixel position after the original's shift granularity
   int exactx;          // pixel position before that rounding (remaster renderer)
+  int artx, arty;      // image offset from the object's own position (remaster renderer)
   int width, height;   // width in bytes
   word grchunk;
   drawtype draw;
@@ -434,8 +435,8 @@ void CaptureScene() {
   for (int priority = 0; priority < PRIORITIES; priority++) {
     for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
       if (!grsegs[sprite->grchunk]) continue;
-      s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, priority,
-                           sprite->draw != spritedraw});
+      s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, sprite->artx,
+                           sprite->arty, priority, sprite->draw != spritedraw});
     }
   }
   std::memcpy(s.classic.data(), vw_screen, s.classic.size());
@@ -671,6 +672,7 @@ void RF_PlaceSprite(void** user, word globalx, word globaly, word spritenumber, 
   const spritetabletype& spr = spritetable[spritenumber - STARTSPRITES];
   if (!grsegs[spritenumber]) Quit("RF_PlaceSprite: Placed an uncached sprite");
 
+  const int objx = globalx >> G_P_SHIFT, objy = globaly >> G_P_SHIFT;
   globaly = static_cast<word>(globaly + spr.orgy);
   globalx = static_cast<word>(globalx + spr.orgx);
   word pixx = static_cast<word>(globalx >> G_P_SHIFT);
@@ -681,6 +683,8 @@ void RF_PlaceSprite(void** user, word globalx, word globaly, word spritenumber, 
   sprite->worldx = (pixx >> 3) * 8 + (shift * 2 / step) * step;
   sprite->exactx = pixx;
   sprite->worldy = static_cast<word>(globaly >> G_P_SHIFT);
+  sprite->artx = sprite->exactx - objx;
+  sprite->arty = sprite->worldy - objy;
   sprite->width = spr.width;
   sprite->height = spr.height;
   sprite->grchunk = spritenumber;
