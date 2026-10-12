@@ -59,36 +59,38 @@ void PackGameState(byte* p) {
   PutWord(p + 0x00, static_cast<word>(gamestate.worldx));
   PutWord(p + 0x02, static_cast<word>(gamestate.worldy));
   for (int i = 0; i < GAMELEVELS; i++) PutWord(p + 0x04 + i * 2, static_cast<word>(gamestate.leveldone[i]));
-  PutWord(p + 0x36, static_cast<word>(gamestate.score));
-  PutWord(p + 0x38, static_cast<word>(gamestate.score >> 16));
-  PutWord(p + 0x3A, static_cast<word>(gamestate.nextextra));
-  PutWord(p + 0x3C, static_cast<word>(gamestate.nextextra >> 16));
-  PutWord(p + 0x3E, static_cast<word>(gamestate.ammo));
-  PutWord(p + 0x40, static_cast<word>(gamestate.drops));
+  const PlayerState& ps = players[0];
+  PutWord(p + 0x36, static_cast<word>(ps.score));
+  PutWord(p + 0x38, static_cast<word>(ps.score >> 16));
+  PutWord(p + 0x3A, static_cast<word>(ps.nextextra));
+  PutWord(p + 0x3C, static_cast<word>(ps.nextextra >> 16));
+  PutWord(p + 0x3E, static_cast<word>(ps.ammo));
+  PutWord(p + 0x40, static_cast<word>(ps.drops));
   PutWord(p + 0x42, static_cast<word>(gamestate.wetsuit));
   PutWord(p + 0x44, static_cast<word>(gamestate.rescued));
   for (int i = 0; i < 4; i++) PutWord(p + 0x46 + i * 2, static_cast<word>(gamestate.keys[i]));
   PutWord(p + 0x4E, static_cast<word>(gamestate.mapon));
   PutWord(p + 0x50, static_cast<word>(gamestate.lives));
   PutWord(p + 0x52, static_cast<word>(gamestate.difficulty));
-  PutWord(p + 0x54, ObjAddress(gamestate.riding));
+  PutWord(p + 0x54, ObjAddress(ps.riding));
 }
 
 void UnpackGameState(const byte* p) {
   gamestate.worldx = static_cast<sword>(GetWord(p + 0x00));
   gamestate.worldy = static_cast<sword>(GetWord(p + 0x02));
   for (int i = 0; i < GAMELEVELS; i++) gamestate.leveldone[i] = static_cast<boolean>(GetWord(p + 0x04 + i * 2));
-  gamestate.score = static_cast<std::int32_t>(GetWord(p + 0x36) | (GetWord(p + 0x38) << 16));
-  gamestate.nextextra = static_cast<std::int32_t>(GetWord(p + 0x3A) | (GetWord(p + 0x3C) << 16));
-  gamestate.ammo = static_cast<sword>(GetWord(p + 0x3E));
-  gamestate.drops = static_cast<sword>(GetWord(p + 0x40));
+  PlayerState& ps = players[0];
+  ps.score = static_cast<std::int32_t>(GetWord(p + 0x36) | (GetWord(p + 0x38) << 16));
+  ps.nextextra = static_cast<std::int32_t>(GetWord(p + 0x3A) | (GetWord(p + 0x3C) << 16));
+  ps.ammo = static_cast<sword>(GetWord(p + 0x3E));
+  ps.drops = static_cast<sword>(GetWord(p + 0x40));
   gamestate.wetsuit = static_cast<boolean>(GetWord(p + 0x42));
   gamestate.rescued = static_cast<sword>(GetWord(p + 0x44));
   for (int i = 0; i < 4; i++) gamestate.keys[i] = static_cast<sword>(GetWord(p + 0x46 + i * 2));
   gamestate.mapon = static_cast<sword>(GetWord(p + 0x4E));
   gamestate.lives = static_cast<sword>(GetWord(p + 0x50));
   gamestate.difficulty = static_cast<sword>(GetWord(p + 0x52));
-  gamestate.riding = nullptr;
+  ps.riding = nullptr;
 }
 
 void PackObj(const objtype* ob, byte* p) {
@@ -334,14 +336,13 @@ void InstallCacheBoxHooks() {
 // 05C4:0063
 void NewGame() {
   std::memset(&gamestate, 0, sizeof gamestate);
-  gamestate.nextextra = 20000;
+  ResetPlayers();
   gamestate.lives = 3;
-  gamestate.ammo = 5;
 }
 
 // 05C4:00D3
 boolean SaveTheGame(std::FILE* file) {
-  gamestate.riding = nullptr;
+  for (PlayerState& ps : players) ps.riding = nullptr;
   byte buf[GAMESTATESIZE];
   PackGameState(buf);
   if (!WriteBytes(file, buf, sizeof buf)) return false;
@@ -559,7 +560,7 @@ void GameLoop() {
         RF_FixOfs();
         VW_FixRefreshBuffer();
         FinaleLayout();
-        CheckHighScore(gamestate.score, static_cast<word>(gamestate.rescued));
+        CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued));
         return;
 
       case ex_completed:
@@ -604,5 +605,5 @@ void GameLoop() {
   }
 
   GameOver();
-  CheckHighScore(gamestate.score, static_cast<word>(gamestate.rescued));
+  CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued));
 }

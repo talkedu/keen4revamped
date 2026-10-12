@@ -150,14 +150,15 @@ sword Abs(sword v) { return v < 0 ? static_cast<sword>(-v) : v; }
 
 // 11A2:0494: a mimrock sneaks up only while Keen walks away from it.
 void T_MimrockWait(objtype* ob) {
-  if (Abs(static_cast<sword>(ob->bottom - player->bottom)) > 5 * TILEGLOBAL) return;
-  if (Abs(static_cast<sword>(ob->x - player->x)) <= 3 * TILEGLOBAL) return;
-  if (player->x < ob->x) {
-    if (player->xdir == -1) {
+  objtype* target = NearestPlayer(ob);
+  if (Abs(static_cast<sword>(ob->bottom - target->bottom)) > 5 * TILEGLOBAL) return;
+  if (Abs(static_cast<sword>(ob->x - target->x)) <= 3 * TILEGLOBAL) return;
+  if (target->x < ob->x) {
+    if (target->xdir == -1) {
       ob->xdir = -1;
       ob->state = ST(0x3458);
     }
-  } else if (player->xdir == 1) {
+  } else if (target->xdir == 1) {
     ob->xdir = 1;
     ob->state = ST(0x3458);
   }
@@ -165,9 +166,10 @@ void T_MimrockWait(objtype* ob) {
 
 // 11A2:04F8
 void T_MimrockSneak(objtype* ob) {
-  if (Abs(static_cast<sword>(ob->bottom - player->bottom)) > 5 * TILEGLOBAL || ob->xdir != player->xdir) {
+  objtype* target = NearestPlayer(ob);
+  if (Abs(static_cast<sword>(ob->bottom - target->bottom)) > 5 * TILEGLOBAL || ob->xdir != target->xdir) {
     ob->state = ST(0x343A);
-  } else if (Abs(static_cast<sword>(ob->x - player->x)) < 4 * TILEGLOBAL) {
+  } else if (Abs(static_cast<sword>(ob->x - target->x)) < 4 * TILEGLOBAL) {
     ob->xspeed = static_cast<sword>(ob->xdir * 20);
     ob->yspeed = -40;
     ytry = static_cast<sword>(ob->yspeed * static_cast<sword>(tics));
@@ -183,7 +185,7 @@ void C_Mimrock(objtype* ob, objtype* hit) {
 // 11A2:059F
 void C_MimrockJump(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
-    KillKeen();
+    KillKeen(hit);
     return;
   }
   C_Mimrock(ob, hit);
@@ -217,9 +219,10 @@ void T_EatenKeen(objtype*) { playstate = ex_died; }
 
 // 11A2:0711 and 0AF6: dopefish and schoolfish chase Keen.
 void T_FishSwim(objtype* ob) {
-  if (!ob->temp1) ob->xdir = ob->x < player->x ? 1 : -1;
+  objtype* target = NearestPlayer(ob);
+  if (!ob->temp1) ob->xdir = ob->x < target->x ? 1 : -1;
   AccelerateXv(ob, ob->xdir, 10);
-  if (ob->y < player->y)
+  if (ob->y < target->y)
     AccelerateY(ob, 1, 10);
   else
     AccelerateY(ob, -1, 10);
@@ -253,7 +256,7 @@ void T_DopefishEat(objtype* ob) {
     xdist = static_cast<sword>(target->left - 2 * PIXGLOBAL - ob->left);
   MoveToward(xdist, ydist);
   if (xtry == xdist && ytry == ydist) {
-    if (target == player)
+    if (PlayerIndex(target) >= 0)
       ChangeState(target, ST(0x36CE));
     else if (target->state->nextstate)
       ChangeState(target, target->state->nextstate);
@@ -336,15 +339,17 @@ void T_Pixie(objtype* ob) {
   AccelerateY(ob, ob->ydir, 8);
   if (static_cast<sword>(ob->temp1 - ob->y) > 2 * PIXGLOBAL) ob->ydir = 1;
   if (static_cast<sword>(ob->y - ob->temp1) > 2 * PIXGLOBAL) ob->ydir = -1;
-  if (player->top < ob->bottom && player->bottom > ob->top) {
-    ob->xdir = player->x < ob->x ? -1 : 1;
+  objtype* target = NearestPlayer(ob);
+  if (target->top < ob->bottom && target->bottom > ob->top) {
+    ob->xdir = target->x < ob->x ? -1 : 1;
     ob->state = ST(0x37BE);
   }
 }
 
 // 11A2:0C18
 void T_PixieCheck(objtype* ob) {
-  if (player->top < ob->bottom && player->bottom > ob->top) ob->state = ST(0x37DC);
+  objtype* target = NearestPlayer(ob);
+  if (target->top < ob->bottom && target->bottom > ob->top) ob->state = ST(0x37DC);
 }
 
 // 11A2:0C3B
@@ -375,7 +380,7 @@ void C_Mine(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
     ChangeState(ob, ST(0x38AE));
     SD_PlaySound(SND_MINEEXPLODE);
-    KillKeen();
+    KillKeen(hit);
   }
 }
 

@@ -20,9 +20,10 @@ objtype* newobj;
 objtype dummyobj;
 sword objectcount;
 
+PlayerState players[MAXPLAYERS];
+int numplayers = 1;
+
 ControlInfo c;
-boolean jumpbutton, jumpheld, pogobutton, pogoheld, firebutton, fireheld, upheld;
-sword oldfirecount;
 boolean showscorebox = true, jerk, oldshooting, QuietFX;
 byte firescan = sc_Space;
 byte gamepadflag;
@@ -31,7 +32,6 @@ word GravisMap[4];
 boolean godmode, jumpcheat, singlestep, debugok, storedemo;
 boolean joypad;
 sword extravbls;
-sword invincible;
 boolean lockscroll;
 boolean scorescreenkludge;
 word originxtilemax, originytilemax;
@@ -133,11 +133,11 @@ boolean DebugKeys() {
     US_CenterWindow(12, 3);
     US_PrintCentered("Free items!");
     for (int i = 0; i < 4; i++) gamestate.keys[i] = 99;
-    gamestate.ammo = 99;
+    for (int i = 0; i < numplayers; i++) players[i].ammo = 99;
     gamestate.wetsuit = true;
     VW_UpdateScreen();
     IN_Ack();
-    GivePoints(3000);
+    GivePoints(player, 3000);
     return true;
   }
   if (Keyboard[sc_J]) {
@@ -208,7 +208,7 @@ boolean DebugKeys() {
   }
   if (Keyboard[sc_Z]) {
     gamestate.lives = 0;
-    KillKeen();
+    KillKeen(player);
     return false;
   }
   return false;
@@ -226,7 +226,7 @@ void CheatKeys() {
   VW_UpdateScreen();
   IN_Ack();
   RF_ForceRefresh();
-  gamestate.ammo = 99;
+  for (int i = 0; i < numplayers; i++) players[i].ammo = 99;
   gamestate.lives++;
   gamestate.keys[0] = gamestate.keys[1] = gamestate.keys[2] = gamestate.keys[3] = 1;
 }
@@ -249,7 +249,7 @@ void DrawStatusNumber(int x, int y, int length, int blanktile, std::int32_t numb
 }
 
 // 06BD:1021
-void DrawStatusWindow() {
+void DrawStatusWindow(const PlayerState& ps) {
   int x = 64, y = 16, w = 184, h = 144;
   VWB_DrawTile8(x, y, 54);
   VWB_DrawTile8(x, y + h, 60);
@@ -282,14 +282,14 @@ void DrawStatusWindow() {
   WindowW = 64;
   US_CPrint("SCORE");
   VWB_Bar(79, 71, 66, 10, 0);
-  DrawStatusNumber(80, 72, 8, 41, gamestate.score);
+  DrawStatusNumber(80, 72, 8, 41, ps.score);
 
   PrintY = 61;
   WindowX = 176;
   WindowW = 64;
   US_CPrint("EXTRA");
   VWB_Bar(175, 71, 66, 10, 0);
-  DrawStatusNumber(176, 72, 8, 41, gamestate.nextextra);
+  DrawStatusNumber(176, 72, 8, 41, ps.nextextra);
 
   PrintY = 85;
   WindowX = 80;
@@ -324,7 +324,7 @@ void DrawStatusWindow() {
   PrintY = 112;
   US_Print("AMMO");
   VWB_Bar(215, 111, 26, 10, 0);
-  DrawStatusNumber(216, 112, 3, 41, gamestate.ammo);
+  DrawStatusNumber(216, 112, 3, 41, ps.ammo);
 
   PrintX = 80;
   PrintY = 128;
@@ -336,7 +336,7 @@ void DrawStatusWindow() {
   PrintY = 128;
   US_Print("DROPS");
   VWB_Bar(224, 127, 16, 10, 0);
-  DrawStatusNumber(224, 128, 2, 41, gamestate.drops);
+  DrawStatusNumber(224, 128, 2, 41, ps.drops);
 
   VWB_Bar(79, 143, 66, 10, 15);
   PrintY = 144;
@@ -455,7 +455,7 @@ void ScrollScreen(objtype* ob) {
     ob->y = static_cast<word>(ob->y - (ob->bottom - (originymax + 13 * TILEGLOBAL)));
     SD_PlaySound(0x14);  // SND_PLUMMET
     godmode = false;
-    KillKeen();
+    KillKeen(ob);
     return;
   }
 
@@ -670,7 +670,7 @@ void StatusWindow() {
   RFL_InitAnimList();
   std::memcpy(statusbuffer, vw_framebuffer, sizeof statusbuffer);
   vw_screen = statusbuffer;
-  DrawStatusWindow();
+  DrawStatusWindow(players[0]);
   vw_screen = vw_framebuffer;
   RF_Refresh();
 
@@ -747,6 +747,8 @@ void InitObjArray() {
   player = newobj;
   GetNewObj(false);
   scoreobj = newobj;
+  players[0].ob = player;
+  players[0].scorebox = scoreobj;
 }
 
 // 06BD:1E11
@@ -787,65 +789,123 @@ void RemoveObj(objtype* ob) {
   objfreelist = ob;
 }
 
-// 06BD:1EF2
-void GivePoints(word points) {
-  gamestate.score += points;
-  if (!DemoMode && gamestate.score >= gamestate.nextextra) {
-    SD_PlaySound(0x11);  // SND_EXTRAKEEN
-    gamestate.lives++;
-    gamestate.nextextra *= 2;
+// Port: players.
+PlayerState& PlayerOf(objtype* ob) {
+  for (int i = 1; i < numplayers; i++)
+    if (players[i].ob == ob) return players[i];
+  return players[0];
+}
+
+int PlayerIndex(const objtype* ob) {
+  for (int i = 0; i < numplayers; i++)
+    if (players[i].ob == ob) return i;
+  return -1;
+}
+
+objtype* NearestPlayer(const objtype* ob) {
+  objtype* best = player;
+  std::int32_t bestdist = -1;
+  for (int i = 0; i < numplayers; i++) {
+    objtype* p = players[i].ob;
+    if (numplayers > 1 && p->obclass != keenobj) continue;  // dead, eaten or waiting at the exit
+    std::int32_t dx = static_cast<sword>(p->x - ob->x), dy = static_cast<sword>(p->y - ob->y);
+    std::int32_t dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    if (bestdist < 0 || dist < bestdist) {
+      best = p;
+      bestdist = dist;
+    }
+  }
+  return best;
+}
+
+objtype* PlayerRiding(const objtype* plat) {
+  for (int i = 0; i < numplayers; i++)
+    if (players[i].riding == plat) return players[i].ob;
+  return nullptr;
+}
+
+void ResetPlayers() {
+  for (PlayerState& ps : players) {
+    objtype *ob = ps.ob, *scorebox = ps.scorebox;
+    ps = PlayerState{};
+    ps.ob = ob;
+    ps.scorebox = scorebox;
+    ps.nextextra = 20000;
+    ps.ammo = 5;
   }
 }
+
+// 06BD:1EF2
+void GivePoints(objtype* who, word points) {
+  PlayerState& ps = PlayerOf(who);
+  ps.score += points;
+  if (!DemoMode && ps.score >= ps.nextextra) {
+    SD_PlaySound(0x11);  // SND_EXTRAKEEN
+    gamestate.lives++;
+    ps.nextextra *= 2;
+  }
+}
+
+namespace {
+
+// 06BD:1F47, for one player whose controls are already in ps.c.
+void PollPlayerControls(PlayerState& ps, boolean gravis, boolean padactive, word padbuttons, boolean firekey) {
+  if (ps.c.yaxis != -1) ps.upheld = false;
+
+  // Port: GravisMap applies to the gamepad's A, B, X and Y, and only while it
+  // is the active control.
+  if (gravis) {
+    ps.jumpbutton = (padbuttons >> (GravisMap[0] & 3)) & 1;
+    ps.pogobutton = (padbuttons >> (GravisMap[1] & 3)) & 1;
+    ps.firebutton = (padbuttons >> (GravisMap[2] & 3)) & 1;
+    if (!ps.jumpbutton) ps.jumpheld = false;
+    if (!ps.pogobutton) ps.pogoheld = false;
+    if (!ps.firebutton) ps.fireheld = false;
+  } else if (oldshooting || DemoMode) {
+    if (ps.c.button0 && ps.c.button1) {
+      ps.firebutton = true;
+      ps.jumpbutton = ps.jumpheld = ps.pogobutton = ps.pogoheld = false;
+    } else {
+      ps.firebutton = ps.fireheld = false;
+      if (ps.c.button0)
+        ps.jumpbutton = true;
+      else
+        ps.jumpbutton = ps.jumpheld = false;
+      if (ps.c.button1) {
+        if (ps.oldfirecount <= 8)
+          ps.oldfirecount = static_cast<sword>(ps.oldfirecount + tics);
+        else
+          ps.pogobutton = true;
+      } else {
+        if (ps.oldfirecount)
+          ps.pogobutton = true;
+        else
+          ps.pogobutton = ps.pogoheld = false;
+        ps.oldfirecount = 0;
+      }
+    }
+  } else {
+    ps.jumpbutton = ps.c.button0;
+    ps.pogobutton = ps.c.button1;
+    ps.firebutton = firekey;
+    // Port: X or Y fires on a gamepad.
+    if (padactive && (padbuttons & 0xC)) ps.firebutton = true;
+    if (!ps.jumpbutton) ps.jumpheld = false;
+    if (!ps.pogobutton) ps.pogoheld = false;
+    if (!ps.firebutton) ps.fireheld = false;
+  }
+}
+
+}  // namespace
 
 // 06BD:1F47
 void PollControls() {
   IN_NoteGameplay();  // port: the gamepad steers Keen, not the menus
-  IN_ReadControl(0, &c);
-  if (c.yaxis != -1) upheld = false;
-
-  // Port: GravisMap applies to the gamepad's A, B, X and Y, and only while it
-  // is the active control.
-  if (GravisGamepad && IN_GamepadActive() && !DemoMode) {
-    word buttons = IN_JoyButtons();
-    jumpbutton = (buttons >> (GravisMap[0] & 3)) & 1;
-    pogobutton = (buttons >> (GravisMap[1] & 3)) & 1;
-    firebutton = (buttons >> (GravisMap[2] & 3)) & 1;
-    if (!jumpbutton) jumpheld = false;
-    if (!pogobutton) pogoheld = false;
-    if (!firebutton) fireheld = false;
-  } else if (oldshooting || DemoMode) {
-    if (c.button0 && c.button1) {
-      firebutton = true;
-      jumpbutton = jumpheld = pogobutton = pogoheld = false;
-    } else {
-      firebutton = fireheld = false;
-      if (c.button0)
-        jumpbutton = true;
-      else
-        jumpbutton = jumpheld = false;
-      if (c.button1) {
-        if (oldfirecount <= 8)
-          oldfirecount = static_cast<sword>(oldfirecount + tics);
-        else
-          pogobutton = true;
-      } else {
-        if (oldfirecount)
-          pogobutton = true;
-        else
-          pogobutton = pogoheld = false;
-        oldfirecount = 0;
-      }
-    }
-  } else {
-    jumpbutton = c.button0;
-    pogobutton = c.button1;
-    firebutton = Keyboard[firescan];
-    // Port: X or Y fires on a gamepad.
-    if (IN_GamepadActive() && (IN_JoyButtons() & 0xC)) firebutton = true;
-    if (!jumpbutton) jumpheld = false;
-    if (!pogobutton) pogoheld = false;
-    if (!firebutton) fireheld = false;
-  }
+  PlayerState& ps = players[0];
+  IN_ReadControl(0, &ps.c);
+  boolean padactive = IN_GamepadActive();
+  word padbuttons = IN_JoyButtons();
+  PollPlayerControls(ps, GravisGamepad && padactive && !DemoMode, padactive, padbuttons, Keyboard[firescan]);
 }
 
 // 06BD:2092
@@ -865,12 +925,15 @@ void StartMusic(sword level) {
 // 06BD:21C6
 void PlayLoop() {
   StartMusic(gamestate.mapon);
-  jumpheld = upheld = pogoheld = fireheld = false;
+  for (int i = 0; i < numplayers; i++) {
+    PlayerState& ps = players[i];
+    ps.jumpheld = ps.upheld = ps.pogoheld = ps.fireheld = false;
+    ps.oldfirecount = 0;
+    ps.invincible = 0;
+  }
   ingame = true;
   playstate = ex_stillplaying;
-  oldfirecount = 0;
   lockscroll = false;
-  invincible = 0;
   CenterActor(player);
 
   if (DemoMode)
@@ -914,7 +977,8 @@ void PlayLoop() {
       }
     }
 
-    if (gamestate.riding) HandleRiding(player);
+    for (int i = 0; i < numplayers; i++)
+      if (players[i].riding) HandleRiding(players[i].ob);
 
     // check for and handle collisions between objects
     for (objtype* obj = player; obj; obj = obj->next) {
@@ -931,10 +995,12 @@ void PlayLoop() {
     }
 
     // check intiles
-    if (mapon)
-      CheckInTiles(player);
-    else
-      CheckWorldInTiles(player);
+    for (int i = 0; i < numplayers; i++) {
+      if (mapon)
+        CheckInTiles(players[i].ob);
+      else
+        CheckWorldInTiles(players[i].ob);
+    }
 
     // react to whatever happened, and post sprites to the refresh manager
     for (objtype* obj = player; obj; obj = obj->next) {
@@ -962,9 +1028,12 @@ void PlayLoop() {
 
     RF_Refresh();
 
-    if (invincible) {
-      invincible = static_cast<sword>(invincible - tics);
-      if (invincible < 0) invincible = 0;
+    for (int i = 0; i < numplayers; i++) {
+      PlayerState& ps = players[i];
+      if (ps.invincible) {
+        ps.invincible = static_cast<sword>(ps.invincible - tics);
+        if (ps.invincible < 0) ps.invincible = 0;
+      }
     }
 
     if (singlestep) {

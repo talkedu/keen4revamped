@@ -131,22 +131,68 @@ enum exittype : sword {
   ex_portout, ex_fusebroke, ex_qedbroke, NUMEXITTYPES
 };
 
+// Port: the score, extra-life threshold, ammo, drops (7A50..7A5A) and the
+// platform Keen rides (7A6E) belong to each player, see PlayerState.
 struct gametype {
   sword worldx, worldy;               // 7A1A
   boolean leveldone[GAMELEVELS];      // 7A1E
-  std::int32_t score, nextextra;      // 7A50 7A54
-  sword ammo, drops;                  // 7A58 7A5A
   boolean wetsuit;                    // 7A5C
   sword rescued;                      // 7A5E
   sword keys[4];                      // 7A60
   sword mapon;                        // 7A68
   sword lives;                        // 7A6A
   sword difficulty;                   // 7A6C
-  objtype* riding;                    // 7A6E
 };
 
 extern gametype gamestate;
 extern exittype playstate;
+
+// ---------------------------------------------------------------------------
+// Players (port)
+//
+// The original has one Keen and keeps what belongs to him in globals: the
+// controls read each frame, his invincibility, the jump and pole timers, and
+// in gamestate his score, ammo, drops and the platform he rides. Co-op has
+// two Keens, so these live in one PlayerState per player. Single-player has
+// one entry, players[0], whose Keen is `player`.
+
+inline constexpr int MAXPLAYERS = 2;
+
+struct PlayerState {
+  objtype* ob;        // the player's Keen; players[0].ob is `player`
+  objtype* scorebox;  // its score box; players[0].scorebox is `scoreobj`
+
+  // Controls (CK_PLAY DGROUP c, jumpbutton..upheld, oldfirecount).
+  ControlInfo c;
+  boolean jumpbutton, jumpheld, pogobutton, pogoheld, firebutton, fireheld, upheld;
+  sword oldfirecount;
+
+  // CK_KEEN timers (DGROUP CAB5..CABB) and invincibility.
+  word moonok;
+  std::int32_t leavepoletime;
+  word jumptime;
+  sword invincible;
+
+  // gamestate 7A50..7A5A and 7A6E.
+  std::int32_t score, nextextra;
+  sword ammo, drops;
+  objtype* riding;
+};
+
+extern PlayerState players[MAXPLAYERS];
+extern int numplayers;  // 1, or 2 in co-op
+
+// The PlayerState of a Keen object; players[0] for any object that is not one.
+PlayerState& PlayerOf(objtype* ob);
+// The player whose Keen is `ob`, or -1.
+int PlayerIndex(const objtype* ob);
+// The Keen an actor goes after: the nearest one in play. With one player
+// this is always `player`, as in the original.
+objtype* NearestPlayer(const objtype* ob);
+// The Keen riding platform `plat`, or nullptr.
+objtype* PlayerRiding(const objtype* plat);
+// Sets up players[] for a new game: score 0, 5 shots, next extra Keen at 20000.
+void ResetPlayers();
 
 // ---------------------------------------------------------------------------
 // CK_PLAY
@@ -162,9 +208,7 @@ extern objtype* newobj;  // "new" in the original
 extern objtype dummyobj;
 extern sword objectcount;
 
-extern ControlInfo c;
-extern boolean jumpbutton, jumpheld, pogobutton, pogoheld, firebutton, fireheld, upheld;
-extern sword oldfirecount;
+extern ControlInfo c;  // scratch for the dialogs that read the controls (HandleDeath)
 extern boolean showscorebox, jerk, oldshooting, QuietFX;
 extern byte firescan;
 extern byte gamepadflag;
@@ -173,7 +217,6 @@ extern word GravisMap[4];
 extern boolean godmode, jumpcheat, singlestep, debugok, storedemo;
 extern boolean joypad;  // DGROUP 7A18
 extern sword extravbls;
-extern sword invincible;
 extern boolean lockscroll;  // DGROUP A7DA: camera does not follow Keen
 extern boolean scorescreenkludge;
 extern word originxtilemax, originytilemax;
@@ -183,7 +226,8 @@ extern sword lastlevel;
 void InitObjArray();
 sword GetNewObj(boolean usedummy);
 void RemoveObj(objtype* ob);
-void GivePoints(word points);
+// Points for the player whose Keen is `who`; extra Keens go to the shared lives.
+void GivePoints(objtype* who, word points);
 void PollControls();
 void StopMusic();
 void StartMusic(sword level);
@@ -275,7 +319,7 @@ void FinaleLayout();
 
 // CK_KEEN / CK_KEEN2
 void SpawnKeen(word tilex, word tiley, sword dir);
-void KillKeen();
+void KillKeen(objtype* ob);
 void HandleRiding(objtype* ob);
 void CheckInTiles(objtype* ob);
 void SpawnScore();
@@ -286,7 +330,7 @@ void CheckWorldInTiles(objtype* ob);
 void SpawnFlag(word tilex, word tiley);
 void SpawnThrowFlag(word tilex, word tiley);
 
-void SpawnShot(word x, word y, sword dir);
+void SpawnShot(objtype* shooter, word x, word y, sword dir);
 void ExplodeShot(objtype* shot);
 
 // K4_SPEC
