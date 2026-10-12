@@ -163,13 +163,12 @@ class SdlPlatform final : public IPlatform {
     }
     vsync_ = options.vsync;
     remaster_vsync_ = options.remaster_vsync;
-    art_.SetDirectory(options.art_dir);
+    art_.SetDirectories(options.art_dirs);
     art_.SetFallback(options.nearest ? render::Fallback::Nearest : render::Fallback::Scale4x);
-    art_.Reload();
-    if (art_.manifestEntries())
-      std::fprintf(stderr, "art: %d manifest entries from %s\n", art_.manifestEntries(), options.art_dir.c_str());
+    ReloadArt();
     remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
     remaster_renderer_->interpolate = options.interpolate;
+    remaster_renderer_->show_hitboxes = options.hitboxes;
     SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
     const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
     float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
@@ -286,6 +285,13 @@ class SdlPlatform final : public IPlatform {
     }
   }
 
+  void ReloadArt() {
+    art_.Reload();
+    for (int i = 0; i < art_.layers(); i++)
+      std::fprintf(stderr, "art: %d manifest entries from %s\n", art_.layerEntries(i),
+                   art_.directories()[i].c_str());
+  }
+
   void DrawRemaster(Uint64 now) {
     if (!remaster_vsync_) {
       // without vsync, stay at the display's rate
@@ -314,9 +320,13 @@ class SdlPlatform final : public IPlatform {
             break;
           }
           if (down && ev.key.scancode == SDL_SCANCODE_F12 && !ev.key.repeat) {
-            // F12: reload the art manifest while the game runs
-            art_.Reload();
-            std::fprintf(stderr, "art: reloaded, %d manifest entries\n", art_.manifestEntries());
+            if (ev.key.mod & SDL_KMOD_SHIFT) {
+              // Shift+F12: show the original hitboxes over the new art
+              remaster_renderer_->show_hitboxes = !remaster_renderer_->show_hitboxes;
+            } else {
+              // F12: reload the art manifests while the game runs
+              ReloadArt();
+            }
             break;
           }
           if (ev.key.scancode == SDL_SCANCODE_F11 || ev.key.scancode == SDL_SCANCODE_F12) break;

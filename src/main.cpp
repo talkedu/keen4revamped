@@ -157,7 +157,8 @@ int main(int argc, char** argv) {
   std::string datadir, savedir;
   bool headless = false, fullscreen = false, sound = true, vsync = false;
   bool classic = false, nearest = false, interpolate = true, hdshots = false;
-  std::string artdir;
+  std::vector<std::string> artdirs;
+  bool hitboxes = false;
   int scale = 3;
   auto scripted = std::make_unique<ScriptedHeadless>();
   std::vector<char*> gameargs = {argv[0]};
@@ -194,11 +195,13 @@ int main(int argc, char** argv) {
     else if (a == "--classic")
       classic = true;
     else if (a == "--art")
-      artdir = next();
+      artdirs.push_back(next());
     else if (a == "--nearest")
       nearest = true;
     else if (a == "--no-interpolation")
       interpolate = false;
+    else if (a == "--hitboxes")
+      hitboxes = true;
     else if (a == "--hd-shots")
       hdshots = true;
     else if (a == "--version") {
@@ -234,7 +237,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  if (artdir.empty() && std::filesystem::exists("art/manifest.txt")) artdir = "art";
+  // Without --art: hand-curated art in art-curated/ over the generated set in art/.
+  if (artdirs.empty()) {
+    for (const char* dir : {"art-curated", "art"})
+      if (std::filesystem::exists(std::filesystem::path(dir) / "manifest.txt")) artdirs.push_back(dir);
+  }
 
   std::unique_ptr<keen4::platform::IPlatform> platform;
 #ifdef KEEN4_WITH_SDL3
@@ -247,7 +254,8 @@ int main(int argc, char** argv) {
     options.remaster = !classic;
     options.interpolate = interpolate;
     options.nearest = nearest;
-    options.art_dir = artdir;
+    options.art_dirs = artdirs;
+    options.hitboxes = hitboxes;
     platform = keen4::platform::CreateSdlPlatform(options);
     if (!platform) return 1;
   }
@@ -264,7 +272,7 @@ int main(int argc, char** argv) {
   static SDL_Renderer* hdrenderer = nullptr;
   static std::unique_ptr<keen4::platform::RemasterRenderer> hd;
   if (headless && hdshots) {
-    hdart.SetDirectory(artdir);
+    hdart.SetDirectories(artdirs);
     hdart.SetFallback(nearest ? keen4::render::Fallback::Nearest : keen4::render::Fallback::Scale4x);
     hdart.Reload();
     hdsurface = SDL_CreateSurface(1280, 720, SDL_PIXELFORMAT_ARGB8888);
@@ -273,6 +281,7 @@ int main(int argc, char** argv) {
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
     hd = std::make_unique<keen4::platform::RemasterRenderer>(hdrenderer, &hdart);
     hd->interpolate = interpolate;
+    hd->show_hitboxes = hitboxes;
     scripted->remaster_shot = [](const std::string& path, const std::uint8_t* pixels,
                                  const std::uint32_t* palette, std::uint64_t now) {
       hd->Update(keen4::render::LatestScene(), now);
@@ -287,6 +296,7 @@ int main(int argc, char** argv) {
   }
 #else
   (void)hdshots;
+  (void)hitboxes;
   (void)nearest;
   (void)interpolate;
   (void)classic;

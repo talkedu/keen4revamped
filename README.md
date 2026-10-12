@@ -55,10 +55,11 @@ default Steam folder. It never writes there: configuration, saved games and high
 (or `--save DIR`).
 
 The default renderer is the remaster (milestone 6): a 16:9 view at the window's resolution,
-art from `art/manifest.txt` (or the original scaled 4x), and smooth motion between frames.
-`--classic` (or F11 while playing) shows the original 320x200 view instead; `--art DIR` picks
-an art folder and F12 reloads it. See [docs/ART.md](docs/ART.md) for making art with
-`keen4-extract` and `tools/keen4-upscale`.
+hand-curated art from `art-curated/` over the generated set in `art/` (or the original
+scaled 4x), and smooth motion between frames. `--classic` (or F11 while playing) shows the
+original 320x200 view instead; `--art DIR` (repeatable, first wins) picks the art folders, F12
+reloads them and Shift+F12 shows sprite hitboxes. See [docs/ART.md](docs/ART.md) for making
+art with `keen4-extract`, `tools/keen4-upscale` and `tools/keen4-curate`.
 
 Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
 `--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).

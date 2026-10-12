@@ -122,45 +122,79 @@ bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::ve
   return false;
 }
 
+bool SpriteHitbox(int chunk, float* x0, float* y0, float* x1, float* y1) {
+  if (!spritetable || chunk < STARTSPRITES || chunk >= STARTSPRITES + NUMSPRITES) return false;
+  const spritetabletype& spr = spritetable[chunk - STARTSPRITES];
+  // the hitbox is at ob->x + xl and the image at ob->x + orgx, in 1/16 pixels
+  constexpr float kUnit = 1 << G_P_SHIFT;
+  *x0 = (spr.xl - spr.orgx) / kUnit;
+  *y0 = (spr.yl - spr.orgy) / kUnit;
+  *x1 = (spr.xh - spr.orgx) / kUnit;
+  *y1 = (spr.yh - spr.orgy) / kUnit;
+  return true;
+}
+
 std::vector<std::uint8_t> Scale4x(const std::vector<std::uint8_t>& src, int width, int height) {
   return Scale2x(Scale2x(src, width, height), width * 2, height * 2);
 }
 
 void ArtLibrary::Reload() {
-  entries_.clear();
+  layers_.clear();
   cache_.clear();
   generation_++;
-  if (dir_.empty()) return;
-  std::ifstream in(std::filesystem::path(dir_) / "manifest.txt");
-  if (!in) return;
-  std::string line;
-  while (std::getline(in, line)) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    if (line.empty() || line[0] == '#') continue;
-    std::istringstream ss(line);
-    std::string kind, file, extra;
-    int number;
-    if (!(ss >> kind >> number >> file)) continue;
-    int k;
-    if (kind == "tile16")
-      k = static_cast<int>(AssetKind::Tile16);
-    else if (kind == "tile16m")
-      k = static_cast<int>(AssetKind::Tile16M);
-    else if (kind == "sprite")
-      k = static_cast<int>(AssetKind::Sprite);
-    else
-      continue;
-    Entry e;
-    e.file = file;
-    while (ss >> extra) {
-      if (extra == "bad") {
-        e.bad = true;
-      } else if (extra == "anchor") {
-        ss >> e.ax >> e.ay;
+  for (const std::string& dir : dirs_) {
+    std::map<Key, Entry>& entries = layers_.emplace_back();
+    if (dir.empty()) continue;
+    std::ifstream in(std::filesystem::path(dir) / "manifest.txt");
+    if (!in) continue;
+    std::string line;
+    while (std::getline(in, line)) {
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      if (line.empty() || line[0] == '#') continue;
+      std::istringstream ss(line);
+      std::string kind, file, extra;
+      int number;
+      if (!(ss >> kind >> number >> file)) continue;
+      int k;
+      if (kind == "tile16")
+        k = static_cast<int>(AssetKind::Tile16);
+      else if (kind == "tile16m")
+        k = static_cast<int>(AssetKind::Tile16M);
+      else if (kind == "sprite")
+        k = static_cast<int>(AssetKind::Sprite);
+      else
+        continue;
+      Entry e;
+      e.file = file;
+      while (ss >> extra) {
+        if (extra == "bad") {
+          e.bad = true;
+        } else if (extra == "anchor") {
+          ss >> e.ax >> e.ay;
+        }
       }
+      entries[{k, number}] = e;
     }
-    entries_[{k, number}] = e;
   }
+}
+
+int ArtLibrary::manifestEntries() const {
+  int n = 0;
+  for (const auto& layer : layers_) n += static_cast<int>(layer.size());
+  return n;
+}
+
+bool ArtLibrary::Find(AssetKind kind, int number, Source* source, int from_layer) const {
+  for (int i = from_layer; i < static_cast<int>(layers_.size()); i++) {
+    auto entry = layers_[i].find({static_cast<int>(kind), number});
+    if (entry == layers_[i].end() || entry->second.bad) continue;
+    source->path = (std::filesystem::path(dirs_[i]) / entry->second.file).string();
+    source->ax = entry->second.ax;
+    source->ay = entry->second.ay;
+    source->layer = i;
+    return true;
+  }
+  return false;
 }
 
 bool ArtLibrary::IsLive(AssetKind kind, int number) {
@@ -194,29 +228,31 @@ ArtImage ArtLibrary::Build(AssetKind kind, int number) {
   img.origw = w;
   img.origh = h;
 
-  auto entry = entries_.find({static_cast<int>(kind), number});
-  if (entry != entries_.end() && !entry->second.bad && !IsLive(kind, number)) {
-    std::string path = (std::filesystem::path(dir_) / entry->second.file).string();
+  // The first layer whose image loads wins; a missing file falls through to
+  // the next layer, and finally to the original.
+  Source src;
+  for (int from = 0; !IsLive(kind, number) && Find(kind, number, &src, from); from = src.layer + 1) {
     int iw, ih, comp;
-    stbi_uc* data = stbi_load(path.c_str(), &iw, &ih, &comp, 4);
-    if (data) {
-      img.width = iw;
-      img.height = ih;
-      img.pixels.resize(static_cast<std::size_t>(iw) * ih);
-      for (std::size_t i = 0; i < img.pixels.size(); i++) {
-        const stbi_uc* p = data + i * 4;
-        img.pixels[i] = (static_cast<std::uint32_t>(p[3]) << 24) | (static_cast<std::uint32_t>(p[0]) << 16) |
-                        (static_cast<std::uint32_t>(p[1]) << 8) | p[2];
-      }
-      stbi_image_free(data);
-      // art is drawn at 4x density; the anchor marks the original's top-left
-      img.ox = -entry->second.ax / kDensity;
-      img.oy = -entry->second.ay / kDensity;
-      img.fromManifest = true;
-      return img;
+    stbi_uc* data = stbi_load(src.path.c_str(), &iw, &ih, &comp, 4);
+    if (!data) {
+      std::fprintf(stderr, "art: cannot load %s for %s %d\n", src.path.c_str(), KindName(kind), number);
+      continue;
     }
-    std::fprintf(stderr, "art: cannot load %s for %s %d, using the original\n", path.c_str(), KindName(kind),
-                 number);
+    img.width = iw;
+    img.height = ih;
+    img.pixels.resize(static_cast<std::size_t>(iw) * ih);
+    for (std::size_t i = 0; i < img.pixels.size(); i++) {
+      const stbi_uc* p = data + i * 4;
+      img.pixels[i] = (static_cast<std::uint32_t>(p[3]) << 24) | (static_cast<std::uint32_t>(p[0]) << 16) |
+                      (static_cast<std::uint32_t>(p[1]) << 8) | p[2];
+    }
+    stbi_image_free(data);
+    // art is drawn at 4x density; the anchor marks the original's top-left
+    img.ox = -src.ax / kDensity;
+    img.oy = -src.ay / kDensity;
+    img.fromManifest = true;
+    img.layer = src.layer;
+    return img;
   }
 
   std::vector<std::uint8_t> big;

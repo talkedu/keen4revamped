@@ -93,6 +93,13 @@ void RemasterRenderer::DrawScene(float alpha) {
   camx = std::round(camx * snap_) / snap_;
   camy = std::round(camy * snap_) / snap_;
 
+  struct Outline {
+    SDL_FRect art;
+    float x, y;  // the original image's top-left in the view
+    int chunk, layer;
+  };
+  std::vector<Outline> outlines;
+
   auto drawImage = [&](render::AssetKind kind, int number, float wx, float wy) {
     const render::ArtImage* img = nullptr;
     SDL_Texture* tex = Texture(kind, number, &img);
@@ -101,6 +108,8 @@ void RemasterRenderer::DrawScene(float alpha) {
     if (img->fromManifest) density = 4;
     SDL_FRect dst{wx - camx + kMargin + img->ox, wy - camy + img->oy, img->width / density,
                   img->height / density};
+    if (show_hitboxes && kind == render::AssetKind::Sprite)
+      outlines.push_back({dst, wx - camx + kMargin, wy - camy, number, img->layer});
     if (dst.x > kViewW || dst.y > kViewH || dst.x + dst.w < 0 || dst.y + dst.h < 0) return;
     // snap both edges to device pixels, so neighbouring tiles meet without gaps
     float x0 = std::round(dst.x * snap_), y0 = std::round(dst.y * snap_);
@@ -145,6 +154,24 @@ void RemasterRenderer::DrawScene(float alpha) {
     drawImage(render::AssetKind::Sprite, sp.chunk, x, y);
   }
   if (!frontdone) drawTiles(true);
+
+  // Art outline: yellow for the first (curated) folder, cyan for later ones,
+  // grey for the built-in upscale. Hitbox in red, from the original table.
+  SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+  for (const Outline& o : outlines) {
+    if (o.layer == 0)
+      SDL_SetRenderDrawColor(renderer_, 255, 220, 0, 220);
+    else if (o.layer > 0)
+      SDL_SetRenderDrawColor(renderer_, 0, 220, 255, 220);
+    else
+      SDL_SetRenderDrawColor(renderer_, 160, 160, 160, 160);
+    SDL_RenderRect(renderer_, &o.art);
+    float x0, y0, x1, y1;
+    if (!render::SpriteHitbox(o.chunk, &x0, &y0, &x1, &y1)) continue;
+    SDL_FRect box{o.x + x0, o.y + y0, x1 - x0, y1 - y0};
+    SDL_SetRenderDrawColor(renderer_, 255, 40, 40, 255);
+    SDL_RenderRect(renderer_, &box);
+  }
 }
 
 void RemasterRenderer::DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette,

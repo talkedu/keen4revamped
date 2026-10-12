@@ -30,6 +30,9 @@ class RemasterRenderer {
 
   void DropTextures();
   bool interpolate = true;
+  // Debug overlay for artists: each sprite's original hitbox (red) over the
+  // outline of its art, coloured by the art folder it came from.
+  bool show_hitboxes = false;
 
  private:
   SDL_Texture* Texture(render::AssetKind kind, int number, const render::ArtImage** image);
