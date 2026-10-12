@@ -42,15 +42,6 @@
         "CMAKE_BUILD_TYPE": "Release",
         "KEEN4_BUILD_TESTS": "OFF"
       }
-    },
-    {
-      "name": "windows-cross-debug",
-      "displayName": "Windows debug (cross-compiled with MinGW-w64)",
-      "inherits": "windows-cross",
-      "binaryDir": "build/windows-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
     }
   ],
   "buildPresets": [
@@ -73,11 +64,6 @@
       "name": "windows-cross",
       "configurePreset": "windows-cross",
       "configuration": "Release"
-    },
-    {
-      "name": "windows-cross-debug",
-      "configurePreset": "windows-cross-debug",
-      "configuration": "Debug"
     }
   ],
   "testPresets": [
