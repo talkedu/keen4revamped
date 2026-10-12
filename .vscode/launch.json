@@ -1,5 +1,6 @@
 {
-  // "Keen 4 (Windows)" plays the cross-compiled build on Windows.
+  // The "(Windows)" configs play the cross-compiled build on Windows; the
+  // Windows build is always Release, so it has no separate release entry.
   // Every config wipes its build folder first, then builds from scratch.
   // "Keen 4" builds the debug preset and starts the game under gdb.
   // Ctrl+F5 runs the same config without the debugger.
@@ -13,6 +14,22 @@
       "type": "node-terminal",
       "request": "launch",
       "command": "./build/windows/keen4.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "clean build windows"
+    },
+    {
+      "name": "Keen 4 (Windows, classic 320x200)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./build/windows/keen4.exe --classic",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "clean build windows"
+    },
+    {
+      "name": "Keen 4 (Windows, jump to level)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./build/windows/keen4.exe /TEDLEVEL ${input:level} ${input:difficulty}",
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "clean build windows"
     },
