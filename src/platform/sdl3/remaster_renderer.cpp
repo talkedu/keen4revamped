@@ -262,17 +262,27 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
   // Drawn straight to the window at its non-whole scale, each tile was
   // resampled anew as it moved (57 or 58 pixels for 64 texels), so textures
   // looked different while scrolling than when the view stood still.
+  // Soft: half the density, so the finest detail (single original pixels,
+  // dither dots) is averaged away and moves calmly on screens where it
+  // flickers.
+  const float density = soft ? kViewDensity / 2 : kViewDensity;
+  if (view_ && view_density_ != density) {
+    SDL_DestroyTexture(view_);
+    view_ = nullptr;
+  }
   if (!view_) {
     view_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET,
-                              render::kWideWidth * kViewDensity, render::kClassicHeight * kViewDensity);
+                              static_cast<int>(render::kWideWidth * density),
+                              static_cast<int>(render::kClassicHeight * density));
     if (view_) SDL_SetTextureScaleMode(view_, SDL_SCALEMODE_LINEAR);
+    view_density_ = density;
   }
   if (view_) {
     SDL_SetRenderTarget(renderer_, view_);
-    SDL_SetRenderScale(renderer_, kViewDensity, kViewDensity);
+    SDL_SetRenderScale(renderer_, density, density);
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
-    snap_ = kViewDensity;
+    snap_ = density;
   }
   DrawScene(Seconds(now_ns));
   Prepare(kPrepareBudgetNs);

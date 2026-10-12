@@ -34,6 +34,9 @@ class RemasterRenderer {
   // Debug overlay for artists: each sprite's original hitbox (red) over the
   // outline of its art, coloured by the art folder it came from.
   bool show_hitboxes = false;
+  // Softer picture: blurs single-pixel detail that flickers in motion on some
+  // displays.
+  bool soft = false;
 
  private:
   SDL_Texture* Texture(render::AssetKind kind, int number, const render::ArtImage** image);
@@ -52,6 +55,7 @@ class RemasterRenderer {
   std::map<std::pair<int, int>, CachedTexture> textures_;
   SDL_Texture* classic_ = nullptr;
   SDL_Texture* view_ = nullptr;  // the scene at art density, scaled to the window
+  float view_density_ = 0;
   std::vector<std::uint32_t> classic_pixels_;
 
   render::Scene prev_, cur_;

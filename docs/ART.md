@@ -11,7 +11,8 @@ same; only how frames are drawn changes.
 | Motion | 35 frames/s, as on DOS | interpolated between game frames at the display's refresh rate |
 
 Press **F11** to switch renderers while playing, **F12** to reload the art manifests and
-**Shift+F12** to show sprite hitboxes over the art.
+**Shift+F12** to show sprite hitboxes over the art. **Ctrl+F11** (or `--soft`) softens the
+picture, for displays where single-pixel detail flickers while it moves.
 
 ## How the remaster renderer works
 

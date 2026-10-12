@@ -174,6 +174,7 @@ class SdlPlatform final : public IPlatform {
     remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
     remaster_renderer_->interpolate = options.interpolate;
     remaster_renderer_->show_hitboxes = options.hitboxes;
+    remaster_renderer_->soft = options.soft;
     SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
     const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
     float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
@@ -369,6 +370,12 @@ class SdlPlatform final : public IPlatform {
               audio::RemasterAudio& sound = audio::Remaster();
               sound.SetEnabled(!sound.enabled());
               std::fprintf(stderr, "audio: %s sound\n", sound.enabled() ? "remastered" : "original");
+              break;
+            }
+            if (ev.key.mod & SDL_KMOD_CTRL) {
+              // Ctrl+F11: softer remaster picture
+              remaster_renderer_->soft = !remaster_renderer_->soft;
+              std::fprintf(stderr, "remaster: %s picture\n", remaster_renderer_->soft ? "soft" : "sharp");
               break;
             }
             // F11: switch between the remaster and the classic renderer

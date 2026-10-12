@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
   bool classic = false, nearest = false, interpolate = true, hdshots = false;
   std::vector<std::string> artdirs;
   bool curated = false, remastered_audio = false;
-  bool hitboxes = false;
+  bool hitboxes = false, soft = false;
   int scale = 3;
   auto scripted = std::make_unique<ScriptedHeadless>();
   std::vector<char*> gameargs = {argv[0]};
@@ -229,6 +229,8 @@ int main(int argc, char** argv) {
       interpolate = false;
     else if (a == "--hitboxes")
       hitboxes = true;
+    else if (a == "--soft")
+      soft = true;
     else if (a == "--hd-shots")
       hdshots = true;
     else if (a == "--lang") {
@@ -295,6 +297,7 @@ int main(int argc, char** argv) {
     options.nearest = nearest;
     options.art_dirs = artdirs;
     options.hitboxes = hitboxes;
+    options.soft = soft;
     platform = keen4::platform::CreateSdlPlatform(options);
     if (!platform) return 1;
   }
@@ -321,6 +324,7 @@ int main(int argc, char** argv) {
     hd = std::make_unique<keen4::platform::RemasterRenderer>(hdrenderer, &hdart);
     hd->interpolate = interpolate;
     hd->show_hitboxes = hitboxes;
+    hd->soft = soft;
     scripted->remaster_shot = [](const std::string& path, const std::uint8_t* pixels,
                                  const std::uint32_t* palette, std::uint64_t now) {
       hd->Update(keen4::render::LatestScene(), now);
@@ -336,6 +340,7 @@ int main(int argc, char** argv) {
 #else
   (void)hdshots;
   (void)hitboxes;
+  (void)soft;
   (void)nearest;
   (void)interpolate;
   (void)classic;

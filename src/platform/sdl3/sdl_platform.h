@@ -29,6 +29,7 @@ struct SdlOptions {
   // asset provides it.
   std::vector<std::string> art_dirs;
   bool hitboxes = false;
+  bool soft = false;  // softer picture; Ctrl+F11 switches it while playing
 };
 
 // Creates the SDL3 backend, or returns nullptr (with a message on stderr) if
