@@ -1,6 +1,6 @@
 name: Release
 
-# Builds keen4 for Windows, Linux and macOS and publishes a GitHub release.
+# Builds keen4 for Windows and Linux and publishes a GitHub release.
 # Run it from the Actions tab (or push a v* tag). Game data is never packaged:
 # players supply their own copy of Keen 4.
 on:
@@ -19,46 +19,51 @@ permissions:
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
 
+# Linux and Windows build on the self-hosted runner in WSL (label "wsl");
+# Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
+# it needs a GitHub-hosted runner, which the Actions spending limit blocks.
 jobs:
   build:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            name: windows-x64
-          - os: ubuntu-latest
-            name: linux-x64
-          - os: macos-latest
-            name: macos-arm64
-    runs-on: ${{ matrix.os }}
+          - name: windows-x64
+            runs-on: [self-hosted, Linux, X64, wsl]
+            preset: windows-cross
+          - name: linux-x64
+            runs-on: [self-hosted, Linux, X64, wsl]
+            preset: release
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
       - name: Install SDL3 build dependencies
-        if: runner.os == 'Linux'
+        # The self-hosted runner already has these (and has no passwordless sudo).
+        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        run: cmake --preset release
+        run: cmake --preset ${{ matrix.preset }}
       - name: Build
-        run: cmake --build --preset release
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
+        # The cross-compiled Windows build has no tests (KEEN4_BUILD_TESTS=OFF).
+        if: matrix.preset == 'release'
         run: ctest --test-dir build/release -C Release --output-on-failure
       - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+        if: matrix.preset == 'windows-cross'
         run: |
-          $dir = "keen4revamped-$env:TAG-${{ matrix.name }}"
-          New-Item -ItemType Directory $dir, "$dir/docs", "$dir/tools/keen4-upscale" | Out-Null
-          Copy-Item build/release/Release/keen4.exe, build/release/Release/keen4-extract.exe, README.md $dir
-          Copy-Item docs/ART.md "$dir/docs"
-          Copy-Item tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
-          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
-      - name: Package (Linux/macOS)
-        if: runner.os != 'Windows'
+          dir="keen4revamped-$TAG-${{ matrix.name }}"
+          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale"
+          cp build/windows/keen4.exe build/windows/keen4-extract.exe README.md "$dir"
+          cp docs/ART.md "$dir/docs"
+          cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
+          zip -qr "$dir.zip" "$dir"
+      - name: Package (Linux)
+        if: matrix.preset == 'release'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
           mkdir -p "$dir/docs" "$dir/tools/keen4-upscale"
@@ -76,7 +81,7 @@ jobs:
 
   release:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wsl]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -94,7 +99,7 @@ jobs:
             - F11 switches between the remaster and the classic 320x200 view (or start with `--classic`). The classic view is unchanged from v1.0.
             - Art: the remaster loads new art from `art/manifest.txt` (`--art DIR`, F12 reloads it). Anything without new art is the original scaled 4x (Scale4x, or `--nearest` for plain pixels). Collision boxes always come from the original, so art cannot change gameplay.
             - New tools for making that art from your own copy of the game: `keen4-extract` exports every tile, sprite and picture as PNG, and `tools/keen4-upscale/keen4_upscale.py` builds a 4x set with Scale4x or the Real-ESRGAN AI upscaler, upscaling tiles together with their level neighbours so edges match, and writes a review page. See docs/ART.md.
-            - Builds for Windows, Linux and macOS (Apple Silicon) below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
+            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
 
             Game data and art are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Art made from it with the tools stays on your machine. See README.md.
 

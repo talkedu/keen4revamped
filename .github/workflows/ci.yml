@@ -5,33 +5,47 @@ on:
     branches: [main]
   pull_request:
 
+# Linux and Windows build on the self-hosted runner in WSL (label "wsl");
+# Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
+# it needs a GitHub-hosted runner, which the Actions spending limit blocks.
+# The repo is private, so only collaborators' pull requests reach the runner.
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - name: linux
+            runs-on: [self-hosted, Linux, X64, wsl]
+            preset: release
+          - name: windows
+            runs-on: [self-hosted, Linux, X64, wsl]
+            preset: windows-cross
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
       - name: Install SDL3 build dependencies
-        if: runner.os == 'Linux'
+        # The self-hosted runner already has these (and has no passwordless sudo).
+        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        run: cmake --preset release
+        run: cmake --preset ${{ matrix.preset }}
       - name: Build
-        run: cmake --build --preset release
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
+        # The cross-compiled Windows build has no tests (KEEN4_BUILD_TESTS=OFF).
+        if: matrix.preset == 'release'
         run: ctest --test-dir build/release -C Release --output-on-failure
       - name: Upload Windows build
-        if: runner.os == 'Windows'
+        if: matrix.name == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: keen4-windows
           path: |
-            build/release/Release/keen4.exe
+            build/windows/keen4.exe
             README.md
