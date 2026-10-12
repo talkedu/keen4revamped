@@ -45,14 +45,6 @@ struct Scene {
   std::array<std::uint8_t, kClassicWidth * kClassicHeight> classic{};
 };
 
-// Where to draw sp, a fraction alpha of the way from the previous scene to
-// this one. The object's own position is what moves; each frame's art sits at
-// its own offset from it, so blending image corners would slide a frame whose
-// art is offset differently (the inchworm's stretch and hump) back and forth.
-// Returns false, leaving x and y alone, when sp was not in prev or moved more
-// than maxstep pixels.
-bool InterpolateSprite(const Scene& prev, const SceneSprite& sp, float alpha, int maxstep, float* x, float* y);
-
 // Called by ID_RF after it has drawn the tiles and sprites of a frame.
 Scene& BeginCapture();
 void EndCapture();
