@@ -135,6 +135,7 @@ class SdlPlatform final : public IPlatform {
  public:
   ~SdlPlatform() override {
     remaster_renderer_.reset();
+    for (SDL_Gamepad* pad : gamepads_) SDL_CloseGamepad(pad);
     if (stream_) SDL_DestroyAudioStream(stream_);
     if (texture_) SDL_DestroyTexture(texture_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
@@ -148,6 +149,9 @@ class SdlPlatform final : public IPlatform {
       std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
       return false;
     }
+    // Pads already plugged in arrive as SDL_EVENT_GAMEPAD_ADDED like hotplugged ones.
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+      std::fprintf(stderr, "No gamepad support: %s\n", SDL_GetError());
     int scale = options.scale > 0 ? options.scale : 3;
     remaster_ = options.remaster;
     // the remaster view is 16:9, the classic one 4:3
@@ -238,6 +242,30 @@ class SdlPlatform final : public IPlatform {
     *event = keys_.front();
     keys_.pop_front();
     return true;
+  }
+
+  void ReadGamepad(GamepadState* state) override {
+    *state = GamepadState{};
+    if (gamepads_.empty()) return;
+    // the newest pad wins, so plugging one in takes over at once
+    SDL_Gamepad* pad = gamepads_.back();
+    static constexpr struct {
+      SDL_GamepadButton button;
+      std::uint32_t bit;
+    } kButtons[] = {
+        {SDL_GAMEPAD_BUTTON_SOUTH, kPadA},         {SDL_GAMEPAD_BUTTON_EAST, kPadB},
+        {SDL_GAMEPAD_BUTTON_WEST, kPadX},          {SDL_GAMEPAD_BUTTON_NORTH, kPadY},
+        {SDL_GAMEPAD_BUTTON_BACK, kPadBack},       {SDL_GAMEPAD_BUTTON_START, kPadStart},
+        {SDL_GAMEPAD_BUTTON_DPAD_UP, kPadUp},      {SDL_GAMEPAD_BUTTON_DPAD_DOWN, kPadDown},
+        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, kPadLeft},  {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, kPadRight},
+    };
+    state->connected = true;
+    for (const auto& b : kButtons)
+      if (SDL_GetGamepadButton(pad, b.button)) state->buttons |= b.bit;
+    state->x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+    state->y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+    const char* name = SDL_GetGamepadName(pad);
+    state->name = name ? name : "Gamepad";
   }
 
   bool QuitRequested() override { return quit_; }
@@ -352,6 +380,23 @@ class SdlPlatform final : public IPlatform {
           keys_.push_back({xt.code, down, xt.extended});
           break;
         }
+        case SDL_EVENT_GAMEPAD_ADDED:
+          if (SDL_Gamepad* pad = SDL_OpenGamepad(ev.gdevice.which)) {
+            if (std::find(gamepads_.begin(), gamepads_.end(), pad) == gamepads_.end())
+              gamepads_.push_back(pad);
+          } else {
+            std::fprintf(stderr, "input: could not open gamepad: %s\n", SDL_GetError());
+          }
+          break;
+        case SDL_EVENT_GAMEPAD_REMOVED:
+          for (auto it = gamepads_.begin(); it != gamepads_.end(); ++it) {
+            if (SDL_GetGamepadID(*it) == ev.gdevice.which) {
+              SDL_CloseGamepad(*it);
+              gamepads_.erase(it);
+              break;
+            }
+          }
+          break;
         default:
           break;
       }
@@ -364,6 +409,7 @@ class SdlPlatform final : public IPlatform {
   int tex_w_ = 0, tex_h_ = 0;
   std::vector<std::uint32_t> rgb_;
   std::deque<KeyEvent> keys_;
+  std::vector<SDL_Gamepad*> gamepads_;  // in connection order
   bool quit_ = false;
   bool fullscreen_ = false;
   Uint64 start_ns_ = 0;

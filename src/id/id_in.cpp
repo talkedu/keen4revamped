@@ -1,7 +1,9 @@
 // ID_IN: input (segment 1460).
 #include "id/id_in.h"
 
+#include <cstdio>
 #include <cstdlib>
+#include <iterator>
 
 #include "exe/keen4exe.h"
 #include "id/id_sd.h"
@@ -63,11 +65,136 @@ void INL_KeyService(byte k, bool special) {
   if (INL_KeyHook && !special) INL_KeyHook();
 }
 
+// Port: the gamepad. The newest connected pad is joystick 1. Controls[0]
+// follows whichever device was used last: the pad when it connects or a button
+// is pressed, the keyboard when a key is pressed or the pad goes away. While
+// Keen is being played (PollControls runs) the pad drives him through
+// IN_ReadControl; anywhere else (menus, help, dialogs) its buttons type the
+// keys those screens wait for.
+namespace pad {
+
+using namespace keen4::platform;
+
+constexpr float kStickDeadZone = 0.5f;
+constexpr std::uint64_t kGameplayTics = 4;  // PollControls runs every frame
+constexpr std::uint64_t kRepeatDelay = 18, kRepeatRate = 5;  // menu auto-repeat, in tics
+constexpr std::uint32_t kDirections = kPadUp | kPadDown | kPadLeft | kPadRight;
+
+struct KeyMap {
+  std::uint32_t bit;
+  ScanCode scan;
+  bool extended;
+};
+constexpr KeyMap kMenuKeys[] = {
+    {kPadUp, sc_UpArrow, true},     {kPadDown, sc_DownArrow, true}, {kPadLeft, sc_LeftArrow, true},
+    {kPadRight, sc_RightArrow, true}, {kPadA, sc_Return, false},    {kPadB, sc_Escape, false},
+    {kPadStart, sc_Escape, false},
+};
+constexpr KeyMap kGameKeys[] = {
+    {kPadStart, sc_Escape, false},  // the control panel
+    {kPadBack, sc_Enter, false},    // the status window
+};
+
+bool connected;
+std::uint32_t held;      // buttons and stick directions in use
+std::uint32_t ignored;   // held through a clear or a mode change; dropped until released
+std::uint32_t typed;     // bits whose key is currently down
+bool menu = true;
+std::uint64_t lastGameplay;
+bool sawGameplay;
+std::uint64_t repeatAt;
+
+std::uint32_t Bits(const GamepadState& s) {
+  std::uint32_t b = s.buttons;
+  if (s.x < -kStickDeadZone) b |= kPadLeft;
+  if (s.x > kStickDeadZone) b |= kPadRight;
+  if (s.y < -kStickDeadZone) b |= kPadUp;
+  if (s.y > kStickDeadZone) b |= kPadDown;
+  return b;
+}
+
+void Type(const KeyMap& key, bool down) {
+  INL_KeyService(static_cast<byte>(key.scan | (down ? 0 : 0x80)), key.extended);
+}
+
+void ReleaseTyped() {
+  for (const KeyMap& key : kMenuKeys)
+    if (typed & key.bit) Type(key, false);
+  for (const KeyMap& key : kGameKeys)
+    if (typed & key.bit) Type(key, false);
+  typed = 0;
+}
+
+void UseGamepad(const char* name) {
+  if (Controls[0] != ctrl_Keyboard1) return;
+  Controls[0] = ctrl_Joystick1;
+  std::fprintf(stderr, "input: %s\n", name);
+}
+
+void UseKeyboard() {
+  if (Controls[0] != ctrl_Joystick1 && Controls[0] != ctrl_Joystick2) return;
+  Controls[0] = ctrl_Keyboard1;
+  std::fprintf(stderr, "input: keyboard\n");
+}
+
+void Pump() {
+  GamepadState s;
+  Get().ReadGamepad(&s);
+  std::uint32_t bits = s.connected ? Bits(s) : 0;
+  if (s.connected != connected) {
+    connected = s.connected;
+    JoysPresent[0] = connected;
+    ReleaseTyped();
+    ignored = bits;  // whatever was held while plugging in does nothing yet
+    if (connected) {
+      std::fprintf(stderr, "input: %s connected\n", s.name);
+      UseGamepad(s.name);
+    } else {
+      std::fprintf(stderr, "input: gamepad disconnected\n");
+      UseKeyboard();
+    }
+  }
+
+  std::uint64_t now = Get().Ticks70();
+  bool nowMenu = !sawGameplay || now - lastGameplay > kGameplayTics;
+  if (nowMenu != menu) {
+    menu = nowMenu;
+    ReleaseTyped();
+    ignored |= bits;
+  }
+  ignored &= bits;
+  bits &= ~ignored;
+  if (bits & ~held) UseGamepad(s.name);
+
+  const KeyMap* keys = menu ? kMenuKeys : kGameKeys;
+  std::size_t count = menu ? std::size(kMenuKeys) : std::size(kGameKeys);
+  for (std::size_t i = 0; i < count; i++) {
+    const KeyMap& key = keys[i];
+    bool down = bits & key.bit;
+    if (down && !(typed & key.bit)) {
+      // menu directions repeat like a held key
+      if (key.bit & kDirections) repeatAt = now + kRepeatDelay;
+      Type(key, true);
+      typed |= key.bit;
+    } else if (!down && (typed & key.bit)) {
+      Type(key, false);
+      typed &= ~key.bit;
+    } else if (down && menu && (key.bit & kDirections) && now >= repeatAt) {
+      repeatAt = now + kRepeatRate;
+      Type(key, true);
+    }
+  }
+  held = bits;
+}
+
+}  // namespace pad
+
 }  // namespace
 
 void IN_PumpEvents() {
   keen4::platform::KeyEvent ev;
   while (keen4::platform::Get().PollKey(&ev)) {
+    if (ev.down) pad::UseKeyboard();
     if (ev.scancode == 0xE1) {
       // The Pause key sends E1 1D 45 E1 9D C5 on press only.
       if (ev.down) Paused = true;
@@ -76,6 +203,28 @@ void IN_PumpEvents() {
     byte k = static_cast<byte>((ev.scancode & 0x7F) | (ev.down ? 0 : 0x80));
     INL_KeyService(k, ev.extended);
   }
+  pad::Pump();
+}
+
+void IN_NoteGameplay() {
+  if (DemoMode == demo_Playback) return;  // the title demos leave the pad on the menus
+  pad::lastGameplay = keen4::platform::Get().Ticks70();
+  pad::sawGameplay = true;
+}
+
+boolean IN_GamepadActive() {
+  return pad::connected && (Controls[0] == ctrl_Joystick1 || Controls[0] == ctrl_Joystick2);
+}
+
+word IN_JoyButtons() {
+  if (!pad::connected) return 0;
+  using namespace keen4::platform;
+  word b = 0;
+  if (pad::held & kPadA) b |= 1;
+  if (pad::held & kPadB) b |= 2;
+  if (pad::held & kPadX) b |= 4;
+  if (pad::held & kPadY) b |= 8;
+  return b;
 }
 
 // 1460:0794
@@ -113,6 +262,8 @@ void IN_ClearKeysDown() {
   LastScan = sc_None;
   LastASCII = key_None;
   for (auto& k : Keyboard) k = false;
+  // Port: pad buttons held now count only once released and pressed again.
+  pad::ignored |= pad::held;
 }
 
 // 1460:09BE
@@ -166,8 +317,26 @@ void IN_ReadControl(int player, ControlInfo* info) {
         realdelta = false;
         break;
       }
+      case ctrl_Joystick1:
+      case ctrl_Joystick2: {
+        // Port: an SDL gamepad, read as a digital stick like the original's
+        // calibrated joystick. A is button 1 (jump), B is button 2 (pogo).
+        using namespace keen4::platform;
+        if (pad::held & kPadUp)
+          my = -1;
+        else if (pad::held & kPadDown)
+          my = 1;
+        if (pad::held & kPadLeft)
+          mx = -1;
+        else if (pad::held & kPadRight)
+          mx = 1;
+        if (pad::held & kPadA) buttons += 1;
+        if (pad::held & kPadB) buttons += 2;
+        realdelta = false;
+        break;
+      }
       default:
-        // Joysticks and the mouse are not supported by the port yet.
+        // The mouse is not supported by the port.
         break;
     }
   }

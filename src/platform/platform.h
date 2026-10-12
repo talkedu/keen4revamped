@@ -14,6 +14,28 @@ struct KeyEvent {
   bool extended;  // preceded by the 0xE0 prefix on a real keyboard
 };
 
+// Game controller buttons in SDL's Xbox-style layout. Other pads (PlayStation,
+// Switch and so on) report the buttons in the same positions.
+enum GamepadButton : std::uint32_t {
+  kPadA = 1u << 0,  // bottom face button
+  kPadB = 1u << 1,  // right
+  kPadX = 1u << 2,  // left
+  kPadY = 1u << 3,  // top
+  kPadBack = 1u << 4,
+  kPadStart = 1u << 5,
+  kPadUp = 1u << 6,
+  kPadDown = 1u << 7,
+  kPadLeft = 1u << 8,
+  kPadRight = 1u << 9,
+};
+
+struct GamepadState {
+  bool connected = false;
+  std::uint32_t buttons = 0;  // GamepadButton bits
+  float x = 0, y = 0;         // left stick, -1..1, y pointing down
+  const char* name = "";
+};
+
 // Fills `count` stereo frames (2 floats each, -1..1) at the rate StartAudio returned.
 using AudioCallback = void (*)(float* frames, int count, void* user);
 
@@ -32,6 +54,8 @@ class IPlatform {
 
   // Next pending key transition; false when there are none.
   virtual bool PollKey(KeyEvent* event) = 0;
+  // The most recently connected gamepad; `connected` is false when there is none.
+  virtual void ReadGamepad(GamepadState* state) { *state = GamepadState{}; }
   // True once the user closed the window.
   virtual bool QuitRequested() = 0;
 

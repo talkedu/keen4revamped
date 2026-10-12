@@ -8,7 +8,7 @@ as in the original.
 Status: playable MVP. The whole game runs at the original 320x200 from our own port of the
 decompiled code: title, demos, control panel, world map, all levels and enemies, save/load,
 high scores, help screens, AdLib music and sound effects. Not ported yet: the scrolling intro
-and the story crawl (the title picture stands in for them), mouse and DOS joystick input.
+and the story crawl (the title picture stands in for them), and mouse input.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and milestones.
 
@@ -76,6 +76,14 @@ The original's parameters still work, for example `/TEDLEVEL 3 HARD` to jump to 
 
 Controls are the original defaults: arrows move, Ctrl jumps, Alt pogos, Space fires,
 Enter shows the status window, Esc opens the control panel, F1 shows help.
+
+Gamepads (Xbox, PlayStation, Switch Pro and others SDL knows) work as soon as they are
+plugged in, also while the game runs. The game switches to the pad when it connects or a
+button is pressed, and back to the keyboard when a key is pressed or the pad is unplugged.
+In play: d-pad or left stick moves, A jumps, B pogos, X or Y fires, Back (View) shows the
+status window and Start (Menu) opens the control panel. In menus: d-pad or stick moves,
+A selects, B or Start goes back. The control panel's Gravis gamepad option remaps jump, pogo,
+fire and status to any of A, B, X and Y.
 
 `--headless --frames N --shot-every K --out DIR --keys "tic:scancode:down,..."` runs
 without a window and saves frames as PNG, which is how the port is checked in CI and tests.
