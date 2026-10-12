@@ -11,12 +11,13 @@ replaces tiles and sprites.
 | Effects | AdLib or PC speaker, as chosen in the sound menu | `sound N` in `audio/manifest.txt`, else the original |
 | Output | 48 kHz stereo float | the same, mixed with the original where nothing is listed |
 
-Press **Shift+F11** while playing to switch between remastered and original sound.
+Remastered sound is off unless the game is started with `--remastered-audio`; then
+**Shift+F11** switches between remastered and original sound while playing.
 
 ## Options
 
-- `--audio DIR`: the folder with `manifest.txt` (default `audio/` when it exists).
-- `--original-audio`: start with the original sound (Shift+F11 switches back).
+- `--remastered-audio`: play the recordings listed in `audio/manifest.txt`.
+- `--audio DIR`: the same with another folder.
 - `--music-volume N`, `--sfx-volume N`: 0 to 100, applied to the original and remastered
   sound alike. Music and effects have separate volumes because each runs on its own
   emulated OPL2; the original keeps effects on channel 0 and music on channels 1 to 8, so the

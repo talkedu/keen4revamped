@@ -7,7 +7,7 @@ same; only how frames are drawn changes.
 | --- | --- | --- |
 | View | 320x200, 4:3 like a CRT | 356x200, 16:9 at the original height |
 | Resolution | 320x200 scaled up | native window resolution |
-| Art | original EGA graphics | `art-curated/`, then `art/`, else the original scaled 4x (Scale4x) |
+| Art | original EGA graphics | `art/` (with `--curated`, `art-curated/` first), else the original scaled 4x (Scale4x) |
 | Motion | 35 frames/s, as on DOS | interpolated between game frames at the display's refresh rate |
 
 Press **F11** to switch renderers while playing, **F12** to reload the art manifests and
@@ -65,12 +65,13 @@ before the generated set, and replaces it one tile or sprite at a time:
 ```sh
 python3 tools/keen4-curate/keen4_curate.py add sprite 130-139 --from art-ai --to art-curated
 # paint over art-curated/sprite/0130.png ... then press F12 in the game
-keen4 --art art-curated --art art-ai
+keen4 --curated --art art-ai      # same as --art art-curated --art art-ai
 ```
 
+- Curated art is only used with `--curated`, which puts `art-curated/` in front of the other
+  folders. Without it the game shows just the upscaled set.
 - `--art` can be given several times; the first folder whose manifest lists an asset
-  provides it. Without `--art` the game uses `art-curated/` and then `art/`, whichever
-  have a `manifest.txt`.
+  provides it. Without `--art` the upscaled set is `art/`.
 - `bad` in a curated manifest line skips that folder for the asset, so it shows the next
   folder's art; a missing or unreadable file does the same, with a message on stderr.
 - **keen4-curate** `add` copies an asset's current image and anchor from the generated set
@@ -83,7 +84,7 @@ keen4 --art art-curated --art art-ai
   art, yellow from the first folder, cyan from later ones and grey for the built-in
   upscale, with the original hitbox from the sprite table in red. Art that reaches well
   outside its red box, or leaves parts of it empty, will look wrong when Keen touches it.
-- `keen4 --headless --hd-shots --hitboxes --art art-curated --art art-ai ...` renders the
+- `keen4 --headless --hd-shots --hitboxes --curated --art art-ai ...` renders the
   same view to PNG files for review without a window.
 - Curated art stays out of this repository like the generated set (`/art-*/` is ignored).
 

@@ -55,16 +55,16 @@ default Steam folder. It never writes there: configuration, saved games and high
 (or `--save DIR`).
 
 The default renderer is the remaster (milestone 6): a 16:9 view at the window's resolution,
-hand-curated art from `art-curated/` over the generated set in `art/` (or the original
-scaled 4x), and smooth motion between frames. `--classic` (or F11 while playing) shows the
-original 320x200 view instead; `--art DIR` (repeatable, first wins) picks the art folders, F12
-reloads them and Shift+F12 shows sprite hitboxes. See [docs/ART.md](docs/ART.md) for making
+the upscaled art in `art/` (or the original scaled 4x), and smooth motion between frames.
+`--curated` adds the hand-curated art in `art-curated/` on top of it. `--classic` (or F11
+while playing) shows the original 320x200 view instead; `--art DIR` (repeatable, first wins)
+picks the art folders, F12 reloads them and Shift+F12 shows sprite hitboxes. See [docs/ART.md](docs/ART.md) for making
 art with `keen4-extract`, `tools/keen4-upscale` and `tools/keen4-curate`.
 
-Sound is the original AdLib and PC speaker sound on an emulated OPL2, with optional
-remastered songs and effects from `audio/manifest.txt` replacing them one at a time
-(`--audio DIR`, Shift+F11 switches between remastered and original, `--music-volume N` and
-`--sfx-volume N` set the volumes). See [docs/AUDIO.md](docs/AUDIO.md).
+Sound is the original AdLib and PC speaker sound on an emulated OPL2. `--remastered-audio`
+plays the songs and effects listed in `audio/manifest.txt` instead (`--audio DIR` for another
+folder; Shift+F11 then switches between remastered and original), and `--music-volume N` and
+`--sfx-volume N` set the volumes. See [docs/AUDIO.md](docs/AUDIO.md).
 
 Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
 `--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).
