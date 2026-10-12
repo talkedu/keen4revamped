@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 #include "id/id_ca.h"
@@ -138,7 +139,81 @@ std::vector<std::uint8_t> Scale4x(const std::vector<std::uint8_t>& src, int widt
   return Scale2x(Scale2x(src, width, height), width * 2, height * 2);
 }
 
+ArtLibrary::~ArtLibrary() { StopReader(); }
+
+void ArtLibrary::StartReader() {
+  stop_ = false;
+  next_all_ = 0;
+  reader_ = std::thread(&ArtLibrary::ReaderLoop, this);
+}
+
+void ArtLibrary::StopReader() {
+  if (!reader_.joinable()) return;
+  {
+    std::lock_guard<std::mutex> lock(files_mutex_);
+    stop_ = true;
+  }
+  files_wake_.notify_all();
+  reader_.join();
+}
+
+void ArtLibrary::ReaderLoop() {
+  for (;;) {
+    std::string path;
+    {
+      std::unique_lock<std::mutex> lock(files_mutex_);
+      files_wake_.wait(lock, [&] { return stop_ || !wanted_.empty() || next_all_ < all_.size(); });
+      if (stop_) return;
+      if (!wanted_.empty()) {
+        path = wanted_.front();
+        wanted_.pop_front();
+      } else {
+        path = all_[next_all_++];
+      }
+      if (files_.count(path)) continue;
+    }
+    std::vector<std::uint8_t> bytes;
+    std::ifstream in(path, std::ios::binary);
+    if (in) bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    std::lock_guard<std::mutex> lock(files_mutex_);
+    files_.emplace(path, std::move(bytes));
+  }
+}
+
+std::vector<std::uint8_t> ArtLibrary::FileBytes(const std::string& path) {
+  {
+    std::lock_guard<std::mutex> lock(files_mutex_);
+    auto found = files_.find(path);
+    if (found != files_.end()) return found->second;
+  }
+  // not read yet: read it now rather than wait behind the queue
+  std::vector<std::uint8_t> bytes;
+  std::ifstream in(path, std::ios::binary);
+  if (in) bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  std::lock_guard<std::mutex> lock(files_mutex_);
+  files_.emplace(path, bytes);
+  return bytes;
+}
+
+bool ArtLibrary::Ready(AssetKind kind, int number) {
+  if (IsLive(kind, number) || cache_.count({static_cast<int>(kind), number})) return true;
+  Source src;
+  if (!Find(kind, number, &src)) return true;  // the built-in upscale needs no file
+  std::lock_guard<std::mutex> lock(files_mutex_);
+  if (files_.count(src.path)) return true;
+  if (asked_.insert(src.path).second) {
+    wanted_.push_back(src.path);
+    files_wake_.notify_one();
+  }
+  return false;
+}
+
 void ArtLibrary::Reload() {
+  StopReader();
+  files_.clear();
+  wanted_.clear();
+  asked_.clear();
+  all_.clear();
   layers_.clear();
   cache_.clear();
   generation_++;
@@ -173,9 +248,11 @@ void ArtLibrary::Reload() {
           ss >> e.ax >> e.ay;
         }
       }
+      if (!e.bad) all_.push_back((std::filesystem::path(dir) / file).string());
       entries[{k, number}] = e;
     }
   }
+  StartReader();
 }
 
 int ArtLibrary::manifestEntries() const {
@@ -233,7 +310,10 @@ ArtImage ArtLibrary::Build(AssetKind kind, int number) {
   Source src;
   for (int from = 0; !IsLive(kind, number) && Find(kind, number, &src, from); from = src.layer + 1) {
     int iw, ih, comp;
-    stbi_uc* data = stbi_load(src.path.c_str(), &iw, &ih, &comp, 4);
+    const std::vector<std::uint8_t> bytes = FileBytes(src.path);
+    stbi_uc* data = bytes.empty() ? nullptr
+                                  : stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &iw,
+                                                          &ih, &comp, 4);
     if (!data) {
       std::fprintf(stderr, "art: cannot load %s for %s %d\n", src.path.c_str(), KindName(kind), number);
       continue;

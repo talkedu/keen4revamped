@@ -207,7 +207,10 @@ class SdlPlatform final : public IPlatform {
       have_frame_ = true;
       Uint64 now = SDL_GetTicksNS();
       remaster_renderer_->Update(render::LatestScene(), now);
-      DrawRemaster(now);
+      // With interpolation the new scene waits for its refresh in Delay:
+      // drawing it right after the last frame queues two frames for one
+      // refresh, and one of them is shown late.
+      if (!remaster_renderer_->interpolate || now - last_draw_ns_ >= refresh_ns_) DrawRemaster(now);
       Pump();
       return;
     }

@@ -9,9 +9,14 @@
 // image scaled up 4x, so the renderer always has a picture for every tile and
 // sprite.
 
+#include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <map>
+#include <mutex>
+#include <set>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -48,6 +53,11 @@ std::vector<std::uint8_t> Scale4x(const std::vector<std::uint8_t>& src, int widt
 
 class ArtLibrary {
  public:
+  ArtLibrary() = default;
+  ArtLibrary(const ArtLibrary&) = delete;
+  ArtLibrary& operator=(const ArtLibrary&) = delete;
+  ~ArtLibrary();
+
   // Art folders in order of precedence: curated art before the AI set.
   void SetDirectories(const std::vector<std::string>& dirs) { dirs_ = dirs; }
   void SetDirectory(const std::string& dir) { dirs_ = {dir}; }
@@ -72,6 +82,9 @@ class ArtLibrary {
   bool Find(AssetKind kind, int number, Source* source, int from_layer = 0) const;
 
   const ArtImage& Get(AssetKind kind, int number);
+  // True if Get will not have to wait for a file. Otherwise asks for the file
+  // to be read next in the background.
+  bool Ready(AssetKind kind, int number);
 
  private:
   struct Entry {
@@ -91,6 +104,24 @@ class ArtLibrary {
   std::vector<std::map<Key, Entry>> layers_;  // one manifest per folder
   std::map<Key, ArtImage> cache_;
   std::uint64_t generation_ = 0;
+
+  // Art files are read on a background thread: reading one when its tile
+  // first scrolls into view (a few ms each from the WSL share) stalls the
+  // frame. Files someone is waiting for go first, then every file the
+  // manifests list.
+  std::vector<std::uint8_t> FileBytes(const std::string& path);
+  void StartReader();
+  void StopReader();
+  void ReaderLoop();
+  std::mutex files_mutex_;
+  std::condition_variable files_wake_;
+  std::map<std::string, std::vector<std::uint8_t>> files_;  // read so far (empty: missing)
+  std::deque<std::string> wanted_;                          // asked for, read first
+  std::set<std::string> asked_;
+  std::vector<std::string> all_;  // every file the manifests list
+  std::size_t next_all_ = 0;
+  bool stop_ = false;
+  std::thread reader_;
 };
 
 }  // namespace keen4::render

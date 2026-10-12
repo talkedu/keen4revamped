@@ -38,6 +38,8 @@ class RemasterRenderer {
  private:
   SDL_Texture* Texture(render::AssetKind kind, int number, const render::ArtImage** image);
   void DrawScene(double now);
+  // Builds textures for art the scene may need soon, for up to `budget_ns`.
+  void Prepare(Uint64 budget_ns);
   void DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette, bool overlay_only);
 
   SDL_Renderer* renderer_;

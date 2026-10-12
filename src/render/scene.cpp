@@ -14,6 +14,9 @@ Scene& BeginCapture() {
   s.fg.clear();
   s.fgfront.clear();
   s.sprites.clear();
+  s.nearbg.clear();
+  s.nearfg.clear();
+  s.loadedsprites.clear();
   s.serial = ++serial;
   return s;
 }

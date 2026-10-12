@@ -1,6 +1,7 @@
 // ID_RF: tile scroller and sprites (segments 1654 and 1826).
 #include "id/id_rf.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "id/id_ca.h"
@@ -440,6 +441,16 @@ void CaptureScene() {
                            sprite->arty, priority, sprite->draw != spritedraw});
     }
   }
+  // art to prepare ahead: tiles up to half a screen beyond the view, and every
+  // sprite the level has cached
+  for (int my = std::max(0, s.tiley0 - 6); my < std::min<int>(mapheight, s.tiley0 + s.rows + 6); my++) {
+    for (int mx = std::max(0, s.tilex0 - 10); mx < std::min<int>(mapwidth, s.tilex0 + s.cols + 10); mx++) {
+      s.nearbg.push_back(*MapPlane(0, mx, my));
+      if (word fg = *MapPlane(1, mx, my)) s.nearfg.push_back(fg);
+    }
+  }
+  for (int chunk = STARTSPRITES; chunk < STARTSPRITES + NUMSPRITES; chunk++)
+    if (grsegs[chunk]) s.loadedsprites.push_back(static_cast<std::uint16_t>(chunk));
   std::memcpy(s.classic.data(), vw_screen, s.classic.size());
   keen4::render::EndCapture();
 }

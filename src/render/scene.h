@@ -41,6 +41,11 @@ struct Scene {
   std::vector<std::uint16_t> bg, fg;
   std::vector<std::uint8_t> fgfront;  // foreground tile drawn over sprites below priority 3
   std::vector<SceneSprite> sprites;   // in draw order
+  // Art the view may need soon: background and foreground tiles in a band
+  // around the view, and every sprite the level has loaded. Building new art
+  // the moment it first shows stalls the frame, so the renderer prepares these
+  // a little at a time.
+  std::vector<std::uint16_t> nearbg, nearfg, loadedsprites;
   // The classic frame of this scene before anything else is drawn over it, to
   // find overlays (status window, dialogs) in later frames.
   std::array<std::uint8_t, kClassicWidth * kClassicHeight> classic{};

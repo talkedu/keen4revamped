@@ -16,6 +16,9 @@ constexpr float kMargin = static_cast<float>(render::kWideMargin);
 constexpr int kOverlayLimit = render::kClassicWidth * render::kClassicHeight * 2 / 5;
 // Bigger jumps than this are teleports or new objects, never interpolated.
 constexpr int kMaxLerp = 48;
+// Time per frame for turning art into textures ahead of need. Loading it
+// when a new column of tiles scrolled in stalled that frame by 10-30 ms.
+constexpr Uint64 kPrepareBudgetNs = 1500000;
 
 double Seconds(Uint64 ns) { return static_cast<double>(ns) * 1e-9; }
 
@@ -167,6 +170,25 @@ void RemasterRenderer::DrawScene(double now) {
   }
 }
 
+void RemasterRenderer::Prepare(Uint64 budget_ns) {
+  const Uint64 start = SDL_GetTicksNS();
+  // true while there is time left for more; art whose file is still being
+  // read in the background is left for a later frame
+  auto ready = [&](render::AssetKind kind, int number) {
+    if (textures_.count(std::make_pair(static_cast<int>(kind), number)) || !art_->Ready(kind, number))
+      return true;
+    const render::ArtImage* img = nullptr;
+    Texture(kind, number, &img);
+    return SDL_GetTicksNS() - start < budget_ns;
+  };
+  for (std::uint16_t tile : cur_.nearbg)
+    if (!ready(render::AssetKind::Tile16, tile)) return;
+  for (std::uint16_t tile : cur_.nearfg)
+    if (!ready(render::AssetKind::Tile16M, tile)) return;
+  for (std::uint16_t chunk : cur_.loadedsprites)
+    if (!ready(render::AssetKind::Sprite, chunk)) return;
+}
+
 void RemasterRenderer::DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette,
                                         bool overlay_only) {
   constexpr int w = render::kClassicWidth, h = render::kClassicHeight;
@@ -233,6 +255,7 @@ void RemasterRenderer::Draw(const std::uint8_t* pixels, const std::uint32_t* pal
   }
 
   DrawScene(Seconds(now_ns));
+  Prepare(kPrepareBudgetNs);
 
   // palette fades: darken the new art by how dark the palette is
   float sum = 0, normal = 0;
