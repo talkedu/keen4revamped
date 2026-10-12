@@ -12,6 +12,7 @@
 
 byte vw_framebuffer[SCREENWIDTH * SCREENHEIGHT];
 byte* vw_screen = vw_framebuffer;
+const byte* vw_remap;
 
 sword px, py;
 byte pdrawmode = 0x18, fontcolor = 15;  // DGROUP 6024: text is XORed by default
@@ -72,8 +73,9 @@ void VWL_DrawPlanar(int x, int y, int wbytes, int height, const byte* data, bool
         if (m & sel) continue;
         int sx = sx0 + bit;
         if (static_cast<unsigned>(sx) >= SCREENWIDTH) continue;
-        dest[sx] = static_cast<byte>(((p0 & sel) ? 1 : 0) | ((p1 & sel) ? 2 : 0) |
-                                     ((p2 & sel) ? 4 : 0) | ((p3 & sel) ? 8 : 0));
+        byte color = static_cast<byte>(((p0 & sel) ? 1 : 0) | ((p1 & sel) ? 2 : 0) | ((p2 & sel) ? 4 : 0) |
+                                       ((p3 & sel) ? 8 : 0));
+        dest[sx] = vw_remap ? vw_remap[color] : color;
       }
     }
   }

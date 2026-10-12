@@ -17,7 +17,8 @@ inline constexpr int SCREENTILESWIDE = 20;
 inline constexpr int SCREENTILESHIGH = 13;
 inline constexpr int PORTTILESWIDE = 21;
 inline constexpr int PORTTILESHIGH = 14;
-inline constexpr int MAXSPRITES = 60;
+// The original has room for 60; co-op adds a Keen and a score box.
+inline constexpr int MAXSPRITES = 80;
 // The original has room for 90; two views can show twice as many.
 inline constexpr int MAXANIMTILES = 180;
 inline constexpr int MAXANIMTYPES = 65;
@@ -65,6 +66,13 @@ void RF_SetRefreshHook(void (*func)());
 void RFL_InitAnimList();
 // Port: the persistent background the game can draw on (see id_rf.cpp).
 byte* RF_MasterScreen();
+
+// Port: co-op draws player 2 as Tom, Keen's twin in other colours: his
+// sprites are variant 1. In the classic view a variant sprite is drawn
+// through the variant's colour table; data, if set, replaces the chunk's
+// graphics (Tom's own score box). Placing a sprite anew resets both.
+void RF_SetVariantRemap(int variant, const byte* remap);
+void RF_SetSpriteVariant(void* sprite, int variant, const byte* data = nullptr);
 
 // Port: several cameras (co-op).
 //

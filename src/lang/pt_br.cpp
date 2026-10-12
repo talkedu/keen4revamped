@@ -255,6 +255,15 @@ constexpr TextEntry kText[] = {
     {"Wetsuit", "Traje"},
     {"Debug keys active", "Teclas de teste ativas"},
     {"Memory Usage", "Uso de Memória"},
+    // co-op (ID_US_2 main menu and its device setup)
+    {"CO-OP GAME", "JOGO COOPERATIVO"},
+    {"CONNECT A GAMEPAD", "CONECTE UM CONTROLE"},
+    {"PLAYER 1: BILLY", "JOGADOR 1: BILLY"},
+    {"PRESS A ON A GAMEPAD", "APERTE A NUM CONTROLE"},
+    {"OR ANY KEY", "OU QUALQUER TECLA"},
+    {"PLAYER 2: TOM", "JOGADOR 2: TOM"},
+    {"PRESS A ON", "APERTE A NO"},
+    {"ANOTHER GAMEPAD", "OUTRO CONTROLE"},
 };
 
 // ComputerWrist help (chunk 4739)

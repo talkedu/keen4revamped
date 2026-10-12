@@ -55,6 +55,8 @@ struct spritelisttype {
   word grchunk;
   drawtype draw;
   word priority;
+  int variant;        // port: 0, or 1 for player 2's look in co-op
+  const byte* data;   // port: graphics to draw instead of the chunk's
   spritelisttype** prevptr;
   spritelisttype* next;
 };
@@ -68,6 +70,8 @@ word hscrolledge, vscrolledge;
 void (*refreshvector)();
 
 word panx, pany;
+
+const byte* variantremap[2];
 
 word ReadInfo(const byte* table, int index) { return table[index]; }
 sword ReadInfoSigned(const byte* table, int index) { return static_cast<signed char>(table[index]); }
@@ -428,14 +432,16 @@ void RFL_UpdateSprites() {
   for (int priority = 0; priority < PRIORITIES; priority++) {
     if (priority == MASKEDTILEPRIORITY) MaskForegroundTiles();
     for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
-      const byte* data = grsegs[sprite->grchunk];
+      const byte* data = sprite->data ? sprite->data : grsegs[sprite->grchunk];
       if (!data) continue;
       int sx = sprite->worldx - ViewPixelX();
       int sy = sprite->worldy - ViewPixelY();
+      if (sprite->variant && !sprite->data) vw_remap = variantremap[sprite->variant];
       if (sprite->draw == spritedraw)
         VWL_DrawPlanar(sx, sy, sprite->width, sprite->height, data, true);
       else
         VWL_DrawInverseMask(sx, sy, sprite->width, sprite->height, data);
+      vw_remap = nullptr;
     }
   }
 }
@@ -473,8 +479,8 @@ void CaptureScene() {
   for (int priority = 0; priority < PRIORITIES; priority++) {
     for (spritelisttype* sprite = prioritystart[priority]; sprite; sprite = sprite->next) {
       if (!grsegs[sprite->grchunk]) continue;
-      s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, sprite->artx,
-                           sprite->arty, priority, sprite->draw != spritedraw});
+      s.sprites.push_back({sprite, sprite->grchunk, sprite->exactx, sprite->worldy, sprite->artx, sprite->arty,
+                           priority, sprite->draw != spritedraw, sprite->variant, sprite->data});
     }
   }
   std::memcpy(s.classic.data(), vw_screen, s.classic.size());
@@ -704,6 +710,8 @@ void RF_PlaceSprite(void** user, word globalx, word globaly, word spritenumber, 
     if (!spritefreeptr) Quit("RF_PlaceSprite: No free spots in spritearray!");
     sprite = spritefreeptr;
     spritefreeptr = spritefreeptr->next;
+    sprite->variant = 0;
+    sprite->data = nullptr;
   }
   if (link) {
     spritelisttype* next = prioritystart[priority];
@@ -818,6 +826,17 @@ void RF_ForceRefresh() {
 
 // 1654:0C50
 void RF_SetRefreshHook(void (*func)()) { refreshvector = func; }
+
+void RF_SetVariantRemap(int variant, const byte* remap) {
+  if (variant > 0 && variant < 2) variantremap[variant] = remap;
+}
+
+void RF_SetSpriteVariant(void* sprite, int variant, const byte* data) {
+  if (!sprite) return;
+  auto* s = static_cast<spritelisttype*>(sprite);
+  s->variant = variant;
+  s->data = data;
+}
 
 void RF_SetCameraMode(boolean on) {
   if (on == cameramode) return;

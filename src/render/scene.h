@@ -27,6 +27,8 @@ struct SceneSprite {
   int artx, arty;        // image top-left relative to the object's own position (the art's origin)
   int priority;          // 0..3
   bool inverse;          // drawn as an inverse mask (maskdraw)
+  int variant = 0;       // 1: player 2's look in co-op (Tom)
+  const std::uint8_t* data = nullptr;  // graphics to use instead of the chunk's (Tom's score box)
 };
 
 struct Scene {

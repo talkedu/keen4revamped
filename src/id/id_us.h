@@ -41,6 +41,10 @@ enum GameDiff : sword { gd_Continue, gd_Easy, gd_Normal, gd_Hard };
 extern boolean ingame, abortgame, loadedgame, NoWait;
 extern boolean HighScoresDirty;  // DGROUP A539
 extern GameDiff restartgame;
+// Port: the new game restartgame asks for is co-op, with these gamepads for
+// players 1 and 2 (0: the keyboard).
+extern boolean restartcoop;
+extern std::uint32_t restartpads[2];
 extern word PrintX, PrintY;
 extern word WindowX, WindowY, WindowW, WindowH;
 extern boolean tedlevel;

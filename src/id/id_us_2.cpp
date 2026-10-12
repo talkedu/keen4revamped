@@ -65,6 +65,7 @@ enum { uii_Bad, uii_Button, uii_RadioButton, uii_Folder };
 enum { ui_Pushed = 1, ui_Selected = 2, ui_Disabled = 4, ui_Separated = 8 };
 enum { uc_None, uc_Return, uc_Abort, uc_Quit, uc_Loaded, uc_SEasy, uc_SNormal, uc_SHard };
 constexpr word uc_Language = 0x100;  // port: the main menu's language item
+constexpr word uc_Coop = 0x101;      // port: the main menu's co-op item
 enum { uic_SetupCard, uic_DrawCard, uic_TouchupCard, uic_DrawIcon, uic_Draw, uic_Hit };
 
 struct UserItemGroup;
@@ -186,17 +187,30 @@ void LoadTree() {
   keybuttonitems = LoadItems(0x1FBD, 0);
   configitems = LoadItems(0x1FCC, 0);
 
-  // Port: a language item above QUIT. With nine items the list starts
-  // right under the card's title so it still ends above the footer.
+  // Port: a language item above QUIT, and a co-op item under NEW GAME. The
+  // list starts right under the card's title and its ten items are seven
+  // pixels apart, so it still ends above the footer.
   std::vector<UserItem>& items = itemarrays[Linear(0x1FD8, 0)];
   UserItem language{};
   language.type = uii_Button;
   language.comm = uc_Language;
   language.text = keen4::lang::MenuLabel();
   items.insert(items.end() - 2, language);
+  UserItem coop{};
+  coop.type = uii_Button;
+  coop.comm = uc_Coop;
+  coop.text = "CO-OP GAME";
+  items.insert(items.begin() + 1, coop);
   rootgroup->items = rootitems = items.data();
   rootgroup->y = 0;
 }
+
+// The root items the original code refers to by number (the co-op item
+// comes after NEW GAME).
+UserItem& RootItem(int original) { return rootitems[original >= 1 ? original + 1 : original]; }
+
+// Item rows are 8 pixels apart; the root card's ten are 7.
+int RowHeight(const UserItemGroup* card) { return card == rootgroup ? 7 : 8; }
 
 // ---------------------------------------------------------------------------
 // State (DGROUP 78D6..78E2, E814..E834)
@@ -206,6 +220,7 @@ const char* footerstrings[3];     // 78D8 (bottom line), 78DA (right), 78DC (lef
 boolean ctlpaneldone;             // 78DE
 boolean QuitToDos;                // 78E0
 boolean GameIsDirty;              // 78E2
+boolean coopchosen;               // port: the difficulty card was opened from CO-OP GAME
 UserItemGroup* topcard;           // E814
 UserItemGroup* cardstack[MaxCards];
 word cstackptr;                   // E834
@@ -270,7 +285,7 @@ void DrawItemIcon(UserItem* item) {
 // 1A89:0110
 void DrawItem(UserItem* item) {
   if (topcard->custom && topcard->custom(uic_Draw, item)) return;
-  VWB_Bar(CTL_X + 1, item->y, CTL_W - 1, 8, BackColor);
+  VWB_Bar(CTL_X + 1, item->y, CTL_W - 1, RowHeight(topcard), BackColor);
   DrawItemIcon(item);
   if ((item->flags & ui_Selected) && !(item->flags & ui_Disabled))
     fontcolor = NohiliteColor;
@@ -318,7 +333,7 @@ void DrawCtlPanelContents() {
     item->x = static_cast<word>(x);
     item->y = static_cast<word>(y);
     DrawItem(item);
-    y += 8;
+    y += RowHeight(topcard);
   }
   if (topcard->custom) topcard->custom(uic_TouchupCard, nullptr);
 }
@@ -418,6 +433,79 @@ boolean CtlDialog(const char* s1, const char* s2, const char* s3) {
   return c == sc_Y;
 }
 
+// Port: before a co-op game, each player picks a device: player 1 a gamepad
+// (A) or the keyboard (any key), player 2 another gamepad. Escape backs out.
+void DrawCoopSetup(const char* title, const char* line1, const char* line2) {
+  const char* lines[4] = {title, line1, line2, S(0x4922)};  // "ESC TO BACK OUT"
+  word w = 0, h = 0, lw;
+  for (const char* s : lines) {
+    Measure(s, &lw, &h);
+    if (lw > w) w = lw;
+  }
+  w = static_cast<word>(w + 7);
+  word x, y;
+  DrawPanel(w, static_cast<word>(h * 6), &x, &y);
+  py = static_cast<sword>(y + h);
+  for (int i = 0; i < 4; i++) {
+    fontcolor = i == 0 ? NohiliteColor : HiliteColor;
+    Measure(lines[i], &lw, &h);
+    px = static_cast<sword>(x + (w - lw) / 2);
+    DrawString(lines[i]);
+    py = static_cast<sword>(py + h + (i == 0 || i == 2 ? h / 2 + 1 : 0));
+  }
+  fontcolor = 15;
+  VW_UpdateScreen();
+}
+
+boolean CoopInputSetup() {
+  std::uint32_t chosen[2] = {0, 0};
+  for (int p = 0; p < 2; p++) {
+    if (p == 0)
+      DrawCoopSetup("PLAYER 1: BILLY", "PRESS A ON A GAMEPAD", "OR ANY KEY");
+    else
+      DrawCoopSetup("PLAYER 2: TOM", "PRESS A ON", "ANOTHER GAMEPAD");
+    IN_ClearKeysDown();
+    // a button already down (the one that picked the difficulty) counts once released
+    std::vector<std::uint32_t> held;
+    for (int i = 0; i < IN_GamepadCount(); i++) held.push_back(IN_GamepadId(i));
+    boolean done = false;
+    while (!done) {
+      SYS_Idle();
+      for (int i = 0; i < IN_GamepadCount() && !done; i++) {
+        std::uint32_t id = IN_GamepadId(i);
+        ControlInfo info;
+        word buttons;
+        IN_ReadGamepad(id, &info, &buttons);
+        bool washeld = false;
+        for (std::size_t k = 0; k < held.size(); k++) {
+          if (held[k] != id) continue;
+          washeld = true;
+          if (!(buttons & 1)) held.erase(held.begin() + static_cast<std::ptrdiff_t>(k));
+          break;
+        }
+        if (washeld || !(buttons & 1) || (p == 1 && id == chosen[0])) continue;
+        chosen[p] = id;
+        done = true;
+      }
+      if (done) break;
+      if (LastScan == sc_Escape) {
+        IN_ClearKeysDown();
+        return false;
+      }
+      if (LastScan && p == 0) {
+        chosen[0] = 0;  // the keyboard
+        done = true;
+      }
+      LastScan = sc_None;  // player 2 cannot use the keyboard
+    }
+    SD_PlaySound(SND_KEENPADDLE);
+  }
+  restartpads[0] = chosen[0];
+  restartpads[1] = chosen[1];
+  IN_ClearKeysDown();
+  return true;
+}
+
 // 1A89:06E8
 boolean ConfirmComm(word comm) {
   if (!comm) Quit(S(0x4903));  // "USL_ConfirmComm() - empty comm"
@@ -453,6 +541,11 @@ boolean ConfirmComm(word comm) {
   }
 
   confirm = dialog ? CtlDialog(s1, s2, s3) : true;
+  // Port: a co-op game first asks each player for a device.
+  if (confirm && coopchosen && comm >= uc_SEasy && comm <= uc_SHard && !CoopInputSetup()) {
+    confirm = false;
+    DrawCtlPanel();
+  }
   if (confirm) {
     lastcomm = comm;
     ctlpaneldone = true;
@@ -1223,6 +1316,17 @@ void DoItem() {
     DrawCtlPanel();
     return;
   }
+  if (item->comm == uc_Coop) {
+    // the NEW GAME card, for two players; player 2 needs a gamepad
+    if (!IN_GamepadCount()) {
+      CtlDialog("CONNECT A GAMEPAD", S(0x49F6), nullptr);  // "PRESS ANY KEY"
+      return;
+    }
+    coopchosen = true;
+    DownLevel(rootitems[0].child);
+    return;
+  }
+  if (topcard == rootgroup && item->type == uii_Folder) coopchosen = false;
   switch (item->type) {
     case uii_Button:
       if (!(topcard->custom && topcard->custom(uic_Hit, item))) ConfirmComm(item->comm);
@@ -1253,12 +1357,12 @@ void SetControlValues() {
   if (!JoysPresent[1]) configitems[5].flags |= ui_Disabled;
   if (!JoysPresent[0] && !JoysPresent[1]) configitems[6].flags |= ui_Disabled;
 
-  rootitems[4].text = S(ingame ? 0x4E5A : 0x4E69);  // "RETURN TO GAME" / "RETURN TO DEMO"
+  RootItem(4).text = S(ingame ? 0x4E5A : 0x4E69);  // "RETURN TO GAME" / "RETURN TO DEMO"
   if (!ingame) {
-    rootitems[2].flags |= ui_Disabled;
-    rootitems[5].flags |= ui_Disabled;
+    RootItem(2).flags |= ui_Disabled;
+    RootItem(5).flags |= ui_Disabled;
   }
-  rootgroup->cursor = ingame ? 4 : 0;
+  rootgroup->cursor = static_cast<word>(ingame ? &RootItem(4) - rootitems : 0);
   SetOptionsText();
 }
 
@@ -1290,12 +1394,15 @@ void HandleComm(word comm) {
       break;
     case uc_SEasy:
       restartgame = gd_Easy;
+      restartcoop = coopchosen;
       break;
     case uc_SNormal:
       restartgame = gd_Normal;
+      restartcoop = coopchosen;
       break;
     case uc_SHard:
       restartgame = gd_Hard;
+      restartcoop = coopchosen;
       break;
     default:
       Quit(S(0x4E86));  // "USL_HandleComm() - unknown"
@@ -1320,6 +1427,7 @@ void SetUpCtlPanel() {
   RF_FixOfs();
 
   lastcomm = uc_None;
+  coopchosen = false;
   ClearFlags(rootgroup);
   SetControlValues();
   InitCtlStack();

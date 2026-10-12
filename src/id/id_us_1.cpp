@@ -19,6 +19,8 @@
 boolean ingame, abortgame, loadedgame, NoWait;
 boolean HighScoresDirty;
 GameDiff restartgame;
+boolean restartcoop;
+std::uint32_t restartpads[2];
 word PrintX, PrintY;
 word WindowX, WindowY, WindowW, WindowH;
 boolean tedlevel;

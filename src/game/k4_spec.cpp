@@ -196,19 +196,19 @@ void KeenSwimReact(objtype* ob) {
   RF_PlaceSprite(&ob->sprite, ob->x, ob->y, ob->shapenum, spritedraw, ob->priority);
 }
 
-// 0E8F:0CFE
-void SpawnSwimKeen(word tilex, word tiley) {
-  player->obclass = keenobj;
-  player->active = ac_allways;
-  player->priority = 1;
-  player->x = static_cast<word>(tilex << G_T_SHIFT);
-  player->y = static_cast<word>(tiley << G_T_SHIFT);
-  player->xdir = player->ydir = 1;
-  player->needtoclip = cl_fullclip;
-  NewState(player, ST(0x19EC));
-}
-
 }  // namespace
+
+// 0E8F:0CFE
+void SpawnSwimKeenObj(objtype* ob, word tilex, word tiley) {
+  ob->obclass = keenobj;
+  ob->active = ac_allways;
+  ob->priority = 1;
+  ob->x = static_cast<word>(tilex << G_T_SHIFT);
+  ob->y = static_cast<word>(tiley << G_T_SHIFT);
+  ob->xdir = ob->ydir = 1;
+  ob->needtoclip = cl_fullclip;
+  NewState(ob, ST(0x19EC));
+}
 
 // Actor spawners (K4_ACT1..3).
 void SpawnMiragia(word tilex, word tiley);
@@ -254,18 +254,21 @@ void ScanInfoPlane() {
         case 1:
           SpawnKeen(x, y, 1);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 1, 0);
           lumpneeded[KEENLUMP] = true;
           MarkKeenSprites();
           break;
         case 2:
           SpawnKeen(x, y, -1);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, -1, 0);
           lumpneeded[KEENLUMP] = true;
           MarkKeenSprites();
           break;
         case 3:
           SpawnWorldKeen(x, y);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 0, 1);
           lumpneeded[WORLDKEENLUMP] = true;
           MarkKeenSprites();
           break;
@@ -446,8 +449,9 @@ void ScanInfoPlane() {
           MarkChunk(430);
           break;
         case 42:
-          SpawnSwimKeen(x, y);
+          SpawnSwimKeenObj(player, x, y);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 1, 2);
           lumpneeded[SCUBAKEENLUMP] = true;
           for (int i = 219; i <= 226; i++) MarkChunk(i);
           MarkKeenSprites();

@@ -183,7 +183,64 @@ struct PlayerState {
   std::int32_t score, nextextra;
   sword ammo, drops;
   objtype* riding;
+
+  // Co-op (ck_coop.cpp).
+  sword status;          // CoopStatus
+  longword respawntime;  // lasttimecount at which the respawn cool-down ends
+  sword flicker;         // tics left of immunity after respawning
+  word groundx, groundy; // where the Keen last stood on solid ground
+  word lastpadbuttons;   // padbuttons of the frame before
 };
+
+// ---------------------------------------------------------------------------
+// Co-op (port, ck_coop.cpp)
+//
+// Billy and his twin brother Tom play the same level. They share the lives,
+// keys, the wetsuit and the rescued council members; score, drops and ammo
+// are each their own. A Keen that dies sits out a cool-down and comes back
+// on the last solid ground his brother stood on, flickering and immune for a
+// while; the level fails when the last Keen still in play dies. A Keen who
+// walks off the map waits there, hidden, for his brother.
+
+enum CoopStatus : sword {
+  coop_playing,     // in play (also while dying, until his death is over)
+  coop_respawning,  // dead, waiting for the cool-down to end; hidden
+  coop_atexit,      // walked off the map, waiting for his brother; hidden
+};
+
+inline constexpr sword COOP_RESPAWNTICS = 3 * 70;
+inline constexpr sword COOP_FLICKERTICS = 2 * 70;
+
+// True for a Keen that is hidden: respawning or waiting at the exit. Hidden
+// Keens neither act nor touch anything.
+boolean CoopHidden(const objtype* ob);
+// True while the Keen is in play and not dying: the one the camera follows
+// and the actors chase.
+boolean CoopInPlay(int player);
+// Level start: both Keens in play.
+void CoopStartLevel();
+// Spawns Tom and his score box next to Billy, who was just spawned at
+// (tilex, tiley). `kind`: 0 on foot, 1 on the world map, 2 swimming.
+void CoopSpawnTom(word tilex, word tiley, sword dir, int kind);
+// A Keen's death is over (fell off the screen or the map, or was eaten).
+void CoopKeenGone(objtype* ob);
+// A Keen walked off the edge of the map.
+void CoopReachedExit(objtype* ob);
+// Every frame after the actors reacted: respawns, flicker, standing ground.
+void CoopFrame();
+// The camera, following the Keens in play (instead of ScrollScreen).
+void CoopScroll();
+// Centres the camera between the Keens in play (instead of CenterActor).
+void CoopCenter();
+// Tom's score box graphics: a copy of the score box sprite he writes into.
+byte* CoopScoreBox();
+// The player whose status window Enter or Back opens.
+int CoopStatusPlayer();
+// Prints how the level ended, the scores and the most actors it had at once
+// (MAXACTORS is the limit).
+void CoopEndLevel();
+// F10 + 1/2 kills Billy/Tom, F10 + 3/4 sends him off the map (to test co-op).
+void CoopDebugKeys();
 
 extern PlayerState players[MAXPLAYERS];
 extern int numplayers;  // 1, or 2 in co-op
@@ -274,7 +331,15 @@ void StopMusic();
 void StartMusic(sword level);
 void PlayLoop();
 void CenterActor(objtype* ob);
-void StatusWindow();
+// The status window of player  (0 in single-player).
+void StatusWindow(int who);
+// Port: 06BD:1ACD ScrollScreen in two parts, LeftTheMap (walked off the edge or
+// fell off the bottom) and ScrollCamera (the view follows Keen); co-op uses
+// them separately.
+void ScrollScreen(objtype* ob);
+boolean LeftTheMap(objtype* ob);
+void ScrollCamera(objtype* ob);
+void WorldScrollScreen(objtype* ob);
 
 // ---------------------------------------------------------------------------
 // CK_PHYS
@@ -360,6 +425,11 @@ void FinaleLayout();
 
 // CK_KEEN / CK_KEEN2
 void SpawnKeen(word tilex, word tiley, sword dir);
+// Port: SpawnKeen, SpawnWorldKeen and SpawnSwimKeen for any player's Keen.
+void SpawnKeenObj(objtype* ob, word tilex, word tiley, sword dir);
+void SpawnWorldKeenObj(objtype* ob, word tilex, word tiley);
+void SpawnSwimKeenObj(objtype* ob, word tilex, word tiley);
+void SpawnScoreObj(objtype* ob);
 void KillKeen(objtype* ob);
 void HandleRiding(objtype* ob);
 void CheckInTiles(objtype* ob);

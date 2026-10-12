@@ -93,6 +93,7 @@ void CountObjects() {
 
 // 06BD:07DC
 boolean DebugKeys() {
+  if (numplayers > 1) CoopDebugKeys();  // port
   if (Keyboard[sc_B] && ingame) {
     US_CenterWindow(24, 3);
     PrintY = static_cast<word>(PrintY + 6);
@@ -393,6 +394,8 @@ void ScrollStatusWindow() {
   VW_UpdateScreen();
 }
 
+}  // namespace
+
 // The tile bounds of the view and of where actors stay awake, from the origin
 // (repeated after every scroll in the original).
 void CalcViewBounds() {
@@ -450,14 +453,16 @@ constexpr word s_keenonpole_b = 0x1346;
 constexpr word s_keenonpole_c = 0x1364;
 constexpr word s_keenonpole_d = 0x1382;
 
-// 06BD:1ACD
-void ScrollScreen(objtype* ob) {
-  if (lockscroll) return;
-
+// 06BD:1ACD, first part: true if Keen left the map, walking off its edge (the
+// level is done; in co-op he waits for his brother) or falling off its bottom.
+boolean LeftTheMap(objtype* ob) {
   // walked off the edge of the map
   if (ob->left < originxmin || ob->right > static_cast<word>(originxmax + 20 * TILEGLOBAL)) {
-    playstate = ex_completed;
-    return;
+    if (numplayers > 1)
+      CoopReachedExit(ob);
+    else
+      playstate = ex_completed;
+    return true;
   }
 
   // fell off the bottom of the map
@@ -466,9 +471,20 @@ void ScrollScreen(objtype* ob) {
     SD_PlaySound(0x14);  // SND_PLUMMET
     godmode = false;
     KillKeen(ob);
-    return;
+    return true;
   }
+  return false;
+}
 
+// 06BD:1ACD
+void ScrollScreen(objtype* ob) {
+  if (lockscroll) return;
+  if (LeftTheMap(ob)) return;
+  ScrollCamera(ob);
+}
+
+// 06BD:1ACD, second part: the camera follows Keen.
+void ScrollCamera(objtype* ob) {
   sword xscroll = 0, yscroll = 0;
   if (ob->x < static_cast<word>(originxglobal + 9 * TILEGLOBAL))
     xscroll = static_cast<sword>(ob->x - (originxglobal + 9 * TILEGLOBAL));
@@ -543,15 +559,35 @@ void ScrollScreen(objtype* ob) {
   CalcViewBounds();
 }
 
+namespace {
+
 // 06BD:0CD5
 void CheckKeys() {
   if (screenfaded) return;  // don't do anything with a faded screen
 
+  // Port: in co-op, Back and Start on a pad other than the newest (which
+  // types Enter and Escape) open the status window and the control panel.
+  int statusplayer = -1;
+  if (numplayers > 1) {
+    int pads = IN_GamepadCount();
+    std::uint32_t newest = pads ? IN_GamepadId(pads - 1) : 0;
+    for (int i = 0; i < numplayers; i++) {
+      PlayerState& ps = players[i];
+      word pressed = static_cast<word>(ps.padbuttons & ~ps.lastpadbuttons);
+      ps.lastpadbuttons = ps.padbuttons;
+      if (!ps.pad || ps.pad == newest) continue;
+      if (pressed & kJoyBack) statusplayer = i;
+      if (pressed & kJoyStart) LastScan = sc_Escape;
+    }
+  }
+
   // Enter: status window (port: or the Gravis status button; Back on a
   // gamepad types Enter)
   if (Keyboard[sc_Enter] ||
-      (GravisGamepad && IN_GamepadActive() && ((IN_JoyButtons() >> (GravisMap[3] & 3)) & 1))) {
-    StatusWindow();
+      (GravisGamepad && IN_GamepadActive() && ((IN_JoyButtons() >> (GravisMap[3] & 3)) & 1)))
+    statusplayer = numplayers > 1 ? CoopStatusPlayer() : 0;
+  if (statusplayer >= 0) {
+    StatusWindow(statusplayer);
     IN_ClearKeysDown();
     RF_ForceRefresh();
     lasttimecount = TimeCount;
@@ -652,7 +688,7 @@ void CheckKeys() {
 }  // namespace
 
 // 06BD:16F1
-void StatusWindow() {
+void StatusWindow(int who) {
   WindowX = 0;
   WindowW = 320;
   WindowY = 0;
@@ -671,7 +707,7 @@ void StatusWindow() {
   RFL_InitAnimList();
   std::memcpy(statusbuffer, vw_framebuffer, sizeof statusbuffer);
   vw_screen = statusbuffer;
-  DrawStatusWindow(players[0]);
+  DrawStatusWindow(players[who]);
   vw_screen = vw_framebuffer;
   RF_Refresh();
 
@@ -824,6 +860,13 @@ void InitObjArray() {
   scoreobj = newobj;
   players[0].ob = player;
   players[0].scorebox = scoreobj;
+  // port: then Tom and his score box in co-op
+  if (numplayers > 1) {
+    GetNewObj(false);
+    players[1].ob = newobj;
+    GetNewObj(false);
+    players[1].scorebox = newobj;
+  }
 }
 
 // 06BD:1E11
@@ -989,6 +1032,11 @@ void PollControls() {
   // (only player 1 may use it).
   for (int i = 0; i < numplayers; i++) {
     PlayerState& ps = players[i];
+    // player 2 has no keyboard: without a pad of his own he takes the first free one
+    if (i > 0 && !ps.pad) {
+      for (int p = 0; p < IN_GamepadCount() && !ps.pad; p++)
+        if (IN_GamepadId(p) != players[0].pad) ps.pad = IN_GamepadId(p);
+    }
     if (ps.pad) {
       ps.padconnected = IN_ReadGamepad(ps.pad, &ps.c, &ps.padbuttons);
       PollPlayerControls(ps, GravisGamepad, true, static_cast<word>(ps.padbuttons & 0xF), false);
@@ -1028,7 +1076,13 @@ void PlayLoop() {
   ingame = true;
   playstate = ex_stillplaying;
   lockscroll = false;
-  CenterActor(player);
+  RF_SetCameraMode(numplayers > 1);
+  if (numplayers > 1) {
+    CoopStartLevel();
+    CoopCenter();
+  } else {
+    CenterActor(player);
+  }
 
   if (DemoMode)
     US_InitRndT(false);
@@ -1044,6 +1098,7 @@ void PlayLoop() {
 
     // go through state changes and propose movements
     for (objtype* obj = player; obj; obj = obj->next) {
+      if (numplayers > 1 && CoopHidden(obj)) continue;
       if (!obj->active && NearAView(obj)) {
         obj->needtoreact = true;
         obj->active = ac_yes;
@@ -1068,13 +1123,13 @@ void PlayLoop() {
     }
 
     for (int i = 0; i < numplayers; i++)
-      if (players[i].riding) HandleRiding(players[i].ob);
+      if (players[i].riding && !CoopHidden(players[i].ob)) HandleRiding(players[i].ob);
 
     // check for and handle collisions between objects
     for (objtype* obj = player; obj; obj = obj->next) {
-      if (!obj->active) continue;
+      if (!obj->active || (numplayers > 1 && CoopHidden(obj))) continue;
       for (objtype* check = obj->next; check; check = check->next) {
-        if (!check->active) continue;
+        if (!check->active || (numplayers > 1 && CoopHidden(check))) continue;
         if (obj->right > check->left && obj->left < check->right && obj->top < check->bottom &&
             obj->bottom > check->top) {
           if (obj->state->contact) obj->state->contact(obj, check);
@@ -1086,6 +1141,7 @@ void PlayLoop() {
 
     // check intiles
     for (int i = 0; i < numplayers; i++) {
+      if (numplayers > 1 && CoopHidden(players[i].ob)) continue;
       if (mapon)
         CheckInTiles(players[i].ob);
       else
@@ -1095,7 +1151,14 @@ void PlayLoop() {
     // react to whatever happened, and post sprites to the refresh manager
     for (objtype* obj = player; obj; obj = obj->next) {
       if (!obj->active) continue;
-      if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
+      if (numplayers > 1 && PlayerIndex(obj) >= 0) {
+        // port: co-op Keens are never removed, even when eaten
+        if (CoopHidden(obj)) continue;
+        if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
+          CoopKeenGone(obj);
+          continue;
+        }
+      } else if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
         if (obj->obclass == keenobj)
           playstate = ex_died;
         else
@@ -1109,11 +1172,17 @@ void PlayLoop() {
     }
 
     // scroll the screen and update the score box
-    if (mapon != 0 && mapon != 17)
-      ScrollScreen(player);
-    else
-      WorldScrollScreen(player);
-    UpdateScore(scoreobj);
+    if (numplayers > 1) {
+      CoopFrame();
+      CoopScroll();
+      for (int i = 0; i < numplayers; i++) UpdateScore(players[i].scorebox);
+    } else {
+      if (mapon != 0 && mapon != 17)
+        ScrollScreen(player);
+      else
+        WorldScrollScreen(player);
+      UpdateScore(scoreobj);
+    }
     if (loadedgame) loadedgame = false;
 
     SyncCameras();
@@ -1152,5 +1221,6 @@ void PlayLoop() {
     }
   } while (playstate == ex_stillplaying);
 
+  if (numplayers > 1) CoopEndLevel();
   ingame = false;
 }

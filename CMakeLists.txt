@@ -65,6 +65,7 @@ add_library(keen4_game STATIC
   src/game/ck_phys.cpp
   src/game/ck_keen.cpp
   src/game/ck_keen2.cpp
+  src/game/ck_coop.cpp
   src/game/ck_states.cpp
   src/game/k4_spec.cpp
   src/game/k4_act1.cpp
@@ -113,4 +114,13 @@ if(KEEN4_BUILD_TESTS)
   add_executable(keen4_audio_tests tests/test_audio.cpp)
   target_link_libraries(keen4_audio_tests PRIVATE keen4_game)
   add_test(NAME keen4_audio_tests COMMAND keen4_audio_tests)
+  # Co-op scenarios run the game headless; they need the game data (KEEN4_DATA)
+  # and are skipped without it.
+  add_executable(keen4_coop_tests tests/test_coop.cpp)
+  target_compile_options(keen4_coop_tests PRIVATE ${KEEN4_WARNINGS})
+  target_compile_definitions(keen4_coop_tests PRIVATE KEEN4_BINARY="$<TARGET_FILE:keen4>"
+                                                      KEEN4_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_dependencies(keen4_coop_tests keen4)
+  add_test(NAME keen4_coop_tests COMMAND keen4_coop_tests)
+  set_tests_properties(keen4_coop_tests PROPERTIES SKIP_RETURN_CODE 77)
 endif()

@@ -336,6 +336,7 @@ void InstallCacheBoxHooks() {
 // 05C4:0063
 void NewGame() {
   std::memset(&gamestate, 0, sizeof gamestate);
+  numplayers = 1;
   ResetPlayers();
   gamestate.lives = 3;
 }
@@ -424,6 +425,12 @@ boolean LoadTheGame(std::FILE* file) {
 // 05C4:0466
 void ResetGame() {
   NewGame();
+  // port: co-op
+  if (restartcoop) {
+    numplayers = 2;
+    players[0].pad = restartpads[0];
+    players[1].pad = restartpads[1];
+  }
   ca_levelnum--;
   ca_levelbit >>= 1;
   CA_ClearMarks();
@@ -560,6 +567,7 @@ void GameLoop() {
         RF_FixOfs();
         VW_FixRefreshBuffer();
         FinaleLayout();
+        numplayers = 1;
         CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued));
         return;
 
@@ -605,5 +613,6 @@ void GameLoop() {
   }
 
   GameOver();
+  numplayers = 1;
   CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued));
 }

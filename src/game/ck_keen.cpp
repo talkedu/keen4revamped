@@ -784,7 +784,12 @@ void T_PulledUp(objtype* ob) {
 void KeenDieThink(objtype* ob) {
   DoWeakGravity(ob);
   xtry = static_cast<sword>(ob->xspeed * static_cast<sword>(tics));
-  if (!OnScreen(ob)) playstate = ex_died;
+  if (!OnScreen(ob)) {
+    if (numplayers > 1)
+      CoopKeenGone(ob);
+    else
+      playstate = ex_died;
+  }
 }
 
 // 0B80:1775: items placed as foreground tiles.
@@ -1100,26 +1105,29 @@ void KeenPoleReact(objtype* ob) {
 }  // namespace
 
 // 0B80:000E
-void SpawnKeen(word tilex, word tiley, sword dir) {
-  player->obclass = keenobj;
-  player->active = ac_allways;
-  player->priority = 1;
-  player->x = static_cast<word>(tilex << G_T_SHIFT);
-  player->y = static_cast<word>((tiley << G_T_SHIFT) - 241);
-  player->xdir = dir;
-  player->ydir = 1;
-  NewState(player, ST(s_keenstand));
+void SpawnKeenObj(objtype* ob, word tilex, word tiley, sword dir) {
+  ob->obclass = keenobj;
+  ob->active = ac_allways;
+  ob->priority = 1;
+  ob->x = static_cast<word>(tilex << G_T_SHIFT);
+  ob->y = static_cast<word>((tiley << G_T_SHIFT) - 241);
+  ob->xdir = dir;
+  ob->ydir = 1;
+  NewState(ob, ST(s_keenstand));
 }
+
+void SpawnKeen(word tilex, word tiley, sword dir) { SpawnKeenObj(player, tilex, tiley, dir); }
 
 // 0B80:13E9
 void KillKeen(objtype* ob) {
   PlayerState& ps = PlayerOf(ob);
-  if (ps.invincible || godmode) return;
+  if (ps.invincible || ps.flicker || godmode) return;
   if (ob->state == ST(s_keendead)) return;
 
   ps.moonok = 0;
   ps.invincible = 30;
-  lockscroll = true;
+  // port: in co-op the camera goes on following his brother
+  if (numplayers == 1) lockscroll = true;
   ob->needtoclip = cl_noclip;
   ob->priority = 3;
   if (mapon == 17) {

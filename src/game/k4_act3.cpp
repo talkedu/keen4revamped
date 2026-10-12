@@ -215,7 +215,12 @@ void R_MimrockBounce(objtype* ob) {
 }
 
 // 11A2:0700: Keen has been swallowed.
-void T_EatenKeen(objtype*) { playstate = ex_died; }
+void T_EatenKeen(objtype* ob) {
+  if (numplayers > 1)
+    CoopKeenGone(ob);
+  else
+    playstate = ex_died;
+}
 
 // 11A2:0711 and 0AF6: dopefish and schoolfish chase Keen.
 void T_FishSwim(objtype* ob) {
@@ -303,7 +308,7 @@ void T_Bubble(objtype* ob) {
 void C_Dopefish(objtype* ob, objtype* hit) {
   if (hit->obclass == schoolfishobj) {
     ChangeState(hit, ST(0x3692));
-  } else if (hit->obclass == keenobj && !godmode) {
+  } else if (hit->obclass == keenobj && !godmode && !PlayerOf(hit).flicker) {
     hit->obclass = inertobj;
     hit->needtoclip = cl_noclip;
     SD_PlaySound(SND_KEENSWIMDIE);
