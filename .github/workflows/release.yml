@@ -1,29 +1,111 @@
 name: Release
 
-# Builds keen4 for Windows and Linux and publishes a GitHub release.
-# Run it from the Actions tab (or push a v* tag). Game data is never packaged:
-# players supply their own copy of Keen 4.
+# Every merge to main is released: the version is bumped from the latest v*
+# tag, Windows and Linux are built with that version, and a GitHub release is
+# published with notes from the merged pull request.
+#
+# The pull request title picks the bump: "[MAJOR] Title", "[MINOR] Title" or
+# "[PATCH] Title". A title without a tag is a patch.
+#
+# Game data is never packaged: players supply their own copy of Keen 4.
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag to create, e.g. v1.2
-        required: true
-        default: v1.2.1
   push:
-    tags: ['v*']
+    branches: [main]
 
 permissions:
   contents: write
+  pull-requests: read
 
-env:
-  TAG: ${{ inputs.tag || github.ref_name }}
-
-# Linux and Windows build on the self-hosted runner in WSL (label "wsl");
-# Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
-# it needs a GitHub-hosted runner, which the Actions spending limit blocks.
 jobs:
+  version:
+    runs-on: [self-hosted, Linux, X64, wsl]
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+      version: ${{ steps.next.outputs.version }}
+      notes: ${{ steps.next.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the next version and reserve its tag
+        id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+                 --jq '[.[] | select(.merged_at != null)] | .[0] // empty')
+          if [ -n "$pr" ]; then
+            title=$(jq -r .title <<<"$pr")
+            body=$(jq -r '.body // ""' <<<"$pr")
+            number=$(jq -r .number <<<"$pr")
+          else
+            # pushed straight to main, not through a pull request
+            title=$(git log -1 --format=%s "$GITHUB_SHA")
+            body=$(git log -1 --format=%b "$GITHUB_SHA")
+            number=
+          fi
+
+          bump=patch
+          shopt -s nocasematch
+          if [[ $title =~ ^[[:space:]]*\[(major|minor|patch)\][[:space:]]*(.*)$ ]]; then
+            bump=${BASH_REMATCH[1],,}
+            title=${BASH_REMATCH[2]}
+          fi
+          shopt -u nocasematch
+
+          # The tag is pushed before the build, so merges released at the same
+          # time never pick the same version: if another run took it, bump again.
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet --force --tags origin
+            prev=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -n1 || true)
+            IFS=. read -r major minor patch <<<"${prev#v}"
+            major=${major:-0} minor=${minor:-0} patch=${patch:-0}
+            case $bump in
+              major) major=$((major + 1)) minor=0 patch=0 ;;
+              minor) minor=$((minor + 1)) patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            version="$major.$minor.$patch"
+            tag="v$version"
+            git tag "$tag" "$GITHUB_SHA"
+            if git push --quiet origin "refs/tags/$tag"; then
+              break
+            fi
+            git tag -d "$tag"
+            if [ "$attempt" = 5 ]; then
+              echo "::error::could not reserve a release tag"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Releasing $tag ($bump bump from ${prev:-no previous tag})"
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "notes<<KEEN4_NOTES_EOF"
+            echo "## $title"
+            echo
+            if [ -n "$body" ]; then
+              printf '%s\n\n' "$body"
+            fi
+            echo "Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release). See README.md."
+            echo
+            if [ -n "$number" ]; then
+              echo "Pull request: https://github.com/$GITHUB_REPOSITORY/pull/$number"
+            fi
+            if [ -n "$prev" ]; then
+              echo "Full changes: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$tag"
+            fi
+            echo "KEEN4_NOTES_EOF"
+          } >>"$GITHUB_OUTPUT"
+
+  # Linux and Windows build on the self-hosted runner in WSL (label "wsl");
+  # Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
+  # it needs a GitHub-hosted runner, which the Actions spending limit blocks.
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +117,9 @@ jobs:
             runs-on: [self-hosted, Linux, X64, wsl]
             preset: release
     runs-on: ${{ matrix.runs-on }}
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install SDL3 build dependencies
@@ -46,7 +131,7 @@ jobs:
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION"
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
@@ -82,26 +167,24 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [version, build]
     runs-on: [self-hosted, Linux, X64, wsl]
     steps:
+      # the self-hosted runner keeps its workspace between runs
+      - name: Clear earlier downloads
+        run: rm -rf dist notes.md
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: keen4revamped ${{ env.TAG }}
-          target_commitish: ${{ github.sha }}
-          body: |
-            keen4revamped v1.2.1 finds your game data on its own. Gameplay is unchanged from v1.2.
-
-            - Steam data lookup: `keen4` and `keen4-extract` no longer need `--data` when Keen 4 is installed through Steam. They look in `--data`, then `KEEN4_DATA_DIR`, then the current and program folders, then every Steam library on Windows, Linux (including Flatpak, Snap, SteamOS and Bazzite) and macOS, including extra library drives. File and folder names match in any case. If nothing is found, the error lists every folder it tried.
-            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the art tools and the docs. macOS builds are still paused.
-
-            Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release). See README.md.
-
-            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.2...${{ env.TAG }}
-          files: dist/*
-          fail_on_unmatched_files: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          NOTES: ${{ needs.version.outputs.notes }}
+        run: |
+          printf '%s\n' "$NOTES" >notes.md
+          # The tag already exists (reserved above); --target only matters if
+          # someone deleted it before this job ran.
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "keen4revamped $TAG" --notes-file notes.md --target "$GITHUB_SHA"

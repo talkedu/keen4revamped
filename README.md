@@ -35,6 +35,17 @@ WSL, the "run on Windows" task builds it and starts it on the Windows host.
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).
 
+The version is not stored in the source: a build takes it from the latest `v*` git tag
+(0.0.0 without one), and `-DKEEN4_VERSION=1.2.3` overrides it.
+
+## Releases
+
+Every pull request merged to main becomes a release. The release workflow bumps the version
+from the latest `v*` tag, builds and tests Windows and Linux, and publishes the packages on
+the Releases page with the pull request's title and description as the notes. Start the
+pull request title with `[MAJOR]`, `[MINOR]` or `[PATCH]` to pick the bump, for example
+`[MINOR] Add a level editor`; a title without one is released as a patch.
+
 ## Decompilation tools
 
 Python scripts in [tools/decomp](tools/decomp) unpack the executable, extract the data
