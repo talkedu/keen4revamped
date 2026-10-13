@@ -26,14 +26,16 @@ bool EqualNoCase(const std::string& a, const std::string& b) {
 void SetDataDir(const std::string& dir) { g_data_dir = dir.empty() ? "." : dir; }
 const std::string& DataDir() { return g_data_dir; }
 
-std::string Find(const std::string& name) {
+std::string Find(const std::string& name) { return FindIn(g_data_dir, name); }
+
+std::string FindIn(const std::string& dir, const std::string& name, bool directory) {
   namespace fs = std::filesystem;
   std::error_code ec;
-  fs::path exact = fs::path(g_data_dir) / name;
-  if (fs::is_regular_file(exact, ec)) return exact.string();
-  for (const auto& entry : fs::directory_iterator(g_data_dir, ec)) {
-    if (entry.is_regular_file(ec) && EqualNoCase(entry.path().filename().string(), name))
-      return entry.path().string();
+  auto matches = [&](const fs::path& p) { return directory ? fs::is_directory(p, ec) : fs::is_regular_file(p, ec); };
+  fs::path exact = fs::path(dir) / name;
+  if (matches(exact)) return exact.string();
+  for (const auto& entry : fs::directory_iterator(dir, ec)) {
+    if (matches(entry.path()) && EqualNoCase(entry.path().filename().string(), name)) return entry.path().string();
   }
   return {};
 }
