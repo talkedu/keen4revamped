@@ -304,8 +304,10 @@ int main(int argc, char** argv) {
   if (remastered_audio && keen4::audio::AudioOptions().dir.empty()) keen4::audio::AudioOptions().dir = "audio";
 
   // The VIDEO card's settings, read before the window opens so it opens in
-  // the saved mode; the command line wins.
+  // the saved mode; the command line wins. Released builds start in full
+  // screen, development builds in a window.
   keen4::platform::VideoSettings video;
+  video.fullscreen = keen4::IsReleaseBuild();
   US_ReadVideoConfig(&video);
   if (fullscreen >= 0) video.fullscreen = fullscreen != 0;
   if (vsync >= 0) video.vsync = vsync != 0;
