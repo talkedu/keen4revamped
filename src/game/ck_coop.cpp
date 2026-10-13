@@ -289,6 +289,8 @@ void CoopStartLevel(boolean loaded) {
       Hide(ps, coop_atexit);
     }
   }
+  for (int i = 0; i < numplayers; i++)
+    Log(players[i].pad ? "plays with a gamepad" : "plays with the keyboard", i);
 }
 
 void CoopSaveStatus(int player, sword* status, word* respawnleft) {

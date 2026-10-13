@@ -1044,14 +1044,18 @@ void PollControls() {
     return;
   }
 
-  // Port: co-op. Each player reads the gamepad bound to them, or the keyboard
-  // (only player 1 may use it).
+  // Port: co-op. Each player reads the gamepad bound to them, or the keyboard.
   for (int i = 0; i < numplayers; i++) {
     PlayerState& ps = players[i];
-    // player 2 has no keyboard: without a pad of his own he takes the first free one
-    if (i > 0 && !ps.pad) {
-      for (int p = 0; p < IN_GamepadCount() && !ps.pad; p++)
-        if (IN_GamepadId(p) != players[0].pad) ps.pad = IN_GamepadId(p);
+    // any gamepad: the first one his brother doesn't use
+    if (ps.pad == kAnyGamepad) {
+      for (int p = 0; p < IN_GamepadCount(); p++) {
+        std::uint32_t id = IN_GamepadId(p);
+        if (id && id != players[1 - i].pad) {
+          ps.pad = id;
+          break;
+        }
+      }
     }
     if (ps.pad) {
       ps.padconnected = IN_ReadGamepad(ps.pad, &ps.c, &ps.padbuttons);

@@ -92,9 +92,10 @@ without a window and saves frames as PNG, which is how the port is checked in CI
 ## Two-player co-op
 
 CO-OP GAME in the main menu starts a game for two: Billy, and his twin brother Tom in a red
-helmet, green shirt and gray pants. It needs a gamepad for player 2. After the difficulty,
-player 1 presses A on a gamepad or any key (the keyboard is player 1's only), and player 2
-presses A on another gamepad.
+helmet, green shirt and gray pants. It needs at least one gamepad. After the difficulty,
+player 1 presses A on a gamepad or any key, and player 2 presses A on another gamepad, or
+any key if player 1 took a gamepad: one plays on the keyboard and one on a gamepad, or each
+on a gamepad of his own.
 
 - Lives are shared, and so are keys, the wetsuit and the rescued council members. Score,
   raindrops, ammo and extra Keens at 20,000 points are each player's own, with a score box
@@ -106,7 +107,8 @@ presses A on another gamepad.
   Rescuing a council member or riding the foot ends it for both.
 - The screen splits, side by side or one above the other, when the Keens are too far apart
   for one view, and joins again when they come back together.
-- If a gamepad is unplugged the game pauses until one is plugged in. Co-op games save and
-  load like any other.
+- If a player's gamepad is unplugged the game pauses until one is plugged in. Co-op games
+  save and load like any other.
 
-`/TEDLEVEL n COOP` plays one level in co-op, player 2 on the first gamepad.
+`/TEDLEVEL n COOP` plays one level in co-op, player 1 on the keyboard and player 2 on the
+first gamepad; `/TEDLEVEL n COOPPAD` the other way round.

@@ -110,8 +110,15 @@ void DemoLoop() {
   if (tedlevel) {
     NewGame();
     // port: /TEDLEVEL n COOP plays the level in co-op, player 1 on the
-    // keyboard and player 2 on the first gamepad
-    if (US_ParmPresent("COOP")) numplayers = 2;
+    // keyboard and player 2 on the first gamepad; COOPPAD the other way round
+    if (US_ParmPresent("COOP")) {
+      numplayers = 2;
+      players[1].pad = kAnyGamepad;
+    }
+    if (US_ParmPresent("COOPPAD")) {
+      players[0].pad = kAnyGamepad;
+      players[1].pad = 0;
+    }
     CA_LoadAllSounds();
     gamestate.mapon = tedlevelnum;
     restartgame = gd_Normal;

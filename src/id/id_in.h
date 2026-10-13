@@ -108,3 +108,6 @@ inline constexpr word kJoyBack = 16, kJoyStart = 32;
 // A is button0, B button1) and its buttons as IN_JoyButtons numbers them, plus
 // kJoyBack and kJoyStart. False, with everything zero, if it is not plugged in.
 boolean IN_ReadGamepad(std::uint32_t id, ControlInfo* info, word* buttons);
+// Port: stands for "the first gamepad the other player doesn't use" where a
+// gamepad id is expected (co-op); 0 there means the keyboard.
+inline constexpr std::uint32_t kAnyGamepad = 0xFFFFFFFFu;

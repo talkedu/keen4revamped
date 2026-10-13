@@ -262,8 +262,7 @@ constexpr TextEntry kText[] = {
     {"PRESS A ON A GAMEPAD", "APERTE A NUM CONTROLE"},
     {"OR ANY KEY", "OU QUALQUER TECLA"},
     {"PLAYER 2: TOM", "JOGADOR 2: TOM"},
-    {"PRESS A ON", "APERTE A NO"},
-    {"ANOTHER GAMEPAD", "OUTRO CONTROLE"},
+    {"PRESS A ON ANOTHER GAMEPAD", "APERTE A NOUTRO CONTROLE"},
     // co-op in play (CK_COOP)
     {"WAITING", "ESPERANDO"},
     {"Reconnect gamepad", "Reconecte o controle"},

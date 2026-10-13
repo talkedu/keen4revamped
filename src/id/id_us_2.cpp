@@ -463,7 +463,8 @@ boolean CoopInputSetup() {
     if (p == 0)
       DrawCoopSetup("PLAYER 1: BILLY", "PRESS A ON A GAMEPAD", "OR ANY KEY");
     else
-      DrawCoopSetup("PLAYER 2: TOM", "PRESS A ON", "ANOTHER GAMEPAD");
+      DrawCoopSetup("PLAYER 2: TOM", "PRESS A ON ANOTHER GAMEPAD",
+                    chosen[0] ? "OR ANY KEY" : "");  // the keyboard, if player 1 took a pad
     IN_ClearKeysDown();
     // a button already down (the one that picked the difficulty) counts once released
     std::vector<std::uint32_t> held;
@@ -492,11 +493,12 @@ boolean CoopInputSetup() {
         IN_ClearKeysDown();
         return false;
       }
-      if (LastScan && p == 0) {
-        chosen[0] = 0;  // the keyboard
+      // the keyboard, for player 1, or for player 2 if player 1 took a pad
+      if (LastScan && (p == 0 || chosen[0])) {
+        chosen[p] = 0;
         done = true;
       }
-      LastScan = sc_None;  // player 2 cannot use the keyboard
+      LastScan = sc_None;
     }
     SD_PlaySound(SND_KEENPADDLE);
   }
@@ -930,7 +932,10 @@ void DoLoadGame(UserItem* item) {
   } else {
     loadedgame = true;
     // port: a co-op game asks each player for a device again
-    if (restartcoop && !CoopInputSetup()) restartpads[0] = restartpads[1] = 0;
+    if (restartcoop && !CoopInputSetup()) {
+      restartpads[0] = 0;
+      restartpads[1] = kAnyGamepad;
+    }
   }
   game->present = true;
   if (loadedgame) Paused = true;

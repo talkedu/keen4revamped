@@ -406,7 +406,10 @@ bool ReadCoopTrailer(std::FILE* file) {
   }
   tom.scorebox->temp1 = tom.scorebox->temp2 = tom.scorebox->temp3 = tom.scorebox->temp4 = -1;
   // the players pick their devices again (ID_US_2 asks after loading)
-  players[0].pad = players[1].pad = 0;
+  players[0].pad = 0;
+  players[1].pad = kAnyGamepad;
+  restartpads[0] = 0;
+  restartpads[1] = kAnyGamepad;
   restartcoop = true;
   return true;
 }

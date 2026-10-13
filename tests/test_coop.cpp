@@ -60,13 +60,14 @@ std::string Press(int tic, std::initializer_list<int> scans) {
 
 constexpr int F10 = 0x44, ONE = 0x02, TWO = 0x03, THREE = 0x04, FOUR = 0x05, KEY_I = 0x17, SPACE = 0x39;
 
-Run Play(const std::string& keys, int tics) {
+// `mode`: COOP (player 1 on the keyboard, 2 on the pad) or COOPPAD (the other way round).
+Run Play(const std::string& keys, int tics, const char* mode = "COOP") {
   fs::path dir = fs::temp_directory_path() / "keen4-coop-test";
   fs::remove_all(dir);
   fs::create_directories(dir);
   std::string cmd = std::string("\"") + KEEN4_BINARY + "\" --headless --data \"" + datadir + "\" --save \"" +
                     dir.string() + "\" --out \"" + dir.string() + "\" --frames 1000000 --tics " +
-                    std::to_string(tics) + " --keys \"" + keys + "\" --gamepad2 0:0 /TEDLEVEL 1 COOP 2>&1";
+                    std::to_string(tics) + " --keys \"" + keys + "\" --gamepad2 0:0 /TEDLEVEL 1 " + mode + " 2>&1";
   Run run;
   std::FILE* p = popen(cmd.c_str(), "r");
   if (!p) return run;
@@ -158,6 +159,19 @@ int main() {
     }
     CHECK(split < run.lines.size());
     CHECK(merged < run.lines.size());
+  }
+
+  // Player 1 can take a gamepad and leave the keyboard to player 2: the keys
+  // then walk Tom away to the left and the screen splits.
+  {
+    Run run = Play("300:75:1,700:75:0", 900, "COOPPAD");
+    bool pad1 = false, keys2 = false, split = false;
+    for (const std::string& line : run.lines) {
+      pad1 |= line.find("player 1 plays with a gamepad") != std::string::npos;
+      keys2 |= line.find("player 2 plays with the keyboard") != std::string::npos;
+      split |= line.find("screen splits") != std::string::npos;
+    }
+    CHECK(pad1 && keys2 && split);
   }
 
   // Points are each player's own: the free-items cheat gives Billy 3000.
