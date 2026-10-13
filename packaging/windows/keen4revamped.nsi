@@ -24,6 +24,9 @@ Unicode true
 !define APPNAME "keen4revamped"
 !define DISPLAYNAME "Commander Keen 4 (keen4revamped)"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+!define SHCNE_CREATE 0x00000002
+!define SHCNE_ASSOCCHANGED 0x08000000
+!define SHCNF_PATHW 0x0005
 
 Name "${DISPLAYNAME}"
 OutFile "${OUTFILE}"
@@ -118,6 +121,10 @@ Section "$(SecDesktopName)" SecDesktop
   SetShellVarContext all
   SetOutPath "$INSTDIR"
   CreateShortcut "$DESKTOP\${DISPLAYNAME}.lnk" "$INSTDIR\keen4.exe" "" "$INSTDIR\keen4.exe" 0
+  ; Explorer does not always notice new files on the Public desktop until the
+  ; desktop is refreshed (F5), so tell it about the shortcut.
+  System::Call 'shell32::SHChangeNotify(i ${SHCNE_CREATE}, i ${SHCNF_PATHW}, w "$DESKTOP\${DISPLAYNAME}.lnk", p 0)'
+  System::Call 'shell32::SHChangeNotify(i ${SHCNE_ASSOCCHANGED}, i 0, p 0, p 0)'
 SectionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -145,4 +152,5 @@ Section "Uninstall"
 
   DeleteRegKey HKLM "${UNINSTKEY}"
   DeleteRegKey HKLM "Software\${APPNAME}"
+  System::Call 'shell32::SHChangeNotify(i ${SHCNE_ASSOCCHANGED}, i 0, p 0, p 0)'
 SectionEnd
