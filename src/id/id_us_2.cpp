@@ -746,8 +746,15 @@ void CheckForUpdates() {
     case update::Check::Ok:
       break;
     case update::Check::NoAccess:
-      update::ForgetToken();  // so the next try can sign in with another account
-      CtlDialog("NO ACCESS TO THE GAME", "ON THIS GITHUB ACCOUNT", S(0x49F6));
+      // A GitHub App's token sees only the repositories the app is installed
+      // on, so installing it fixes this without signing in again. Otherwise
+      // the next try can sign in with another account.
+      if (update::IsGitHubApp()) {
+        CtlDialog("NO ACCESS TO THE GAME", "INSTALL THE GITHUB APP", "ON THE GAME'S REPOSITORY");
+      } else {
+        update::ForgetToken();
+        CtlDialog("NO ACCESS TO THE GAME", "ON THIS GITHUB ACCOUNT", S(0x49F6));
+      }
       return;
     case update::Check::NoRelease:
       CtlDialog("NO RELEASES YET", "ON GITHUB", S(0x49F6));
