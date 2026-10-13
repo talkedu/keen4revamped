@@ -136,6 +136,7 @@ if(KEEN4_WITH_SDL3)
   target_compile_definitions(keen4 PRIVATE KEEN4_WITH_SDL3=1)
   if(WIN32)
     set_target_properties(keen4 PROPERTIES WIN32_EXECUTABLE ON)
+    target_sources(keen4 PRIVATE packaging/windows/keen4.rc)
   endif()
 endif()
 

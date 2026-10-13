@@ -18,6 +18,22 @@ This repository contains no game data. The port loads the original `.CK4` files 
 copy you own (for example the Steam release). Never commit game files, the original
 executable, or anything extracted from it; `.gitignore` blocks the usual names.
 
+## Installing
+
+Each [release](https://github.com/talkedu/keen4revamped/releases) has installers next to the
+plain archives. Neither includes game data; after installing, point the game at your copy as
+described in [Running](#running).
+
+- Windows: run `keen4revamped-vX.Y-windows-x64-installer.exe`. It installs to Program Files,
+  adds Start menu and desktop shortcuts and an entry in Settings > Apps for uninstalling.
+- Linux: run `sh keen4revamped-vX.Y-linux-x64-installer.sh` (no root needed). It installs to
+  `~/.local/lib/keen4revamped`, links `keen4` and `keen4-extract` into `~/.local/bin` and adds
+  an app-menu entry and a desktop shortcut. `--no-desktop-shortcut` skips the shortcut,
+  `--prefix DIR` installs somewhere else, and `~/.local/lib/keen4revamped/uninstall.sh`
+  removes it again. The same `install.sh` is in the `.tar.gz`.
+
+Uninstalling removes only the installed files; saved games and the configuration stay.
+
 ## Building
 
 Requires CMake 3.25+ and a C++20 compiler (MSVC 2022, GCC 12+, Clang 15+).
