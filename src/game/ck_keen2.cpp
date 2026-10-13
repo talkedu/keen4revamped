@@ -78,19 +78,20 @@ void DrawDemoPlaque(objtype* ob) {
 
 // 0D8F:06F0
 void T_KeenWorldWalk(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (ob->temp3) {
     ob->temp3 = static_cast<sword>(ob->temp3 - 4);
     if (ob->temp3 < 0) ob->temp3 = 0;
   } else {
-    ob->xdir = c.xaxis;
-    ob->ydir = c.yaxis;
-    if (pogobutton || firebutton || jumpbutton) CheckEnterLevel(ob);
-    if (c.dir == dir_None) {
+    ob->xdir = ps.c.xaxis;
+    ob->ydir = ps.c.yaxis;
+    if (ps.pogobutton || ps.firebutton || ps.jumpbutton) CheckEnterLevel(ob);
+    if (ps.c.dir == dir_None) {
       ob->state = ST(s_worldkeen);
       ob->shapenum = static_cast<word>(worldshapes(ob->temp1) + 3);
       return;
     }
-    ob->temp1 = c.dir;
+    ob->temp1 = ps.c.dir;
   }
   if (++ob->temp2 == 4) ob->temp2 = 0;
   ob->shapenum = static_cast<word>(worldshapes(ob->temp1) + worldanims(ob->temp2));
@@ -102,12 +103,13 @@ void T_KeenWorldWalk(objtype* ob) {
 
 // 0D8F:06AF
 void T_KeenWorld(objtype* ob) {
-  if (c.dir != dir_None) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.dir != dir_None) {
     ob->state = ST(s_worldkeenwalk);
     ob->temp2 = 0;
     T_KeenWorldWalk(ob);
   }
-  if (jumpbutton || pogobutton || firebutton) CheckEnterLevel(ob);
+  if (ps.jumpbutton || ps.pogobutton || ps.firebutton) CheckEnterLevel(ob);
 }
 
 // 0D8F:07AB: riding the foot to the other side of the world.
@@ -122,7 +124,7 @@ void T_FlyKeen(objtype* ob) {
     ob->temp1 = 6;
     ob->temp2 = 3;
     ob->temp3 = 0;
-    player->xdir = player->ydir = 0;
+    ob->xdir = ob->ydir = 0;
     ob->state = ST(s_worldkeen);
     ob->shapenum = 256;
     ob->needtoclip = cl_midclip;
@@ -131,13 +133,14 @@ void T_FlyKeen(objtype* ob) {
 
 // 0D8F:0826
 void T_WorldKeenSwim(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (ob->temp3) {
     ob->temp3 = static_cast<sword>(ob->temp3 - 6);
     if (ob->temp3 < 0) ob->temp3 = 0;
   } else {
-    ob->xdir = c.xaxis;
-    ob->ydir = c.yaxis;
-    if (c.xaxis || c.yaxis) ob->temp1 = c.dir;
+    ob->xdir = ps.c.xaxis;
+    ob->ydir = ps.c.yaxis;
+    if (ps.c.xaxis || ps.c.yaxis) ob->temp1 = ps.c.dir;
   }
   ob->shapenum = static_cast<word>(swimshapes(ob->temp1) + ob->temp2);
   if (++ob->temp2 == 2) ob->temp2 = 0;
@@ -174,14 +177,20 @@ void FlagAlign(objtype* ob) {
 
 // 0D8F:0D6A: off-screen shots still stun inactive actors close by.
 void T_Shot(objtype* ob) {
-  if (ob->tileright >= originxtile && ob->tilebottom >= originytile && ob->tileleft <= originxtilemax &&
-      ob->tiletop <= originytilemax)
-    return;
-
-  if (static_cast<word>(ob->tileright + 10) < originxtile ||
-      static_cast<word>(ob->tileleft - 10) > originxtilemax ||
-      static_cast<word>(ob->tilebottom + 6) < originytile ||
-      static_cast<word>(ob->tiletop - 6) > originytilemax) {
+  // Port: by every camera's view.
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  bool far = true;
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (ob->tileright >= v.xtile && ob->tilebottom >= v.ytile && ob->tileleft <= v.xtilemax &&
+        ob->tiletop <= v.ytilemax)
+      return;
+    if (!(static_cast<word>(ob->tileright + 10) < v.xtile || static_cast<word>(ob->tileleft - 10) > v.xtilemax ||
+          static_cast<word>(ob->tilebottom + 6) < v.ytile || static_cast<word>(ob->tiletop - 6) > v.ytilemax))
+      far = false;
+  }
+  if (far) {
     RemoveObj(ob);
     return;
   }
@@ -251,27 +260,32 @@ void T_Door(objtype* ob) {
 }  // namespace
 
 // 0D8F:0003
-void SpawnScore() {
-  scoreobj->obclass = inertobj;
-  scoreobj->priority = 3;
-  scoreobj->active = ac_allways;
-  scoreobj->needtoclip = cl_noclip;
-  scoreobj->temp2 = scoreobj->temp1 = scoreobj->temp3 = scoreobj->temp4 = -1;
+void SpawnScoreObj(objtype* ob) {
+  ob->obclass = inertobj;
+  ob->priority = 3;
+  ob->active = ac_allways;
+  ob->needtoclip = cl_noclip;
+  ob->temp2 = ob->temp1 = ob->temp3 = ob->temp4 = -1;
 
   if (scorescreenkludge) {
-    scoreobj->state = ST(s_scoredummy);
+    ob->state = ST(s_scoredummy);
     return;
   }
   if (!DemoMode) {
-    NewState(scoreobj, ST(s_score));
+    NewState(ob, ST(s_score));
   } else {
-    NewState(scoreobj, ST(s_demo));
+    NewState(ob, ST(s_demo));
     CA_MarkGrChunk(DEMOPLAQUESPR);
   }
 }
 
+void SpawnScore() { SpawnScoreObj(scoreobj); }
+
 // 0D8F:014F
 void UpdateScore(objtype* ob) {
+  // port: in co-op Tom has his own score box, at the top right
+  const boolean tom = numplayers > 1 && ob == players[1].scorebox;
+  const PlayerState& ps = tom ? players[1] : players[0];
   if (scorescreenkludge) return;
   if (DemoMode) {
     DrawDemoPlaque(ob);
@@ -281,17 +295,17 @@ void UpdateScore(objtype* ob) {
 
   boolean changed = false;
   CA_CacheGrChunk(SCOREBOXSPR);
-  byte* shape = grsegs[SCOREBOXSPR];
+  byte* shape = tom ? CoopScoreBox() : grsegs[SCOREBOXSPR];
   const spritetabletype& spr = spritetable[SCOREBOXSPR - STARTSPRITES];
   int width = spr.width;
   int planesize = spr.width * spr.height;
   byte* plane0 = shape + planesize;  // after the mask
   char str[16];
 
-  word scorehi = static_cast<word>(static_cast<std::uint32_t>(gamestate.score) >> 16);
-  word scorelo = static_cast<word>(gamestate.score & 0xFFFF);
+  word scorehi = static_cast<word>(static_cast<std::uint32_t>(ps.score) >> 16);
+  word scorelo = static_cast<word>(ps.score & 0xFFFF);
   if (static_cast<word>(ob->temp1) != scorehi || static_cast<word>(ob->temp2) != scorelo) {
-    std::snprintf(str, sizeof str, "%ld", static_cast<long>(gamestate.score));
+    std::snprintf(str, sizeof str, "%ld", static_cast<long>(ps.score));
     DrawScoreField(plane0 + width * 4, width, planesize, 9, str);
     ShiftScore();
     ob->needtoreact = true;
@@ -300,7 +314,7 @@ void UpdateScore(objtype* ob) {
     changed = true;
   }
 
-  word ammo = static_cast<word>(gamestate.ammo);
+  word ammo = static_cast<word>(ps.ammo);
   if (static_cast<word>(ob->temp3) != ammo) {
     if (ammo > 99)
       std::strcpy(str, "99");
@@ -325,57 +339,67 @@ void UpdateScore(objtype* ob) {
     changed = true;
   }
 
-  if (ob->x != originxglobal || ob->y != originyglobal) {
-    ob->x = originxglobal;
-    ob->y = originyglobal;
+  // port: in co-op each player's box has its place, and on a split screen
+  // shows only in his view
+  word x = originxglobal, y = originyglobal;
+  int view = -1;
+  if (numplayers > 1) CoopScoreBoxAt(tom ? 1 : 0, width * 8, &x, &y, &view);
+  if (ob->x != x || ob->y != y) {
+    ob->x = x;
+    ob->y = y;
     changed = true;
   }
 
-  if (changed)
+  if (changed) {
     RF_PlaceSprite(&ob->sprite, static_cast<word>(ob->x + 4 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL),
                    SCOREBOXSPR, spritedraw, 3);
+    if (tom) RF_SetSpriteVariant(ob->sprite, 1, shape);
+  }
+  if (numplayers > 1) RF_SetSpriteView(ob->sprite, view);
 }
 
 // 0D8F:050A
-void SpawnWorldKeen(word tilex, word tiley) {
+void SpawnWorldKeenObj(objtype* ob, word tilex, word tiley) {
   if (playstate == ex_foot) {
-    player->needtoclip = cl_noclip;
-    player->obclass = keenobj;
-    player->x = static_cast<word>(gamestate.worldx);
-    player->y = static_cast<word>(gamestate.worldy);
-    player->active = ac_allways;
-    player->priority = 3;
-    player->xdir = player->ydir = 0;
+    ob->needtoclip = cl_noclip;
+    ob->obclass = keenobj;
+    ob->x = static_cast<word>(gamestate.worldx);
+    ob->y = static_cast<word>(gamestate.worldy);
+    ob->active = ac_allways;
+    ob->priority = 3;
+    ob->xdir = ob->ydir = 0;
     if (static_cast<word>(gamestate.worldx) < 20 * TILEGLOBAL) {
-      player->temp1 = 280;
-      player->xspeed = static_cast<sword>(static_cast<word>(30 * TILEGLOBAL - player->x) / 280 + 1);
-      player->yspeed = static_cast<sword>(static_cast<word>(55 * TILEGLOBAL - player->y) / 280 + 1);
+      ob->temp1 = 280;
+      ob->xspeed = static_cast<sword>(static_cast<word>(30 * TILEGLOBAL - ob->x) / 280 + 1);
+      ob->yspeed = static_cast<sword>(static_cast<word>(55 * TILEGLOBAL - ob->y) / 280 + 1);
     } else {
-      player->temp1 = 140;
-      player->xspeed = static_cast<sword>(static_cast<sword>(16 * TILEGLOBAL - player->x) / 140 + 1);
-      player->yspeed = static_cast<sword>(static_cast<sword>(47 * TILEGLOBAL - player->y) / 140 + 1);
+      ob->temp1 = 140;
+      ob->xspeed = static_cast<sword>(static_cast<sword>(16 * TILEGLOBAL - ob->x) / 140 + 1);
+      ob->yspeed = static_cast<sword>(static_cast<sword>(47 * TILEGLOBAL - ob->y) / 140 + 1);
     }
-    NewState(player, ST(s_keenonfoot1));
+    NewState(ob, ST(s_keenonfoot1));
     return;
   }
 
-  player->obclass = keenobj;
+  ob->obclass = keenobj;
   if (!gamestate.worldx) {
-    player->x = static_cast<word>(tilex << G_T_SHIFT);
-    player->y = static_cast<word>(tiley << G_T_SHIFT);
+    ob->x = static_cast<word>(tilex << G_T_SHIFT);
+    ob->y = static_cast<word>(tiley << G_T_SHIFT);
   } else {
-    player->x = static_cast<word>(gamestate.worldx);
-    player->y = static_cast<word>(gamestate.worldy);
+    ob->x = static_cast<word>(gamestate.worldx);
+    ob->y = static_cast<word>(gamestate.worldy);
   }
-  player->active = ac_allways;
-  player->priority = 1;
-  player->xdir = player->ydir = 0;
-  player->temp1 = 6;
-  player->temp2 = 3;
-  player->temp3 = 0;
-  player->shapenum = 256;
-  NewState(player, ST(s_worldkeen));
+  ob->active = ac_allways;
+  ob->priority = 1;
+  ob->xdir = ob->ydir = 0;
+  ob->temp1 = 6;
+  ob->temp2 = 3;
+  ob->temp3 = 0;
+  ob->shapenum = 256;
+  NewState(ob, ST(s_worldkeen));
 }
+
+void SpawnWorldKeen(word tilex, word tiley) { SpawnWorldKeenObj(player, tilex, tiley); }
 
 // 0D8F:062E
 void CheckEnterLevel(objtype* ob) {
@@ -475,12 +499,13 @@ void SpawnThrowFlag(word tilex, word tiley) {
 }
 
 // 0D8F:0C76
-void SpawnShot(word x, word y, sword dir) {
-  if (!gamestate.ammo) {
+void SpawnShot(objtype* shooter, word x, word y, sword dir) {
+  PlayerState& ps = PlayerOf(shooter);
+  if (!ps.ammo) {
     SD_PlaySound(SND_NOAMMO);
     return;
   }
-  gamestate.ammo--;
+  ps.ammo--;
   GetNewObj(true);
   newobj->x = x;
   newobj->y = y;

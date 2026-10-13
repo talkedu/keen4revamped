@@ -12,6 +12,8 @@
 
 byte vw_framebuffer[SCREENWIDTH * SCREENHEIGHT];
 byte* vw_screen = vw_framebuffer;
+const byte* vw_remap;
+int vw_clipx0, vw_clipy0, vw_clipx1 = SCREENWIDTH, vw_clipy1 = SCREENHEIGHT;
 
 sword px, py;
 byte pdrawmode = 0x18, fontcolor = 15;  // DGROUP 6024: text is XORed by default
@@ -58,7 +60,7 @@ void VWL_DrawPlanar(int x, int y, int wbytes, int height, const byte* data, bool
   const byte* colors = masked ? data + planesize : data;
   for (int row = skiprows; row < height; row++) {
     int sy = y + row - skiprows;
-    if (static_cast<unsigned>(sy) >= SCREENHEIGHT) continue;
+    if (sy < vw_clipy0 || sy >= vw_clipy1) continue;
     byte* dest = vw_screen + sy * SCREENWIDTH;
     for (int b = 0; b < wbytes; b++) {
       int idx = row * wbytes + b;
@@ -71,9 +73,10 @@ void VWL_DrawPlanar(int x, int y, int wbytes, int height, const byte* data, bool
         byte sel = static_cast<byte>(0x80 >> bit);
         if (m & sel) continue;
         int sx = sx0 + bit;
-        if (static_cast<unsigned>(sx) >= SCREENWIDTH) continue;
-        dest[sx] = static_cast<byte>(((p0 & sel) ? 1 : 0) | ((p1 & sel) ? 2 : 0) |
-                                     ((p2 & sel) ? 4 : 0) | ((p3 & sel) ? 8 : 0));
+        if (sx < vw_clipx0 || sx >= vw_clipx1) continue;
+        byte color = static_cast<byte>(((p0 & sel) ? 1 : 0) | ((p1 & sel) ? 2 : 0) | ((p2 & sel) ? 4 : 0) |
+                                       ((p3 & sel) ? 8 : 0));
+        dest[sx] = vw_remap ? vw_remap[color] : color;
       }
     }
   }
@@ -82,13 +85,13 @@ void VWL_DrawPlanar(int x, int y, int wbytes, int height, const byte* data, bool
 void VWL_DrawInverseMask(int x, int y, int wbytes, int height, const byte* mask, int skiprows) {
   for (int row = skiprows; row < height; row++) {
     int sy = y + row - skiprows;
-    if (static_cast<unsigned>(sy) >= SCREENHEIGHT) continue;
+    if (sy < vw_clipy0 || sy >= vw_clipy1) continue;
     for (int b = 0; b < wbytes; b++) {
       byte m = static_cast<byte>(~mask[row * wbytes + b]);
       for (int bit = 0; bit < 8; bit++) {
         if (m & (0x80 >> bit)) {
           int sx = x + b * 8 + bit;
-          if (static_cast<unsigned>(sx) < SCREENWIDTH) vw_screen[sy * SCREENWIDTH + sx] |= 15;
+          if (sx >= vw_clipx0 && sx < vw_clipx1) vw_screen[sy * SCREENWIDTH + sx] |= 15;
         }
       }
     }

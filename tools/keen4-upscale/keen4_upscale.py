@@ -2,13 +2,14 @@
 """keen4-upscale: builds the remaster's 4x art set from keen4-extract output.
 
     python3 keen4_upscale.py EXTRACTED_DIR ART_DIR [--method scale4x|nearest|realesrgan]
-                             [--model NAME] [--realesrgan PATH] [--only tile16,tile16m,sprite]
+                             [--model NAME] [--realesrgan PATH] [--only tile16,tile16m,sprite,sprite2]
 
 Steps (docs/ART.md):
   1. Tiles are upscaled as whole sheets, 18 tiles wide as the levels lay them
      out, then cut back into 64 px tiles, so edges match and no seams show.
   2. Sprites are upscaled per animation strip (frames side by side), so all
-     frames of an animation come out consistent.
+     frames of an animation come out consistent. Tom's sprites (sprite2, co-op)
+     are Keen's recoloured by keen4-extract and upscaled the same way.
   3. Transparency is upscaled on its own and re-thresholded to a hard edge,
      because AI models blur alpha and leave halos.
   4. ART_DIR/manifest.txt lists every image; ART_DIR/review.html shows the
@@ -204,6 +205,8 @@ class Upscaler:
 
     def flush(self):
         """Runs the queued jobs, one image size at a time to keep memory low."""
+        if not self.jobs:
+            return  # scale4x and nearest are done at once
         groups = {}
         for job in self.jobs:
             rows = job[0]
@@ -262,7 +265,8 @@ def is_empty(rows):
 
 
 def parse_index(path):
-    sheets, strips = [], []
+    """Returns the sheets and {"sprite": strips, "sprite2": strips}."""
+    sheets, strips = [], {"sprite": [], "sprite2": []}
     with open(path) as f:
         for line in f:
             parts = line.split()
@@ -271,7 +275,9 @@ def parse_index(path):
             if parts[0] == "sheet":
                 sheets.append((parts[1], parts[2], int(parts[3]), int(parts[4])))
             elif parts[0] == "strip":
-                strips.append([int(p) for p in parts[1:]])
+                strips["sprite"].append([int(p) for p in parts[1:]])
+            elif parts[0] == "strip2":
+                strips["sprite2"].append([int(p) for p in parts[1:]])
     return sheets, strips
 
 
@@ -282,7 +288,7 @@ def main():
     ap.add_argument("--method", choices=["scale4x", "nearest", "realesrgan"], default="scale4x")
     ap.add_argument("--model", default="realesrgan-x4plus-anime")
     ap.add_argument("--realesrgan", default="realesrgan-ncnn-vulkan", help="path of the Real-ESRGAN program")
-    ap.add_argument("--only", default="tile16,tile16m,sprite")
+    ap.add_argument("--only", default="tile16,tile16m,sprite,sprite2")
     args = ap.parse_args()
 
     ai = None
@@ -347,10 +353,12 @@ def main():
 
             up.submit(rows, centre, model_mask=False)
 
-    if "sprite" in kinds:
-        print(f"sprite: {len(strips)} animation strips", flush=True)
-        for strip in strips:
-            frames = [read_png(os.path.join(args.extracted, "sprite", f"{c:04d}.png")) for c in strip]
+    for skind in ("sprite", "sprite2"):
+        if skind not in kinds:
+            continue
+        print(f"{skind}: {len(strips[skind])} animation strips", flush=True)
+        for strip in strips[skind]:
+            frames = [read_png(os.path.join(args.extracted, skind, f"{c:04d}.png")) for c in strip]
             fw, fh = frames[0][0], frames[0][1]
             sw = len(frames) * (fw + STRIP_PAD) + STRIP_PAD
             sheet = [[(0, 0, 0, 0)] * sw for _ in range(fh + 2 * STRIP_PAD)]
@@ -359,15 +367,15 @@ def main():
                 for y in range(fh):
                     sheet[STRIP_PAD + y][ox:ox + fw] = rows[y]
 
-            def split(big, strip=strip, fw=fw, fh=fh):
+            def split(big, strip=strip, fw=fw, fh=fh, skind=skind):
                 for i, c in enumerate(strip):
                     ox = (STRIP_PAD + i * (fw + STRIP_PAD)) * DENSITY
                     img = crop(big, ox, STRIP_PAD * DENSITY, fw * DENSITY, fh * DENSITY)
-                    name = f"sprite/{c:04d}.png"
+                    name = f"{skind}/{c:04d}.png"
                     write_png(os.path.join(args.art, name), fw * DENSITY, fh * DENSITY, img)
-                    manifest[("sprite", c)] = f"sprite {c} {name}"
-                    review[("sprite", c)] = ("sprite", c, os.path.relpath(
-                        os.path.join(args.extracted, "sprite", f"{c:04d}.png"), args.art), name)
+                    manifest[(skind, c)] = f"{skind} {c} {name}"
+                    review[(skind, c)] = (skind, c, os.path.relpath(
+                        os.path.join(args.extracted, skind, f"{c:04d}.png"), args.art), name)
 
             up.submit(sheet, split)
 

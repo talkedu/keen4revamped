@@ -251,7 +251,7 @@ void ClipToWalls(objtype* ob) {
     midxmoved = static_cast<sword>(ob->midx - oldmidx);
 
     ClipToEnds(ob);
-    if (ob == player && !playerkludgeclipcancel) {
+    if (PlayerIndex(ob) >= 0 && !playerkludgeclipcancel) {
       if (!ob->hitnorth && bottommoved > 0) PlayerBottomKludge(ob);
       if (!ob->hitsouth && topmoved < 0) PlayerTopKludge(ob);
     }
@@ -403,7 +403,7 @@ void ClipToSpriteTop(objtype* push, objtype* solid) {
   sword ymove = static_cast<sword>(push->ymove - solid->ymove);
   sword bottominto = static_cast<sword>(push->bottom - solid->top);
   if (bottominto >= 0 && bottominto <= ymove) {
-    if (push == player) gamestate.riding = solid;
+    if (PlayerIndex(push) >= 0) PlayerOf(push).riding = solid;
     ytry = static_cast<sword>(-bottominto);
     boolean temp = push->state->pushtofloor;
     push->state->pushtofloor = false;
@@ -425,7 +425,7 @@ void ClipToSprite(objtype* push, objtype* solid, boolean squish) {
     xtry = leftinto;
     push->xspeed = 0;
     PushObj(push);
-    if (squish && push->hitwest) KillKeen();
+    if (squish && push->hitwest) KillKeen(push);
     push->hiteast = 1;
     return;
   }
@@ -433,7 +433,7 @@ void ClipToSprite(objtype* push, objtype* solid, boolean squish) {
     xtry = static_cast<sword>(-rightinto);
     push->xspeed = 0;
     PushObj(push);
-    if (squish && push->hiteast) KillKeen();
+    if (squish && push->hiteast) KillKeen(push);
     push->hitwest = 1;
     return;
   }
@@ -443,17 +443,17 @@ void ClipToSprite(objtype* push, objtype* solid, boolean squish) {
   sword bottominto = static_cast<sword>(push->bottom - solid->top);
 
   if (bottominto >= 0 && bottominto <= ymove) {
-    if (push == player) gamestate.riding = solid;
+    if (PlayerIndex(push) >= 0) PlayerOf(push).riding = solid;
     ytry = static_cast<sword>(-bottominto);
     PushObj(push);
-    if (squish && push->hitsouth) KillKeen();
+    if (squish && push->hitsouth) KillKeen(push);
     if (!push->hitsouth) push->hitnorth = 25;
     return;
   }
   if (topinto >= 0 && topinto <= ymove) {
     ytry = topinto;
     ClipToWalls(push);
-    if (squish && push->hitnorth) KillKeen();
+    if (squish && push->hitnorth) KillKeen(push);
     push->hitsouth = 25;
   }
 }
@@ -620,11 +620,17 @@ void ChangeState(objtype* ob, statetype* state) {
 }
 
 // 09DC:1260
+// Port: on screen in any camera's view.
 boolean OnScreen(objtype* ob) {
-  if (ob->tileright < originxtile || ob->tilebottom < originytile || ob->tileleft > originxtilemax ||
-      ob->tiletop > originytilemax)
-    return false;
-  return true;
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (!(ob->tileright < v.xtile || ob->tilebottom < v.ytile || ob->tileleft > v.xtilemax ||
+          ob->tiletop > v.ytilemax))
+      return true;
+  }
+  return false;
 }
 
 namespace {
@@ -802,7 +808,7 @@ void T_Stunned(objtype* ob) {
 
 // 09DC:1752
 void C_Lethal(objtype*, objtype* hit) {
-  if (hit->obclass == keenobj) KillKeen();
+  if (hit->obclass == keenobj) KillKeen(hit);
 }
 
 // 09DC:176E

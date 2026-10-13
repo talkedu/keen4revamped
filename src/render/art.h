@@ -17,7 +17,9 @@
 
 namespace keen4::render {
 
-enum class AssetKind { Tile16, Tile16M, Sprite };
+// Sprite2: player 2's copy of a sprite chunk in co-op (Tom, Keen's twin in
+// other colours); listed as "sprite2" in manifests.
+enum class AssetKind { Tile16, Tile16M, Sprite, Sprite2 };
 
 // An RGBA image (0xAARRGGBB). It stands for an original asset of origw x origh
 // pixels, drawn offset by (ox, oy) original pixels from the original's top-left.
@@ -36,8 +38,17 @@ enum class Fallback { Scale4x, Nearest };
 // The original 16 EGA colours in the default palette, as 0xRRGGBB.
 std::uint32_t EgaColor(int index);
 
-// Decodes an original asset to palette indices (16 = transparent).
+// Decodes an original asset to palette indices (16 = transparent). A Sprite2
+// is the sprite with Tom's colours.
 bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::vector<std::uint8_t>* indices);
+
+// Tom's colours: EGA index c of Keen's sprites becomes TomColours()[c] (a red
+// helmet for the green one, a green shirt for the magenta one, gray pants
+// for the blue ones).
+const std::uint8_t* TomColours();
+// True for the sprite chunks of Keen himself (on foot, on the world map,
+// swimming), the ones Tom has his own copies of. Needs the exe loaded.
+bool IsKeenSprite(int chunk);
 
 // A sprite's collision box from the original sprite table, in original pixels
 // relative to the image's top-left. New art never changes it.
@@ -72,6 +83,10 @@ class ArtLibrary {
   bool Find(AssetKind kind, int number, Source* source, int from_layer = 0) const;
 
   const ArtImage& Get(AssetKind kind, int number);
+  // Sprite `number` drawn from `data` (planar, as the chunk) instead of the
+  // chunk: the game's own copy it draws into (Tom's score box). Like the
+  // score box, rebuilt from the data whenever it changes.
+  const ArtImage& GetData(int number, const std::uint8_t* data);
 
  private:
   struct Entry {
@@ -85,6 +100,7 @@ class ArtLibrary {
   // digits drawn into it), so they always come from the current original data.
   static bool IsLive(AssetKind kind, int number);
   std::map<Key, std::uint32_t> live_checksums_;
+  std::map<const std::uint8_t*, std::pair<std::uint32_t, ArtImage>> data_images_;
 
   std::vector<std::string> dirs_;
   Fallback fallback_ = Fallback::Scale4x;

@@ -59,39 +59,42 @@ void PackGameState(byte* p) {
   PutWord(p + 0x00, static_cast<word>(gamestate.worldx));
   PutWord(p + 0x02, static_cast<word>(gamestate.worldy));
   for (int i = 0; i < GAMELEVELS; i++) PutWord(p + 0x04 + i * 2, static_cast<word>(gamestate.leveldone[i]));
-  PutWord(p + 0x36, static_cast<word>(gamestate.score));
-  PutWord(p + 0x38, static_cast<word>(gamestate.score >> 16));
-  PutWord(p + 0x3A, static_cast<word>(gamestate.nextextra));
-  PutWord(p + 0x3C, static_cast<word>(gamestate.nextextra >> 16));
-  PutWord(p + 0x3E, static_cast<word>(gamestate.ammo));
-  PutWord(p + 0x40, static_cast<word>(gamestate.drops));
+  const PlayerState& ps = players[0];
+  PutWord(p + 0x36, static_cast<word>(ps.score));
+  PutWord(p + 0x38, static_cast<word>(ps.score >> 16));
+  PutWord(p + 0x3A, static_cast<word>(ps.nextextra));
+  PutWord(p + 0x3C, static_cast<word>(ps.nextextra >> 16));
+  PutWord(p + 0x3E, static_cast<word>(ps.ammo));
+  PutWord(p + 0x40, static_cast<word>(ps.drops));
   PutWord(p + 0x42, static_cast<word>(gamestate.wetsuit));
   PutWord(p + 0x44, static_cast<word>(gamestate.rescued));
   for (int i = 0; i < 4; i++) PutWord(p + 0x46 + i * 2, static_cast<word>(gamestate.keys[i]));
   PutWord(p + 0x4E, static_cast<word>(gamestate.mapon));
   PutWord(p + 0x50, static_cast<word>(gamestate.lives));
   PutWord(p + 0x52, static_cast<word>(gamestate.difficulty));
-  PutWord(p + 0x54, ObjAddress(gamestate.riding));
+  PutWord(p + 0x54, ObjAddress(ps.riding));
 }
 
 void UnpackGameState(const byte* p) {
   gamestate.worldx = static_cast<sword>(GetWord(p + 0x00));
   gamestate.worldy = static_cast<sword>(GetWord(p + 0x02));
   for (int i = 0; i < GAMELEVELS; i++) gamestate.leveldone[i] = static_cast<boolean>(GetWord(p + 0x04 + i * 2));
-  gamestate.score = static_cast<std::int32_t>(GetWord(p + 0x36) | (GetWord(p + 0x38) << 16));
-  gamestate.nextextra = static_cast<std::int32_t>(GetWord(p + 0x3A) | (GetWord(p + 0x3C) << 16));
-  gamestate.ammo = static_cast<sword>(GetWord(p + 0x3E));
-  gamestate.drops = static_cast<sword>(GetWord(p + 0x40));
+  PlayerState& ps = players[0];
+  ps.score = static_cast<std::int32_t>(GetWord(p + 0x36) | (GetWord(p + 0x38) << 16));
+  ps.nextextra = static_cast<std::int32_t>(GetWord(p + 0x3A) | (GetWord(p + 0x3C) << 16));
+  ps.ammo = static_cast<sword>(GetWord(p + 0x3E));
+  ps.drops = static_cast<sword>(GetWord(p + 0x40));
   gamestate.wetsuit = static_cast<boolean>(GetWord(p + 0x42));
   gamestate.rescued = static_cast<sword>(GetWord(p + 0x44));
   for (int i = 0; i < 4; i++) gamestate.keys[i] = static_cast<sword>(GetWord(p + 0x46 + i * 2));
   gamestate.mapon = static_cast<sword>(GetWord(p + 0x4E));
   gamestate.lives = static_cast<sword>(GetWord(p + 0x50));
   gamestate.difficulty = static_cast<sword>(GetWord(p + 0x52));
-  gamestate.riding = nullptr;
+  ps.riding = nullptr;
 }
 
-void PackObj(const objtype* ob, byte* p) {
+// `next` is the object written after it (0 for the last).
+void PackObj(const objtype* ob, const objtype* next, byte* p) {
   const word fields[] = {
       static_cast<word>(ob->obclass), static_cast<word>(ob->active), static_cast<word>(ob->needtoreact),
       static_cast<word>(ob->needtoclip), ob->nothink, ob->x, ob->y, static_cast<word>(ob->xdir),
@@ -103,7 +106,7 @@ void PackObj(const objtype* ob, byte* p) {
       static_cast<word>(ob->hitsouth), static_cast<word>(ob->hitwest), static_cast<word>(ob->temp1),
       static_cast<word>(ob->temp2), static_cast<word>(ob->temp3),
       static_cast<word>(ob->tempobj ? ObjAddress(ob->tempobj) : ob->temp4),
-      static_cast<word>(ob->sprite ? 1 : 0), ObjAddress(ob->next), ObjAddress(ob->prev)};
+      static_cast<word>(ob->sprite ? 1 : 0), ObjAddress(next), ObjAddress(ob->prev)};
   static_assert(sizeof(fields) / sizeof(fields[0]) * 2 == OBJSIZE, "objtype is 0x4C bytes");
   for (int i = 0; i < OBJSIZE / 2; i++) PutWord(p + i * 2, fields[i]);
 }
@@ -331,17 +334,97 @@ void InstallCacheBoxHooks() {
   finishcachebox = DialogFinish;
 }
 
+// Port: co-op saves. The objects are written as for one player, without Tom
+// and his score box, so a build without co-op loads the game for one player.
+// After them comes this trailer: the tag, a version, the number of players,
+// each player's co-op status and respawn tics left, player 2's score, extra
+// Keen threshold, ammo and drops, then Tom's and his score box's objects.
+constexpr byte kCoopTag[4] = {'K', 'C', 'O', 'P'};
+constexpr word kCoopVersion = 1;
+
+bool WriteCoopTrailer(std::FILE* file) {
+  byte buf[4 + 2 + 2 + 4 * MAXPLAYERS + 12];
+  byte* p = buf;
+  std::memcpy(p, kCoopTag, 4);
+  PutWord(p + 4, kCoopVersion);
+  PutWord(p + 6, static_cast<word>(numplayers));
+  p += 8;
+  for (int i = 0; i < MAXPLAYERS; i++) {
+    sword status;
+    word left;
+    CoopSaveStatus(i, &status, &left);
+    PutWord(p, static_cast<word>(status));
+    PutWord(p + 2, left);
+    p += 4;
+  }
+  const PlayerState& tom = players[1];
+  PutWord(p, static_cast<word>(tom.score));
+  PutWord(p + 2, static_cast<word>(tom.score >> 16));
+  PutWord(p + 4, static_cast<word>(tom.nextextra));
+  PutWord(p + 6, static_cast<word>(tom.nextextra >> 16));
+  PutWord(p + 8, static_cast<word>(tom.ammo));
+  PutWord(p + 10, static_cast<word>(tom.drops));
+  if (!WriteBytes(file, buf, sizeof buf)) return false;
+  for (objtype* ob : {tom.ob, tom.scorebox}) {
+    byte obj[OBJSIZE];
+    PackObj(ob, nullptr, obj);
+    if (!WriteBytes(file, obj, sizeof obj)) return false;
+  }
+  return true;
+}
+
+// Reads the co-op trailer if there is one; false for a one-player save.
+bool ReadCoopTrailer(std::FILE* file) {
+  byte buf[4 + 2 + 2 + 4 * MAXPLAYERS + 12];
+  if (!ReadBytes(file, buf, sizeof buf) || std::memcmp(buf, kCoopTag, 4) || GetWord(buf + 4) != kCoopVersion ||
+      GetWord(buf + 6) != 2)
+    return false;
+  byte objs[2][OBJSIZE];
+  if (!ReadBytes(file, objs[0], OBJSIZE) || !ReadBytes(file, objs[1], OBJSIZE)) return false;
+  numplayers = 2;
+  const byte* p = buf + 8;
+  for (int i = 0; i < MAXPLAYERS; i++, p += 4)
+    CoopLoadStatus(i, static_cast<sword>(GetWord(p)), GetWord(p + 2));
+  PlayerState& tom = players[1];
+  tom.score = static_cast<std::int32_t>(GetWord(p) | (GetWord(p + 2) << 16));
+  tom.nextextra = static_cast<std::int32_t>(GetWord(p + 4) | (GetWord(p + 6) << 16));
+  tom.ammo = static_cast<sword>(GetWord(p + 8));
+  tom.drops = static_cast<sword>(GetWord(p + 10));
+  tom.riding = nullptr;
+  for (int k = 0; k < 2; k++) {
+    GetNewObj(false);
+    objtype* prev = newobj->prev;
+    UnpackObj(newobj, objs[k]);
+    newobj->prev = prev;
+    newobj->next = nullptr;
+    newobj->needtoreact = true;
+    newobj->sprite = nullptr;
+    if (k == 0)
+      tom.ob = newobj;
+    else
+      tom.scorebox = newobj;
+  }
+  tom.scorebox->temp1 = tom.scorebox->temp2 = tom.scorebox->temp3 = tom.scorebox->temp4 = -1;
+  // the players pick their devices again (ID_US_2 asks after loading)
+  players[0].pad = 0;
+  players[1].pad = kAnyGamepad;
+  restartpads[0] = 0;
+  restartpads[1] = kAnyGamepad;
+  restartcoop = true;
+  return true;
+}
+
 // 05C4:0063
 void NewGame() {
   std::memset(&gamestate, 0, sizeof gamestate);
-  gamestate.nextextra = 20000;
+  numplayers = 1;
+  ResetPlayers();
   gamestate.lives = 3;
-  gamestate.ammo = 5;
 }
 
 // 05C4:00D3
 boolean SaveTheGame(std::FILE* file) {
-  gamestate.riding = nullptr;
+  for (PlayerState& ps : players) ps.riding = nullptr;
   byte buf[GAMESTATESIZE];
   PackGameState(buf);
   if (!WriteBytes(file, buf, sizeof buf)) return false;
@@ -356,11 +439,19 @@ boolean SaveTheGame(std::FILE* file) {
     if (!WriteBytes(file, bytes.data(), bytes.size())) return false;
   }
 
+  // port: Tom and his score box go in the co-op trailer
+  auto tomsown = [](const objtype* ob) {
+    return numplayers > 1 && (ob == players[1].ob || ob == players[1].scorebox);
+  };
   for (objtype* ob = player; ob; ob = ob->next) {
+    if (tomsown(ob)) continue;
+    objtype* next = ob->next;
+    while (next && tomsown(next)) next = next->next;
     byte obj[OBJSIZE];
-    PackObj(ob, obj);
+    PackObj(ob, next, obj);
     if (!WriteBytes(file, obj, sizeof obj)) return false;
   }
+  if (numplayers > 1) return WriteCoopTrailer(file);
   return true;
 }
 
@@ -368,6 +459,9 @@ boolean SaveTheGame(std::FILE* file) {
 boolean LoadTheGame(std::FILE* file) {
   byte buf[GAMESTATESIZE];
   if (!ReadBytes(file, buf, sizeof buf)) return false;
+  // port: one player unless the co-op trailer says otherwise
+  numplayers = 1;
+  restartcoop = false;
   UnpackGameState(buf);
 
   ca_levelbit >>= 1;
@@ -417,12 +511,19 @@ boolean LoadTheGame(std::FILE* file) {
   scoreobj->temp1 = -1;
   scoreobj->temp3 = -1;
   scoreobj->temp4 = -1;
+  ReadCoopTrailer(file);
   return true;
 }
 
 // 05C4:0466
 void ResetGame() {
   NewGame();
+  // port: co-op
+  if (restartcoop) {
+    numplayers = 2;
+    players[0].pad = restartpads[0];
+    players[1].pad = restartpads[1];
+  }
   ca_levelnum--;
   ca_levelbit >>= 1;
   CA_ClearMarks();
@@ -503,6 +604,19 @@ void EndDemoRecord() {
 
 void HandleDeath() { HandleDeathImpl(); }
 
+// Port: the high score table, for both players in co-op (each enters a name).
+void HighScores() {
+  const int count = numplayers;
+  const std::int32_t tomscore = players[1].score;
+  numplayers = 1;  // the table is shown on a level of its own
+  if (count == 1) {
+    CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued));
+    return;
+  }
+  CheckHighScore(players[0].score, static_cast<word>(gamestate.rescued), "Billy");
+  CheckHighScore(tomscore, static_cast<word>(gamestate.rescued), "Tom");
+}
+
 void GameOver() { GameOverScreen(); }
 
 // 05C4:0D81
@@ -559,7 +673,7 @@ void GameLoop() {
         RF_FixOfs();
         VW_FixRefreshBuffer();
         FinaleLayout();
-        CheckHighScore(gamestate.score, static_cast<word>(gamestate.rescued));
+        HighScores();
         return;
 
       case ex_completed:
@@ -604,5 +718,5 @@ void GameLoop() {
   }
 
   GameOver();
-  CheckHighScore(gamestate.score, static_cast<word>(gamestate.rescued));
+  HighScores();
 }

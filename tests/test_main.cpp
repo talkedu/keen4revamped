@@ -7,6 +7,7 @@
 
 #include "engine/lang.h"
 #include "engine/version.h"
+#include "game/coop_split.h"
 #include "id/id_ca.h"
 #include "id/id_in.h"
 #include "id/id_vw.h"
@@ -95,6 +96,74 @@ int main() {
     Set(nullptr);
   }
 
+  // Two gamepads: each keeps its id and can be read on its own, oldest first;
+  // the newest still drives Controls[0].
+  {
+    using namespace keen4::platform;
+    HeadlessPlatform two;
+    Set(&two);
+    Controls[0] = ctrl_Keyboard1;
+    GamepadState a, b;
+    a.connected = b.connected = true;
+    two.SetGamepadAt(0, a);
+    two.SetGamepadAt(1, b);
+    IN_PumpEvents();
+    CHECK(IN_GamepadCount() == 2 && Controls[0] == ctrl_Joystick1);
+    std::uint32_t ida = IN_GamepadId(0), idb = IN_GamepadId(1);
+    CHECK(ida && idb && ida != idb && !IN_GamepadId(2));
+    b.buttons = kPadA | kPadLeft | kPadStart;
+    two.SetGamepadAt(1, b);
+    ControlInfo info;
+    word buttons;
+    CHECK(IN_ReadGamepad(idb, &info, &buttons));
+    CHECK(info.button0 && !info.button1 && info.xaxis == -1 && info.yaxis == 0);
+    CHECK(buttons == (1 | kJoyStart));
+    CHECK(IN_ReadGamepad(ida, &info, &buttons) && !info.button0 && info.xaxis == 0 && buttons == 0);
+    a.y = -0.9f;  // stick up
+    two.SetGamepadAt(0, a);
+    CHECK(IN_ReadGamepad(ida, &info, &buttons) && info.yaxis == -1);
+    // unplugging the first keeps the second's id
+    two.SetGamepadAt(0, GamepadState{});
+    CHECK(IN_GamepadCount() == 1 && IN_GamepadId(0) == idb);
+    CHECK(!IN_ReadGamepad(ida, &info, &buttons) && buttons == 0);
+    two.SetGamepadAt(1, GamepadState{});
+    IN_PumpEvents();
+    CHECK(Controls[0] == ctrl_Keyboard1);
+    IN_ClearKeysDown();
+    Set(nullptr);
+  }
+
+  // Co-op split screen: one view until the Keens are too far apart for it,
+  // split side by side or stacked by where they are further apart, back to
+  // one view after they fit again for half a second and the divider slid away.
+  {
+    CoopSplit s{};
+    auto box = [](int x, int y) { return CoopBox{x, y, x + 16, y + 32}; };
+    CoopSplitStep(&s, box(100, 100), box(300, 100), 3);  // 216 apart: fits in 256
+    CHECK(s.mode == coop_shared);
+    CoopSplitStep(&s, box(100, 100), box(360, 120), 3);  // 276 across
+    CHECK(s.mode == coop_sidebyside && CoopSplitSize(s) == 160);
+    CoopSplitStep(&s, box(100, 100), box(330, 100), 3);  // closer, but not by the margin
+    CHECK(s.mode == coop_sidebyside && s.fittics == 0);
+    CoopSplit t{};
+    CoopSplitStep(&t, box(100, 0), box(110, 170), 3);  // 202 up and down
+    CHECK(t.mode == coop_stacked && CoopSplitSize(t) == 100);
+    int tics = 0;
+    while (s.mode != coop_shared && tics < 200) {
+      CoopSplitStep(&s, box(100, 100), box(200, 100), 3);
+      tics += 3;
+      if (s.slidetics) CHECK(CoopSplitSize(s) >= 160 && CoopSplitSize(s) <= 320);
+    }
+    CHECK(s.mode == coop_shared && tics >= COOP_MERGETICS + COOP_SLIDETICS);
+    CHECK(tics < COOP_MERGETICS + COOP_SLIDETICS + 9);
+    // moving apart again while the divider slides keeps the split
+    CoopSplitStep(&s, box(0, 100), box(400, 100), 3);
+    for (int i = 0; i < 14; i++) CoopSplitStep(&s, box(100, 100), box(200, 100), 3);
+    CHECK(s.slidetics > 0);
+    CoopSplitStep(&s, box(0, 100), box(400, 100), 3);
+    CHECK(s.mode == coop_sidebyside && s.slidetics == 0 && CoopSplitSize(s) == 160);
+  }
+
   // Scale4x: 4x the size, no new colours, and a flat image stays flat.
   {
     std::vector<std::uint8_t> src = {1, 2, 3, 4};
@@ -167,11 +236,12 @@ int main() {
                                                         "tile16 7 seven.png bad\n";
     std::ofstream(root / "ai" / "manifest.txt") << "sprite 124 ai124.png\n"
                                                    "sprite 125 ai125.png\n"
+                                                   "sprite2 124 tom124.png\n"
                                                    "tile16 7 ai7.png\r\n";
     keen4::render::ArtLibrary art;
     art.SetDirectories({(root / "curated").string(), (root / "ai").string()});
     art.Reload();
-    CHECK(art.layers() == 2 && art.layerEntries(0) == 2 && art.layerEntries(1) == 3);
+    CHECK(art.layers() == 2 && art.layerEntries(0) == 2 && art.layerEntries(1) == 4);
     keen4::render::ArtLibrary::Source src;
     using keen4::render::AssetKind;
     CHECK(art.Find(AssetKind::Sprite, 124, &src) && src.layer == 0 && src.ax == 8 && src.ay == 4 &&
@@ -181,6 +251,9 @@ int main() {
     CHECK(art.Find(AssetKind::Tile16, 7, &src) && src.layer == 1 && fs::path(src.path).filename() == "ai7.png");
     CHECK(!art.Find(AssetKind::Tile16M, 7, &src));
     CHECK(!art.Find(AssetKind::Sprite, 126, &src));
+    // Tom's copy of a sprite (co-op) is an asset of its own
+    CHECK(art.Find(AssetKind::Sprite2, 124, &src) && src.layer == 1 && fs::path(src.path).filename() == "tom124.png");
+    CHECK(!art.Find(AssetKind::Sprite2, 125, &src));
     fs::remove_all(root);
   }
 

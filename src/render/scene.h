@@ -27,6 +27,19 @@ struct SceneSprite {
   int artx, arty;        // image top-left relative to the object's own position (the art's origin)
   int priority;          // 0..3
   bool inverse;          // drawn as an inverse mask (maskdraw)
+  int variant = 0;       // 1: player 2's look in co-op (Tom)
+  const std::uint8_t* data = nullptr;  // graphics to use instead of the chunk's (Tom's score box)
+  int view = -1;         // the only split-screen view it shows in, or -1
+};
+
+// One view of a split screen (co-op): its camera, its place on the classic
+// 320x200 screen and the tiles around it.
+struct SceneView {
+  int viewx = 0, viewy = 0;      // world pixel at the view's classic top-left
+  int x = 0, y = 0, w = 0, h = 0;  // its rectangle on the classic screen
+  int tilex0 = 0, tiley0 = 0, cols = 0, rows = 0;
+  std::vector<std::uint16_t> bg, fg;
+  std::vector<std::uint8_t> fgfront;
 };
 
 struct Scene {
@@ -40,6 +53,8 @@ struct Scene {
   std::vector<std::uint16_t> bg, fg;
   std::vector<std::uint8_t> fgfront;  // foreground tile drawn over sprites below priority 3
   std::vector<SceneSprite> sprites;   // in draw order
+  // A split screen's views; empty for the one full view described above.
+  std::vector<SceneView> views;
   // The classic frame of this scene before anything else is drawn over it, to
   // find overlays (status window, dialogs) in later frames.
   std::array<std::uint8_t, kClassicWidth * kClassicHeight> classic{};

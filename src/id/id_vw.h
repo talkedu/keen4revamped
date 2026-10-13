@@ -85,6 +85,12 @@ void VW_MeasureMPropString(const char* string, word* width, word* height);
 // optional mask plane followed by four colour planes of wbytes*height each.
 void VWL_DrawPlanar(int x, int y, int wbytes, int height, const byte* data, bool masked,
                     int skiprows = 0);
+// Port: when set, VWL_DrawPlanar draws colour c as vw_remap[c] (player 2's
+// colours in co-op).
+extern const byte* vw_remap;
+// Port: VWL_DrawPlanar, VWL_DrawInverseMask and ID_RF's tiles draw only inside
+// this rectangle (normally the whole screen; one view of a split screen).
+extern int vw_clipx0, vw_clipy0, vw_clipx1, vw_clipy1;
 // Draws the sprite's opaque pixels in colour 15 (the original "maskdraw").
 void VWL_DrawInverseMask(int x, int y, int wbytes, int height, const byte* mask, int skiprows = 0);
 

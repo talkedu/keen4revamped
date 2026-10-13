@@ -37,7 +37,22 @@ class RemasterRenderer {
 
  private:
   SDL_Texture* Texture(render::AssetKind kind, int number, const render::ArtImage** image);
+  // A sprite drawn from the game's own graphics data (Tom's score box).
+  SDL_Texture* DataTexture(int chunk, const std::uint8_t* data, const render::ArtImage** image);
   void DrawScene(float alpha, double now);
+  // One view: the whole screen, or a split-screen half (co-op).
+  struct View {
+    int index = -1;            // the split-screen view, -1 for the whole screen
+    float camx = 0, camy = 0;  // world pixel at the classic view's top-left
+    int classicw = 0;          // the classic view's width; it is centred in rect
+    SDL_FRect rect{};          // where it goes on the remaster view
+    int tilex0 = 0, tiley0 = 0, cols = 0, rows = 0;
+    const std::vector<std::uint16_t>* bg = nullptr;
+    const std::vector<std::uint16_t>* fg = nullptr;
+    const std::vector<std::uint8_t>* fgfront = nullptr;
+  };
+  void DrawView(const View& view, bool lerp, double now);
+  static float WideX(int classicx);
   void DrawClassicFrame(const std::uint8_t* pixels, const std::uint32_t* palette, bool overlay_only);
 
   SDL_Renderer* renderer_;

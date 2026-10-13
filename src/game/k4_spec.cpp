@@ -105,29 +105,30 @@ sword SwimAccel(sword speed, sword low) {
 
 // 0E8F:0E17
 void KeenSwimThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   boolean wasleft = ob->xspeed < 0;
   boolean wasup = ob->yspeed < 4;
 
   ob->temp4 = static_cast<sword>(ob->temp4 + tics);
   if (ob->temp4 > 60) SpawnBubble(ob);
 
-  if (jumpbutton && !jumpheld) {
-    jumpheld = true;
-    if (c.xaxis) ob->xspeed = static_cast<sword>(c.xaxis * 18);
-    if (c.yaxis) ob->yspeed = static_cast<sword>(c.yaxis * 18);
+  if (ps.jumpbutton && !ps.jumpheld) {
+    ps.jumpheld = true;
+    if (ps.c.xaxis) ob->xspeed = static_cast<sword>(ps.c.xaxis * 18);
+    if (ps.c.yaxis) ob->yspeed = static_cast<sword>(ps.c.yaxis * 18);
     ob->state = ob->state->nextstate;
   }
-  if (c.xaxis) ob->xdir = static_cast<sword>(c.xaxis);
+  if (ps.c.xaxis) ob->xdir = static_cast<sword>(ps.c.xaxis);
 
   for (longword lt = lasttimecount - tics; lt < lasttimecount; lt++) {
     if ((lt & 7) == 0) {
-      sword dx = static_cast<sword>(SwimAccel(ob->xspeed, 0) + c.xaxis * 2);
+      sword dx = static_cast<sword>(SwimAccel(ob->xspeed, 0) + ps.c.xaxis * 2);
       ob->xspeed = static_cast<sword>(ob->xspeed + dx);
-      if (c.xaxis == 0 && (ob->xspeed < 0) != wasleft) ob->xspeed = 0;
+      if (ps.c.xaxis == 0 && (ob->xspeed < 0) != wasleft) ob->xspeed = 0;
 
-      sword dy = static_cast<sword>(SwimAccel(ob->yspeed, 4) + c.yaxis * 2);
+      sword dy = static_cast<sword>(SwimAccel(ob->yspeed, 4) + ps.c.yaxis * 2);
       ob->yspeed = static_cast<sword>(ob->yspeed + dy);
-      if (c.yaxis == 0 && ob->yspeed > 4 && wasup) ob->yspeed = 0;
+      if (ps.c.yaxis == 0 && ob->yspeed > 4 && wasup) ob->yspeed = 0;
     }
     xtry = static_cast<sword>(xtry + ob->xspeed);
     ytry = static_cast<sword>(ytry + ob->yspeed);
@@ -136,13 +137,14 @@ void KeenSwimThink(objtype* ob) {
 
 // 0E8F:0FAE
 void KeenSwimFastThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   ob->temp4 = static_cast<sword>(ob->temp4 + tics);
   if (ob->temp4 > 60) SpawnBubble(ob);
 
-  if (jumpbutton && !jumpheld) {
-    jumpheld = true;
-    ob->xspeed = static_cast<sword>(c.xaxis * 18);
-    if (c.yaxis) ob->yspeed = static_cast<sword>(c.yaxis * 18);
+  if (ps.jumpbutton && !ps.jumpheld) {
+    ps.jumpheld = true;
+    ob->xspeed = static_cast<sword>(ps.c.xaxis * 18);
+    if (ps.c.yaxis) ob->yspeed = static_cast<sword>(ps.c.yaxis * 18);
     if (ob->state == ST(0x1A28))
       ob->state = ST(0x1A46);
     else
@@ -159,7 +161,7 @@ void KeenSwimFastThink(objtype* ob) {
 }
 
 // 0E8F:1061
-void KeenSwimContact(objtype*, objtype* hit) {
+void KeenSwimContact(objtype* ob, objtype* hit) {
   switch (hit->obclass) {
     case bonusobj: {
       word type = static_cast<word>(hit->temp1);
@@ -168,14 +170,14 @@ void KeenSwimContact(objtype*, objtype* hit) {
       hit->obclass = inertobj;
       hit->priority = 3;
       hit->shapenum = g_exe.Word(static_cast<std::uint16_t>(0x140C + type * 2));
-      GivePoints(g_exe.Word(static_cast<std::uint16_t>(0x13F4 + type * 2)));
+      GivePoints(ob, g_exe.Word(static_cast<std::uint16_t>(0x13F4 + type * 2)));
       if (type < 4)
         gamestate.keys[type]++;
       else if (type == 10)
         gamestate.lives++;
       else if (type == 11)
-        gamestate.ammo = static_cast<sword>(
-            gamestate.ammo + g_exe.Int(static_cast<std::uint16_t>(0x13D4 + gamestate.difficulty * 2)));
+        PlayerOf(ob).ammo = static_cast<sword>(
+            PlayerOf(ob).ammo + g_exe.Int(static_cast<std::uint16_t>(0x13D4 + gamestate.difficulty * 2)));
       ChangeState(hit, ST(0x1F28));
       break;
     }
@@ -194,19 +196,19 @@ void KeenSwimReact(objtype* ob) {
   RF_PlaceSprite(&ob->sprite, ob->x, ob->y, ob->shapenum, spritedraw, ob->priority);
 }
 
-// 0E8F:0CFE
-void SpawnSwimKeen(word tilex, word tiley) {
-  player->obclass = keenobj;
-  player->active = ac_allways;
-  player->priority = 1;
-  player->x = static_cast<word>(tilex << G_T_SHIFT);
-  player->y = static_cast<word>(tiley << G_T_SHIFT);
-  player->xdir = player->ydir = 1;
-  player->needtoclip = cl_fullclip;
-  NewState(player, ST(0x19EC));
-}
-
 }  // namespace
+
+// 0E8F:0CFE
+void SpawnSwimKeenObj(objtype* ob, word tilex, word tiley) {
+  ob->obclass = keenobj;
+  ob->active = ac_allways;
+  ob->priority = 1;
+  ob->x = static_cast<word>(tilex << G_T_SHIFT);
+  ob->y = static_cast<word>(tiley << G_T_SHIFT);
+  ob->xdir = ob->ydir = 1;
+  ob->needtoclip = cl_fullclip;
+  NewState(ob, ST(0x19EC));
+}
 
 // Actor spawners (K4_ACT1..3).
 void SpawnMiragia(word tilex, word tiley);
@@ -252,18 +254,21 @@ void ScanInfoPlane() {
         case 1:
           SpawnKeen(x, y, 1);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 1, 0);
           lumpneeded[KEENLUMP] = true;
           MarkKeenSprites();
           break;
         case 2:
           SpawnKeen(x, y, -1);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, -1, 0);
           lumpneeded[KEENLUMP] = true;
           MarkKeenSprites();
           break;
         case 3:
           SpawnWorldKeen(x, y);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 0, 1);
           lumpneeded[WORLDKEENLUMP] = true;
           MarkKeenSprites();
           break;
@@ -428,19 +433,25 @@ void ScanInfoPlane() {
         case 33:
           SpawnMiragia(x, y);
           break;
-        case 34:
-          if (gamestate.ammo < 5) {
+        case 34: {
+          // Port: in co-op the ammo is there when either player runs low.
+          boolean lowammo = false;
+          for (int i = 0; i < numplayers; i++)
+            if (players[i].ammo < 5) lowammo = true;
+          if (lowammo) {
             SpawnBonus(x, y, 11);
             lumpneeded[bonuslump(11)] = true;
           }
           break;
+        }
         case 35:
           SpawnScuba(x, y);
           MarkChunk(430);
           break;
         case 42:
-          SpawnSwimKeen(x, y);
+          SpawnSwimKeenObj(player, x, y);
           SpawnScore();
+          if (numplayers > 1) CoopSpawnTom(x, y, 1, 2);
           lumpneeded[SCUBAKEENLUMP] = true;
           for (int i = 219; i <= 226; i++) MarkChunk(i);
           MarkKeenSprites();

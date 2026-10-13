@@ -13,7 +13,7 @@ constexpr word PLATFORMBLOCK = 0x1F;  // info-plane marker that turns platforms 
 word InfoAt(word tilex, word tiley) { return *MAPSPOT_PTR(mapsegs[2], tilex, tiley); }
 
 void FacePlayer(objtype* ob) {
-  if (ob->x > player->x)
+  if (ob->x > NearestPlayer(ob)->x)
     ob->xdir = -1;
   else
     ob->xdir = 1;
@@ -21,7 +21,7 @@ void FacePlayer(objtype* ob) {
 
 // 1080:0071
 void T_WormLookRight(objtype* ob) {
-  if (player->x > ob->x) {
+  if (NearestPlayer(ob)->x > ob->x) {
     ob->xdir = 1;
     ob->state = ST(0x26DE);
   }
@@ -29,7 +29,7 @@ void T_WormLookRight(objtype* ob) {
 
 // 1080:0091
 void T_WormLook(objtype* ob) {
-  if (player->x > ob->x)
+  if (NearestPlayer(ob)->x > ob->x)
     ob->xdir = 1;
   else
     ob->xdir = -1;
@@ -37,7 +37,7 @@ void T_WormLook(objtype* ob) {
 
 // 1080:00B4
 void T_WormLookLeft(objtype* ob) {
-  if (player->x < ob->x) {
+  if (NearestPlayer(ob)->x < ob->x) {
     ob->xdir = -1;
     ob->state = ST(0x26DE);
   }
@@ -45,8 +45,9 @@ void T_WormLookLeft(objtype* ob) {
 
 // 1080:00D4
 void T_Worm(objtype* ob) {
-  sword xdist = static_cast<sword>(player->x - ob->x);
-  sword ydist = static_cast<sword>(player->bottom - ob->bottom);
+  objtype* target = NearestPlayer(ob);
+  sword xdist = static_cast<sword>(target->x - ob->x);
+  sword ydist = static_cast<sword>(target->bottom - ob->bottom);
   if ((xdist < -3 * TILEGLOBAL || xdist > 3 * TILEGLOBAL) && US_RndT() < 6) {
     ob->state = ST(0x26FC);
     return;
@@ -70,7 +71,7 @@ void C_WormKill(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
     if (ob->xdir == 1 && ob->x > hit->x) return;
     if (ob->xdir == -1 && ob->x < hit->x) return;
-    KillKeen();
+    KillKeen(hit);
     return;
   }
   C_Worm(ob, hit);
@@ -78,11 +79,17 @@ void C_WormKill(objtype* ob, objtype* hit) {
 
 // 1080:020C
 void T_Cloud(objtype* ob) {
-  if (static_cast<word>(US_RndT()) < tics) ob->xdir = ob->x > player->x ? -1 : 1;
+  if (static_cast<word>(US_RndT()) < tics) ob->xdir = ob->x > NearestPlayer(ob)->x ? -1 : 1;
   AccelerateX(ob, ob->xdir, 10);
-  if (player->bottom >= ob->bottom && static_cast<sword>(player->top - ob->bottom) <= 4 * TILEGLOBAL &&
-      ob->left < player->right && ob->right > player->left) {
-    ob->state = ST(0x28FA);
+  // Port: strikes at whichever Keen passes under it.
+  for (int i = 0; i < numplayers; i++) {
+    const objtype* p = players[i].ob;
+    if (numplayers > 1 && p->obclass != keenobj) continue;
+    if (p->bottom >= ob->bottom && static_cast<sword>(p->top - ob->bottom) <= 4 * TILEGLOBAL &&
+        ob->left < p->right && ob->right > p->left) {
+      ob->state = ST(0x28FA);
+      break;
+    }
   }
 }
 
@@ -130,14 +137,15 @@ void C_CloudSleep(objtype* ob, objtype* hit) {
 
 // 1080:040B
 void T_Berkeloid(objtype* ob) {
-  if (US_RndT() < 0x20) ob->xdir = player->x < ob->x ? -1 : 1;
+  objtype* target = NearestPlayer(ob);
+  if (US_RndT() < 0x20) ob->xdir = target->x < ob->x ? -1 : 1;
   if (US_RndT() < 8) {
     ob->state = ST(0x2B70);
     return;
   }
   if (US_RndT() <= 0x40) {
-    sword xdist = static_cast<sword>(player->x - ob->x);
-    sword ydist = static_cast<sword>(player->y - ob->y);
+    sword xdist = static_cast<sword>(target->x - ob->x);
+    sword ydist = static_cast<sword>(target->y - ob->y);
     if (ydist >= -TILEGLOBAL && ydist <= TILEGLOBAL &&
         ((ob->xdir == 1 && xdist > 0) || (ob->xdir == -1 && xdist < 0))) {
       ob->state = ST(0x2B70);
@@ -177,7 +185,7 @@ void C_Berkeloid(objtype*, objtype* hit) {
   if (hit->obclass == stunshotobj)
     ExplodeShot(hit);
   else if (hit->obclass == keenobj)
-    KillKeen();
+    KillKeen(hit);
 }
 
 // 1080:055E
@@ -279,11 +287,11 @@ void R_Bounder(objtype* ob) {
     ob->temp2++;
     if (OnScreen(ob)) SD_PlaySound(SND_BOUNCE2);
     ob->yspeed = -50;
-    if (gamestate.riding == ob) {
+    if (objtype* rider = PlayerRiding(ob)) {
       ob->temp2 = 0;
-      if (player->left < static_cast<word>(ob->left - 4 * PIXGLOBAL))
+      if (rider->left < static_cast<word>(ob->left - 4 * PIXGLOBAL))
         ob->xdir = -1;
-      else if (player->right > static_cast<word>(ob->right + 4 * PIXGLOBAL))
+      else if (rider->right > static_cast<word>(ob->right + 4 * PIXGLOBAL))
         ob->xdir = 1;
       else
         ob->xdir = 0;
@@ -318,8 +326,9 @@ void R_Bounder(objtype* ob) {
 // 1080:0B42
 void T_Lick(objtype* ob) {
   FacePlayer(ob);
-  sword xdist = static_cast<sword>(player->x - ob->x);
-  sword ydist = static_cast<sword>(player->y - ob->y);
+  objtype* target = NearestPlayer(ob);
+  sword xdist = static_cast<sword>(target->x - ob->x);
+  sword ydist = static_cast<sword>(target->y - ob->y);
   if (ydist >= -TILEGLOBAL && ydist <= TILEGLOBAL &&
       ((ob->xdir == 1 && xdist > -2 * PIXGLOBAL && xdist < 0x180) ||
        (ob->xdir == -1 && xdist < 2 * PIXGLOBAL && xdist > -0x200))) {
@@ -348,7 +357,7 @@ void C_Lick(objtype* ob, objtype* hit) {
 // 1080:0C23: the flame only hurts in front of the lick.
 void C_LickKill(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
-    if ((ob->xdir == 1 && player->x > ob->x) || (ob->xdir == -1 && player->x < ob->x)) KillKeen();
+    if ((ob->xdir == 1 && hit->x > ob->x) || (ob->xdir == -1 && hit->x < ob->x)) KillKeen(hit);
     return;
   }
   C_Lick(ob, hit);
@@ -385,7 +394,7 @@ void R_Platform(objtype* ob) {
 
 // 1080:114F
 void T_DropPlatSit(objtype* ob) {
-  if (gamestate.riding == ob) {
+  if (PlayerRiding(ob)) {
     ytry = static_cast<sword>(tics << 4);
     ob->yspeed = 0;
     if (static_cast<word>(ob->y + ytry - ob->temp1) >= 8 * PIXGLOBAL) ob->state = ST(0x31A6);
@@ -400,13 +409,13 @@ void T_DropPlatFall(objtype* ob) {
   word newtile = static_cast<word>(newpos >> G_T_SHIFT);
   if (ob->tilebottom != newtile && InfoAt(ob->tileleft, newtile) == PLATFORMBLOCK) {
     ytry = static_cast<sword>(0xFF - (ob->bottom & 0xFF));
-    if (gamestate.riding != ob) ob->state = ST(0x31C4);
+    if (!PlayerRiding(ob)) ob->state = ST(0x31C4);
   }
 }
 
 // 1080:11FB
 void T_DropPlatRise(objtype* ob) {
-  if (gamestate.riding == ob) {
+  if (PlayerRiding(ob)) {
     ob->yspeed = 0;
     ob->state = ST(0x31A6);
   } else if (ob->y <= static_cast<word>(ob->temp1)) {

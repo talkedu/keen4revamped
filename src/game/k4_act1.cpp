@@ -15,10 +15,12 @@ constexpr int SND_MINEEXPLODE = 5, SND_BOUNCE2 = 16, SND_SQUISH = 22, SND_BOUNCE
 
 // 0FA8:002E: Miragia appears while Keen stands away from it.
 void T_MiragiaCheck(objtype* ob) {
-  if (player->tileright >= ob->x && player->tileleft <= ob->x + 5 && player->tilebottom >= ob->y &&
-      player->tiletop <= ob->y + 4) {
-    ob->state = ST(0x1ECE);
-    return;
+  for (int i = 0; i < numplayers; i++) {
+    const objtype* p = players[i].ob;
+    if (p->tileright >= ob->x && p->tileleft <= ob->x + 5 && p->tilebottom >= ob->y && p->tiletop <= ob->y + 4) {
+      ob->state = ST(0x1ECE);
+      return;
+    }
   }
   RF_MapToMap(8, 60, ob->x, ob->y, 6, 4);
 }
@@ -46,7 +48,7 @@ void T_Council(objtype* ob) {
 // 0FA8:0369
 void T_Slug(objtype* ob) {
   if (US_RndT() < 16) {
-    if (ob->x < player->x)
+    if (ob->x < NearestPlayer(ob)->x)
       ob->xdir = 1;
     else
       ob->xdir = -1;
@@ -69,7 +71,7 @@ void T_SlugSlime(objtype* ob) {
 // 0FA8:03EA
 void C_Slug(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
-    KillKeen();
+    KillKeen(hit);
   } else if (hit->obclass == stunshotobj) {
     if (US_RndT() < 0x80)
       StunObj(ob, hit, ST(0x206C));
@@ -82,7 +84,7 @@ void C_Slug(objtype* ob, objtype* hit) {
 
 // 0FA8:0493
 void T_Mushroom(objtype* ob) {
-  if (player->x < ob->x)
+  if (NearestPlayer(ob)->x < ob->x)
     ob->xdir = -1;
   else
     ob->xdir = 1;
@@ -94,7 +96,7 @@ void C_Mushroom(objtype*, objtype* hit) {
   if (hit->obclass == stunshotobj)
     ExplodeShot(hit);
   else if (hit->obclass == keenobj)
-    KillKeen();
+    KillKeen(hit);
 }
 
 // 0FA8:04EC
@@ -123,7 +125,7 @@ void SpawnBirdFrom(objtype* ob) {
   newobj->active = ac_yes;
   newobj->x = ob->x;
   newobj->y = static_cast<word>(ob->y - 8 * PIXGLOBAL);
-  if (newobj->x < player->x)
+  if (newobj->x < NearestPlayer(ob)->x)
     newobj->xdir = 1;
   else
     newobj->xdir = -1;
@@ -157,11 +159,12 @@ void C_Egg(objtype* ob, objtype* hit) {
 
 // 0FA8:0779
 void T_EggbirdWalk(objtype* ob) {
-  if (ob->x < player->x)
+  objtype* target = NearestPlayer(ob);
+  if (ob->x < target->x)
     ob->xdir = 1;
   else
     ob->xdir = -1;
-  if (ob->bottom >= static_cast<word>(player->bottom + 3 * TILEGLOBAL) && player->hitnorth &&
+  if (ob->bottom >= static_cast<word>(target->bottom + 3 * TILEGLOBAL) && target->hitnorth &&
       StatePositionOk(ob, ST(0x224C))) {
     ob->state = ST(0x224C);
     ob->needtoclip = cl_fullclip;
@@ -172,14 +175,15 @@ void T_EggbirdWalk(objtype* ob) {
 
 // 0FA8:07D7
 void T_EggbirdFly(objtype* ob) {
+  objtype* target = NearestPlayer(ob);
   if (!ob->temp1) {
-    if (ob->x < player->x)
+    if (ob->x < target->x)
       ob->xdir = 1;
     else
       ob->xdir = -1;
   }
   AccelerateXv(ob, ob->xdir, 16);
-  if (ob->y < player->y)
+  if (ob->y < target->y)
     AccelerateY(ob, 1, 16);
   else
     AccelerateY(ob, -1, 16);
@@ -188,7 +192,7 @@ void T_EggbirdFly(objtype* ob) {
 // 0FA8:0840
 void C_EggbirdWalk(objtype* ob, objtype* hit) {
   if (hit->obclass == keenobj) {
-    KillKeen();
+    KillKeen(hit);
   } else if (hit->obclass == stunshotobj) {
     ob->xspeed = 0;
     ob->needtoclip = cl_midclip;
@@ -244,7 +248,7 @@ void R_EggbirdFly(objtype* ob) {
     ob->xspeed = 0;
     ob->xdir = static_cast<sword>(-ob->xdir);
   }
-  if (ob->hitnorth == 1 && static_cast<word>(player->bottom - ob->bottom) < 8 * PIXGLOBAL) {
+  if (ob->hitnorth == 1 && static_cast<word>(NearestPlayer(ob)->bottom - ob->bottom) < 8 * PIXGLOBAL) {
     statetype* oldstate = ob->state;
     ob->needtoclip = cl_midclip;
     ChangeState(ob, ST(0x21D4));
@@ -263,7 +267,7 @@ void R_EggbirdFly(objtype* ob) {
 
 // 0FA8:0AF9
 void T_Arachnut(objtype* ob) {
-  if (ob->x > player->x)
+  if (ob->x > NearestPlayer(ob)->x)
     ob->xdir = -1;
   else
     ob->xdir = 1;
@@ -274,7 +278,7 @@ void C_Arachnut(objtype* ob, objtype* hit) {
   if (hit->obclass == stunshotobj)
     StunObj(ob, hit, ST(0x23F0));
   else if (hit->obclass == keenobj)
-    KillKeen();
+    KillKeen(hit);
 }
 
 // 0FA8:0B48
@@ -294,7 +298,7 @@ void T_SkypestFly(objtype* ob) {
 
 // 0FA8:0C57
 void C_Skypest(objtype* ob, objtype* hit) {
-  if (hit->obclass == keenobj) KillKeen();
+  if (hit->obclass == keenobj) KillKeen(hit);
   if (hit->obclass == stunshotobj) {
     if (hit->xdir == 1)
       ob->xspeed = 20;
@@ -444,7 +448,7 @@ void SpawnEggbird(word tilex, word tiley) {
   newobj->priority = 2;
   newobj->x = static_cast<word>(tilex << G_T_SHIFT);
   newobj->y = static_cast<word>((tiley << G_T_SHIFT) - 241);
-  if (newobj->x < player->x)
+  if (newobj->x < NearestPlayer(newobj)->x)
     newobj->xdir = 1;
   else
     newobj->xdir = -1;

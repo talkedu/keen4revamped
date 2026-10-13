@@ -40,6 +40,7 @@ keen4 --art art
 ```
 
 - **keen4-extract** writes every tile, foreground tile, sprite and picture as a 1x PNG,
+  Keen's own sprites a second time in Tom's colours (`sprite2/`, see below),
   sheets of all tiles laid out 18 wide as the levels use them, `index.txt` with the
   sheets and sprite animation strips, and a context patch per tile: the tile with the 8
   tiles around its first use in a level.
@@ -56,6 +57,21 @@ keen4 --art art
   15 GB of RAM for the large tile sheets.
 - Extracted and generated art is derived from the game data and stays out of the
   repository, like the data itself.
+
+## Tom, player 2 in co-op
+
+In co-op, player 2 is Tom, Billy's twin brother: Keen's sprites with a red helmet, a
+green shirt and gray pants. The classic view draws him through a colour table. The
+remaster draws him from `sprite2` assets, Tom's copy of each of Keen's sprite chunks
+(on foot, on the world map and swimming), listed by the same chunk numbers:
+
+- keen4-extract recolours the indexed original first (`sprite2/NNNN.png`, `strip2`
+  lines in `index.txt`), so the upscaler works from Tom's colours rather than
+  recolouring the upscaled Billy.
+- keen4-upscale upscales them per animation strip like the other sprites and lists them
+  as `sprite2 N sprite2/NNNN.png`.
+- Without a `sprite2` entry, the remaster recolours the original and scales it up itself.
+- keen4-curate takes `sprite2` as a kind, so Tom can be curated like any sprite.
 
 ## Curated art over the AI set
 
@@ -101,10 +117,10 @@ sprite 141 sprite/0141.png bad
 ```
 
 - `tile16` background tiles, `tile16m` foreground tiles, `sprite` sprite chunks, by
-  their original numbers.
+  their original numbers; `sprite2` Tom's copy of one of Keen's sprite chunks (co-op).
 - `anchor ax ay`: where the original's top-left sits in the new image, in art pixels,
   for art bigger than the original (default 0 0).
 - `bad`: ignore this entry and use the built-in Scale4x until the asset is redone.
 - Assets not listed use the built-in Scale4x (`--nearest` for plain 4x pixels).
 - The score box (sprite 253) always comes from the original: the game draws the score
-  into it.
+  into it. Tom's score box is his own copy of it.

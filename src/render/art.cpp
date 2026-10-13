@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "exe/keen4exe.h"
 #include "id/id_ca.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -74,9 +75,29 @@ const char* KindName(AssetKind kind) {
   switch (kind) {
     case AssetKind::Tile16: return "tile16";
     case AssetKind::Tile16M: return "tile16m";
+    case AssetKind::Sprite2: return "sprite2";
     default: return "sprite";
   }
 }
+
+constexpr std::uint8_t kTomColours[16] = {
+    0,   // black
+    8,   // dark blue pants -> dark gray
+    4,   // dark green helmet -> dark red
+    3,   //
+    4,   // red shoes stay red
+    2,   // dark magenta shirt -> dark green
+    6,   //
+    7,   //
+    8,   //
+    7,   // light blue pants -> light gray
+    12,  // light green helmet -> light red
+    15,  // light cyan pants highlights -> white (foam on the world map)
+    12,  //
+    10,  // light magenta shirt -> light green
+    14,  //
+    15,  //
+};
 
 }  // namespace
 
@@ -87,8 +108,26 @@ std::uint32_t EgaColor(int index) {
   return colors[index & 15];
 }
 
+const std::uint8_t* TomColours() { return kTomColours; }
+
+bool IsKeenSprite(int chunk) {
+  // the sprite lumps (DGROUP 1860 first chunk, 18AA last) of Keen on foot,
+  // on the world map and in the wetsuit
+  for (int lump : {1, 10, 32}) {
+    int first = exe::g_exe.Word(static_cast<std::uint16_t>(0x1860 + lump * 2));
+    int last = exe::g_exe.Word(static_cast<std::uint16_t>(0x18AA + lump * 2));
+    if (chunk >= first && chunk <= last) return true;
+  }
+  return false;
+}
+
 bool DecodeOriginal(AssetKind kind, int number, int* width, int* height, std::vector<std::uint8_t>* indices) {
   switch (kind) {
+    case AssetKind::Sprite2:
+      if (!DecodeOriginal(AssetKind::Sprite, number, width, height, indices)) return false;
+      for (std::uint8_t& c : *indices)
+        if (c < 16) c = kTomColours[c];
+      return true;
     case AssetKind::Tile16: {
       if (number < 0 || number >= NUMTILE16) return false;
       CA_CacheGrChunk(STARTTILE16 + number);
@@ -162,6 +201,8 @@ void ArtLibrary::Reload() {
         k = static_cast<int>(AssetKind::Tile16M);
       else if (kind == "sprite")
         k = static_cast<int>(AssetKind::Sprite);
+      else if (kind == "sprite2")
+        k = static_cast<int>(AssetKind::Sprite2);
       else
         continue;
       Entry e;
@@ -218,6 +259,37 @@ const ArtImage& ArtLibrary::Get(AssetKind kind, int number) {
   }
   if (found != cache_.end()) return found->second;
   return cache_[key] = Build(kind, number);
+}
+
+const ArtImage& ArtLibrary::GetData(int number, const std::uint8_t* data) {
+  auto& [sum, img] = data_images_[data];
+  if (number < STARTSPRITES || number >= STARTSPRITES + NUMSPRITES || !spritetable) return img;
+  const spritetabletype& spr = spritetable[number - STARTSPRITES];
+  const std::uint32_t size = static_cast<std::uint32_t>(spr.width) * spr.height * 5;
+  std::uint32_t now = 0;
+  for (std::uint32_t i = 0; i < size; i++) now = now * 31 + data[i];
+  if (img.origw && sum == now) return img;
+  sum = now;
+  const std::uint32_t revision = img.revision + 1;
+  int w = spr.width * 8, h = spr.height;
+  std::vector<std::uint8_t> indices;
+  Unplane(data + spr.width * spr.height, data, spr.width, spr.height, &indices);
+  std::vector<std::uint8_t> big = fallback_ == Fallback::Scale4x ? Scale4x(indices, w, h) : std::vector<std::uint8_t>();
+  if (big.empty()) {
+    big.resize(static_cast<std::size_t>(w) * h * 16);
+    for (int y = 0; y < h * 4; y++)
+      for (int x = 0; x < w * 4; x++)
+        big[static_cast<std::size_t>(y) * w * 4 + x] = indices[static_cast<std::size_t>(y / 4) * w + x / 4];
+  }
+  img = ArtImage{};
+  img.origw = w;
+  img.origh = h;
+  img.width = w * 4;
+  img.height = h * 4;
+  img.pixels.resize(big.size());
+  for (std::size_t i = 0; i < big.size(); i++) img.pixels[i] = Rgba(big[i]);
+  img.revision = revision;
+  return img;
 }
 
 ArtImage ArtLibrary::Build(AssetKind kind, int number) {

@@ -5,8 +5,9 @@
 //
 // Writes tile16/NNNN.png (background tiles), tile16m/NNNN.png (foreground
 // tiles with transparency), sprite/NNNN.png (sprite chunks with transparency),
-// pic/NNNN.png (pictures), sheets/*.png (all tiles of a kind in one image, for
-// upscaling in context) and index.txt describing the sheets and sprite strips.
+// sprite2/NNNN.png (Keen's sprites in Tom's colours, for co-op), pic/NNNN.png
+// (pictures), sheets/*.png (all tiles of a kind in one image, for upscaling in
+// context) and index.txt describing the sheets and sprite strips.
 // The output is derived from the game data: keep it out of the repository.
 #include <cstdio>
 #include <cstdlib>
@@ -116,7 +117,7 @@ int main(int argc, char** argv) {
   CA_Startup();
 
   fs::path root(out);
-  for (const char* d : {"tile16", "tile16m", "sprite", "pic", "sheets"}) fs::create_directories(root / d);
+  for (const char* d : {"tile16", "tile16m", "sprite", "sprite2", "pic", "sheets"}) fs::create_directories(root / d);
 
   std::vector<std::uint32_t> argb;
   int w, h, count = 0;
@@ -132,14 +133,23 @@ int main(int argc, char** argv) {
 
   // Sprites: consecutive chunks of the same size are treated as one animation
   // strip, so the upscaler sees all frames of an animation together.
+  // Keen's sprites also go out recoloured as Tom's (co-op), the indexed image
+  // recoloured before any upscaling, in strip2 lines of their own.
   int strip_w = -1, strip_h = -1;
-  std::vector<int> strip;
+  std::vector<int> strip, strip2;
   auto flush = [&]() {
-    if (strip.empty()) return;
-    index << "strip";
-    for (int c : strip) index << " " << c;
-    index << "\n";
+    if (!strip.empty()) {
+      index << "strip";
+      for (int c : strip) index << " " << c;
+      index << "\n";
+    }
+    if (!strip2.empty()) {
+      index << "strip2";
+      for (int c : strip2) index << " " << c;
+      index << "\n";
+    }
     strip.clear();
+    strip2.clear();
   };
   for (int n = STARTSPRITES; n < STARTSPRITES + NUMSPRITES; n++) {
     if (!Export(AssetKind::Sprite, n, root / "sprite", &argb, &w, &h)) continue;
@@ -148,6 +158,10 @@ int main(int argc, char** argv) {
     strip_w = w;
     strip_h = h;
     strip.push_back(n);
+    if (keen4::render::IsKeenSprite(n) && Export(AssetKind::Sprite2, n, root / "sprite2", &argb, &w, &h)) {
+      count++;
+      strip2.push_back(n);
+    }
   }
   flush();
 

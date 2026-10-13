@@ -227,6 +227,52 @@ word IN_JoyButtons() {
   return b;
 }
 
+int IN_GamepadCount() { return keen4::platform::Get().GamepadCount(); }
+
+std::uint32_t IN_GamepadId(int index) {
+  keen4::platform::GamepadState s;
+  keen4::platform::Get().ReadGamepadAt(index, &s);
+  return s.connected ? s.id : 0;
+}
+
+boolean IN_ReadGamepad(std::uint32_t id, ControlInfo* info, word* buttons) {
+  using namespace keen4::platform;
+  *info = ControlInfo{};
+  info->dir = DirTable[4];
+  *buttons = 0;
+  int count = Get().GamepadCount();
+  for (int i = 0; i < count; i++) {
+    GamepadState s;
+    Get().ReadGamepadAt(i, &s);
+    if (!s.connected || s.id != id) continue;
+    std::uint32_t bits = pad::Bits(s);
+    sword mx = 0, my = 0;
+    if (bits & kPadUp)
+      my = -1;
+    else if (bits & kPadDown)
+      my = 1;
+    if (bits & kPadLeft)
+      mx = -1;
+    else if (bits & kPadRight)
+      mx = 1;
+    info->xaxis = mx;
+    info->yaxis = my;
+    info->x = static_cast<sword>(mx * 127);
+    info->y = static_cast<sword>(my * 127);
+    info->button0 = (bits & kPadA) != 0;
+    info->button1 = (bits & kPadB) != 0;
+    info->dir = DirTable[((my + 1) * 3) + (mx + 1)];
+    if (bits & kPadA) *buttons |= 1;
+    if (bits & kPadB) *buttons |= 2;
+    if (bits & kPadX) *buttons |= 4;
+    if (bits & kPadY) *buttons |= 8;
+    if (bits & kPadBack) *buttons |= kJoyBack;
+    if (bits & kPadStart) *buttons |= kJoyStart;
+    return true;
+  }
+  return false;
+}
+
 // 1460:0794
 void IN_Startup() {
   if (IN_Started) return;

@@ -5,7 +5,8 @@
     python3 keen4_curate.py remove KIND NUMBER [NUMBER...] [--to art-curated]
     python3 keen4_curate.py list [--to art-curated]
 
-KIND is tile16, tile16m or sprite; a NUMBER may be a range such as 124-131.
+KIND is tile16, tile16m, sprite or sprite2 (Tom's copy, co-op); a NUMBER may be a
+range such as 124-131.
 
 `add` copies each asset's current image (and anchor) from the generated set
 into the curated folder and lists it in the curated manifest, so an artist
@@ -21,7 +22,7 @@ import os
 import shutil
 import sys
 
-KINDS = ("tile16", "tile16m", "sprite")
+KINDS = ("tile16", "tile16m", "sprite", "sprite2")
 
 
 def read_manifest(path):

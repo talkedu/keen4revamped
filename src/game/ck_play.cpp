@@ -20,9 +20,10 @@ objtype* newobj;
 objtype dummyobj;
 sword objectcount;
 
+PlayerState players[MAXPLAYERS];
+int numplayers = 1;
+
 ControlInfo c;
-boolean jumpbutton, jumpheld, pogobutton, pogoheld, firebutton, fireheld, upheld;
-sword oldfirecount;
 boolean showscorebox = true, jerk, oldshooting, QuietFX;
 byte firescan = sc_Space;
 byte gamepadflag;
@@ -31,13 +32,16 @@ word GravisMap[4];
 boolean godmode, jumpcheat, singlestep, debugok, storedemo;
 boolean joypad;
 sword extravbls;
-sword invincible;
 boolean lockscroll;
 boolean scorescreenkludge;
 word originxtilemax, originytilemax;
 word inactivateleft, inactivateright, inactivatetop, inactivatebottom;
 sword lastlevel;
 word centerlevel;
+
+Camera cameras[MAXCAMERAS];
+int numcameras = 1;
+int curcamera;
 
 void SizeText(const char* text, word* width, word* height);  // CK_MAIN
 void ScanInfoPlane();
@@ -89,6 +93,7 @@ void CountObjects() {
 
 // 06BD:07DC
 boolean DebugKeys() {
+  if (numplayers > 1) CoopDebugKeys();  // port
   if (Keyboard[sc_B] && ingame) {
     US_CenterWindow(24, 3);
     PrintY = static_cast<word>(PrintY + 6);
@@ -133,11 +138,11 @@ boolean DebugKeys() {
     US_CenterWindow(12, 3);
     US_PrintCentered("Free items!");
     for (int i = 0; i < 4; i++) gamestate.keys[i] = 99;
-    gamestate.ammo = 99;
+    for (int i = 0; i < numplayers; i++) players[i].ammo = 99;
     gamestate.wetsuit = true;
     VW_UpdateScreen();
     IN_Ack();
-    GivePoints(3000);
+    GivePoints(player, 3000);
     return true;
   }
   if (Keyboard[sc_J]) {
@@ -208,7 +213,7 @@ boolean DebugKeys() {
   }
   if (Keyboard[sc_Z]) {
     gamestate.lives = 0;
-    KillKeen();
+    KillKeen(player);
     return false;
   }
   return false;
@@ -226,7 +231,7 @@ void CheatKeys() {
   VW_UpdateScreen();
   IN_Ack();
   RF_ForceRefresh();
-  gamestate.ammo = 99;
+  for (int i = 0; i < numplayers; i++) players[i].ammo = 99;
   gamestate.lives++;
   gamestate.keys[0] = gamestate.keys[1] = gamestate.keys[2] = gamestate.keys[3] = 1;
 }
@@ -249,7 +254,7 @@ void DrawStatusNumber(int x, int y, int length, int blanktile, std::int32_t numb
 }
 
 // 06BD:1021
-void DrawStatusWindow() {
+void DrawStatusWindow(const PlayerState& ps) {
   int x = 64, y = 16, w = 184, h = 144;
   VWB_DrawTile8(x, y, 54);
   VWB_DrawTile8(x, y + h, 60);
@@ -282,14 +287,14 @@ void DrawStatusWindow() {
   WindowW = 64;
   US_CPrint("SCORE");
   VWB_Bar(79, 71, 66, 10, 0);
-  DrawStatusNumber(80, 72, 8, 41, gamestate.score);
+  DrawStatusNumber(80, 72, 8, 41, ps.score);
 
   PrintY = 61;
   WindowX = 176;
   WindowW = 64;
   US_CPrint("EXTRA");
   VWB_Bar(175, 71, 66, 10, 0);
-  DrawStatusNumber(176, 72, 8, 41, gamestate.nextextra);
+  DrawStatusNumber(176, 72, 8, 41, ps.nextextra);
 
   PrintY = 85;
   WindowX = 80;
@@ -324,7 +329,7 @@ void DrawStatusWindow() {
   PrintY = 112;
   US_Print("AMMO");
   VWB_Bar(215, 111, 26, 10, 0);
-  DrawStatusNumber(216, 112, 3, 41, gamestate.ammo);
+  DrawStatusNumber(216, 112, 3, 41, ps.ammo);
 
   PrintX = 80;
   PrintY = 128;
@@ -336,7 +341,7 @@ void DrawStatusWindow() {
   PrintY = 128;
   US_Print("DROPS");
   VWB_Bar(224, 127, 16, 10, 0);
-  DrawStatusNumber(224, 128, 2, 41, gamestate.drops);
+  DrawStatusNumber(224, 128, 2, 41, ps.drops);
 
   VWB_Bar(79, 143, 66, 10, 15);
   PrintY = 144;
@@ -389,6 +394,23 @@ void ScrollStatusWindow() {
   VW_UpdateScreen();
 }
 
+}  // namespace
+
+// The tile bounds of the view and of where actors stay awake, from the origin
+// (repeated after every scroll in the original).
+void CalcViewBounds() {
+  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
+  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
+  inactivateleft = static_cast<word>(originxtile - 4);
+  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
+  inactivateright = static_cast<word>(originxtilemax + 4);
+  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
+  inactivatetop = static_cast<word>(originytile - 4);
+  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
+  inactivatebottom = static_cast<word>(originytilemax + 4);
+  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+}
+
 // 06BD:1983
 void WorldScrollScreen(objtype* ob) {
   if (lockscroll) return;
@@ -419,16 +441,7 @@ void WorldScrollScreen(objtype* ob) {
     yscroll = -0xFF;
 
   RF_Scroll(xscroll, yscroll);
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
 
 // Keen states the camera treats specially (DGROUP addresses).
@@ -440,14 +453,16 @@ constexpr word s_keenonpole_b = 0x1346;
 constexpr word s_keenonpole_c = 0x1364;
 constexpr word s_keenonpole_d = 0x1382;
 
-// 06BD:1ACD
-void ScrollScreen(objtype* ob) {
-  if (lockscroll) return;
-
+// 06BD:1ACD, first part: true if Keen left the map, walking off its edge (the
+// level is done; in co-op he waits for his brother) or falling off its bottom.
+boolean LeftTheMap(objtype* ob) {
   // walked off the edge of the map
   if (ob->left < originxmin || ob->right > static_cast<word>(originxmax + 20 * TILEGLOBAL)) {
-    playstate = ex_completed;
-    return;
+    if (numplayers > 1)
+      CoopReachedExit(ob);
+    else
+      playstate = ex_completed;
+    return true;
   }
 
   // fell off the bottom of the map
@@ -455,10 +470,21 @@ void ScrollScreen(objtype* ob) {
     ob->y = static_cast<word>(ob->y - (ob->bottom - (originymax + 13 * TILEGLOBAL)));
     SD_PlaySound(0x14);  // SND_PLUMMET
     godmode = false;
-    KillKeen();
-    return;
+    KillKeen(ob);
+    return true;
   }
+  return false;
+}
 
+// 06BD:1ACD
+void ScrollScreen(objtype* ob) {
+  if (lockscroll) return;
+  if (LeftTheMap(ob)) return;
+  ScrollCamera(ob);
+}
+
+// 06BD:1ACD, second part: the camera follows Keen.
+void ScrollCamera(objtype* ob) {
   sword xscroll = 0, yscroll = 0;
   if (ob->x < static_cast<word>(originxglobal + 9 * TILEGLOBAL))
     xscroll = static_cast<sword>(ob->x - (originxglobal + 9 * TILEGLOBAL));
@@ -530,27 +556,38 @@ void ScrollScreen(objtype* ob) {
     yscroll = -0xFF;
 
   RF_Scroll(xscroll, yscroll);
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
+
+namespace {
 
 // 06BD:0CD5
 void CheckKeys() {
   if (screenfaded) return;  // don't do anything with a faded screen
 
+  // Port: in co-op, Back and Start on a pad other than the newest (which
+  // types Enter and Escape) open the status window and the control panel.
+  int statusplayer = -1;
+  if (numplayers > 1) {
+    int pads = IN_GamepadCount();
+    std::uint32_t newest = pads ? IN_GamepadId(pads - 1) : 0;
+    for (int i = 0; i < numplayers; i++) {
+      PlayerState& ps = players[i];
+      word pressed = static_cast<word>(ps.padbuttons & ~ps.lastpadbuttons);
+      ps.lastpadbuttons = ps.padbuttons;
+      if (!ps.pad || ps.pad == newest) continue;
+      if (pressed & kJoyBack) statusplayer = i;
+      if (pressed & kJoyStart) LastScan = sc_Escape;
+    }
+  }
+
   // Enter: status window (port: or the Gravis status button; Back on a
   // gamepad types Enter)
   if (Keyboard[sc_Enter] ||
-      (GravisGamepad && IN_GamepadActive() && ((IN_JoyButtons() >> (GravisMap[3] & 3)) & 1))) {
-    StatusWindow();
+      (GravisGamepad && IN_GamepadActive() && ((IN_JoyButtons() >> (GravisMap[3] & 3)) & 1)))
+    statusplayer = numplayers > 1 ? CoopStatusPlayer() : 0;
+  if (statusplayer >= 0) {
+    StatusWindow(statusplayer);
     IN_ClearKeysDown();
     RF_ForceRefresh();
     lasttimecount = TimeCount;
@@ -651,7 +688,7 @@ void CheckKeys() {
 }  // namespace
 
 // 06BD:16F1
-void StatusWindow() {
+void StatusWindow(int who) {
   WindowX = 0;
   WindowW = 320;
   WindowY = 0;
@@ -670,7 +707,7 @@ void StatusWindow() {
   RFL_InitAnimList();
   std::memcpy(statusbuffer, vw_framebuffer, sizeof statusbuffer);
   vw_screen = statusbuffer;
-  DrawStatusWindow();
+  DrawStatusWindow(players[who]);
   vw_screen = vw_framebuffer;
   RF_Refresh();
 
@@ -705,6 +742,105 @@ void StatusWindow() {
   scoreobj->x = 0;  // force scorebox to redraw if it's not there
 }
 
+// Port: cameras.
+void StoreCamera() {
+  Camera& cam = cameras[curcamera];
+  cam.originxglobal = originxglobal;
+  cam.originyglobal = originyglobal;
+  cam.originxtilemax = originxtilemax;
+  cam.originytilemax = originytilemax;
+  cam.inactivateleft = inactivateleft;
+  cam.inactivateright = inactivateright;
+  cam.inactivatetop = inactivatetop;
+  cam.inactivatebottom = inactivatebottom;
+  cam.centerlevel = centerlevel;
+  cam.lockscroll = lockscroll;
+}
+
+void LoadCamera() {
+  const Camera& cam = cameras[curcamera];
+  RF_SetOrigin(cam.originxglobal, cam.originyglobal);
+  originxtilemax = cam.originxtilemax;
+  originytilemax = cam.originytilemax;
+  inactivateleft = cam.inactivateleft;
+  inactivateright = cam.inactivateright;
+  inactivatetop = cam.inactivatetop;
+  inactivatebottom = cam.inactivatebottom;
+  centerlevel = cam.centerlevel;
+  lockscroll = cam.lockscroll;
+}
+
+void SelectCamera(int i) {
+  if (i == curcamera) return;
+  StoreCamera();
+  curcamera = i;
+  LoadCamera();
+}
+
+int GetViewBounds(ViewBounds* out) {
+  for (int i = 0; i < numcameras; i++) {
+    ViewBounds& v = out[i];
+    if (i == curcamera) {
+      v = ViewBounds{originxtile,    originytile,     originxtilemax, originytilemax,
+                     inactivateleft, inactivateright, inactivatetop,  inactivatebottom};
+    } else {
+      const Camera& cam = cameras[i];
+      v = ViewBounds{static_cast<word>(cam.originxglobal >> G_T_SHIFT),
+                     static_cast<word>(cam.originyglobal >> G_T_SHIFT),
+                     cam.originxtilemax,
+                     cam.originytilemax,
+                     cam.inactivateleft,
+                     cam.inactivateright,
+                     cam.inactivatetop,
+                     cam.inactivatebottom};
+    }
+  }
+  return numcameras;
+}
+
+namespace {
+
+// In camera mode, tells ID_RF where every camera is before it refreshes.
+void SyncCameras() {
+  if (!RF_CameraMode()) return;
+  RF_Origin origins[MAXCAMERAS];
+  for (int i = 0; i < numcameras; i++) {
+    if (i == curcamera)
+      origins[i] = RF_Origin{originxglobal, originyglobal};
+    else
+      origins[i] = RF_Origin{cameras[i].originxglobal, cameras[i].originyglobal};
+  }
+  RF_SetCameras(origins, numcameras);
+}
+
+// An asleep actor wakes when it is within a tile of any view.
+bool NearAView(const objtype* obj) {
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (obj->tileright >= static_cast<word>(v.xtile - 1) && obj->tileleft <= static_cast<word>(v.xtilemax + 1) &&
+        obj->tiletop <= static_cast<word>(v.ytilemax + 1) && obj->tilebottom >= static_cast<word>(v.ytile - 1))
+      return true;
+  }
+  return false;
+}
+
+// An awake actor may sleep when it is outside every view's inactivate bounds.
+bool FarFromViews(const objtype* obj) {
+  ViewBounds views[MAXCAMERAS];
+  int count = GetViewBounds(views);
+  for (int i = 0; i < count; i++) {
+    const ViewBounds& v = views[i];
+    if (!(obj->tileright < v.inactivateleft || obj->tileleft > v.inactivateright ||
+          obj->tiletop > v.inactivatebottom || obj->tilebottom < v.inactivatetop))
+      return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 // 06BD:18A5
 void CenterActor(objtype* ob) {
   centerlevel = 140;
@@ -717,16 +853,7 @@ void CenterActor(objtype* ob) {
 
   if (!scorescreenkludge) RF_NewPosition(orgx, orgy);
 
-  originxtilemax = static_cast<word>(originxtile + PORTTILESWIDE - 1);
-  originytilemax = static_cast<word>(originytile + PORTTILESHIGH - 1);
-  inactivateleft = static_cast<word>(originxtile - 4);
-  if (static_cast<sword>(inactivateleft) < 0) inactivateleft = 0;
-  inactivateright = static_cast<word>(originxtilemax + 4);
-  if (static_cast<sword>(inactivateright) < 0) inactivateright = 0;
-  inactivatetop = static_cast<word>(originytile - 4);
-  if (static_cast<sword>(inactivatetop) < 0) inactivatetop = 0;
-  inactivatebottom = static_cast<word>(originytilemax + 4);
-  if (static_cast<sword>(inactivatebottom) < 0) inactivatebottom = 0;
+  CalcViewBounds();
 }
 
 // 06BD:1D9E
@@ -747,6 +874,15 @@ void InitObjArray() {
   player = newobj;
   GetNewObj(false);
   scoreobj = newobj;
+  players[0].ob = player;
+  players[0].scorebox = scoreobj;
+  // port: then Tom and his score box in co-op
+  if (numplayers > 1) {
+    GetNewObj(false);
+    players[1].ob = newobj;
+    GetNewObj(false);
+    players[1].scorebox = newobj;
+  }
 }
 
 // 06BD:1E11
@@ -787,64 +923,150 @@ void RemoveObj(objtype* ob) {
   objfreelist = ob;
 }
 
-// 06BD:1EF2
-void GivePoints(word points) {
-  gamestate.score += points;
-  if (!DemoMode && gamestate.score >= gamestate.nextextra) {
-    SD_PlaySound(0x11);  // SND_EXTRAKEEN
-    gamestate.lives++;
-    gamestate.nextextra *= 2;
+// Port: players.
+PlayerState& PlayerOf(objtype* ob) {
+  for (int i = 1; i < numplayers; i++)
+    if (players[i].ob == ob) return players[i];
+  return players[0];
+}
+
+int PlayerIndex(const objtype* ob) {
+  for (int i = 0; i < numplayers; i++)
+    if (players[i].ob == ob) return i;
+  return -1;
+}
+
+objtype* NearestPlayer(const objtype* ob) {
+  objtype* best = player;
+  std::int32_t bestdist = -1;
+  for (int i = 0; i < numplayers; i++) {
+    objtype* p = players[i].ob;
+    if (numplayers > 1 && p->obclass != keenobj) continue;  // dead, eaten or waiting at the exit
+    std::int32_t dx = static_cast<sword>(p->x - ob->x), dy = static_cast<sword>(p->y - ob->y);
+    std::int32_t dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    if (bestdist < 0 || dist < bestdist) {
+      best = p;
+      bestdist = dist;
+    }
+  }
+  return best;
+}
+
+objtype* PlayerRiding(const objtype* plat) {
+  for (int i = 0; i < numplayers; i++)
+    if (players[i].riding == plat) return players[i].ob;
+  return nullptr;
+}
+
+void ResetPlayers() {
+  for (PlayerState& ps : players) {
+    objtype *ob = ps.ob, *scorebox = ps.scorebox;
+    ps = PlayerState{};
+    ps.ob = ob;
+    ps.scorebox = scorebox;
+    ps.nextextra = 20000;
+    ps.ammo = 5;
   }
 }
+
+// 06BD:1EF2
+void GivePoints(objtype* who, word points) {
+  PlayerState& ps = PlayerOf(who);
+  ps.score += points;
+  if (!DemoMode && ps.score >= ps.nextextra) {
+    SD_PlaySound(0x11);  // SND_EXTRAKEEN
+    gamestate.lives++;
+    ps.nextextra *= 2;
+  }
+}
+
+namespace {
+
+// 06BD:1F47, for one player whose controls are already in ps.c.
+void PollPlayerControls(PlayerState& ps, boolean gravis, boolean padactive, word padbuttons, boolean firekey) {
+  if (ps.c.yaxis != -1) ps.upheld = false;
+
+  // Port: GravisMap applies to the gamepad's A, B, X and Y, and only while it
+  // is the active control.
+  if (gravis) {
+    ps.jumpbutton = (padbuttons >> (GravisMap[0] & 3)) & 1;
+    ps.pogobutton = (padbuttons >> (GravisMap[1] & 3)) & 1;
+    ps.firebutton = (padbuttons >> (GravisMap[2] & 3)) & 1;
+    if (!ps.jumpbutton) ps.jumpheld = false;
+    if (!ps.pogobutton) ps.pogoheld = false;
+    if (!ps.firebutton) ps.fireheld = false;
+  } else if (oldshooting || DemoMode) {
+    if (ps.c.button0 && ps.c.button1) {
+      ps.firebutton = true;
+      ps.jumpbutton = ps.jumpheld = ps.pogobutton = ps.pogoheld = false;
+    } else {
+      ps.firebutton = ps.fireheld = false;
+      if (ps.c.button0)
+        ps.jumpbutton = true;
+      else
+        ps.jumpbutton = ps.jumpheld = false;
+      if (ps.c.button1) {
+        if (ps.oldfirecount <= 8)
+          ps.oldfirecount = static_cast<sword>(ps.oldfirecount + tics);
+        else
+          ps.pogobutton = true;
+      } else {
+        if (ps.oldfirecount)
+          ps.pogobutton = true;
+        else
+          ps.pogobutton = ps.pogoheld = false;
+        ps.oldfirecount = 0;
+      }
+    }
+  } else {
+    ps.jumpbutton = ps.c.button0;
+    ps.pogobutton = ps.c.button1;
+    ps.firebutton = firekey;
+    // Port: X or Y fires on a gamepad.
+    if (padactive && (padbuttons & 0xC)) ps.firebutton = true;
+    if (!ps.jumpbutton) ps.jumpheld = false;
+    if (!ps.pogobutton) ps.pogoheld = false;
+    if (!ps.firebutton) ps.fireheld = false;
+  }
+}
+
+}  // namespace
 
 // 06BD:1F47
 void PollControls() {
   IN_NoteGameplay();  // port: the gamepad steers Keen, not the menus
-  IN_ReadControl(0, &c);
-  if (c.yaxis != -1) upheld = false;
+  if (numplayers == 1) {
+    PlayerState& ps = players[0];
+    IN_ReadControl(0, &ps.c);
+    boolean padactive = IN_GamepadActive();
+    word padbuttons = IN_JoyButtons();
+    PollPlayerControls(ps, GravisGamepad && padactive && !DemoMode, padactive, padbuttons, Keyboard[firescan]);
+    return;
+  }
 
-  // Port: GravisMap applies to the gamepad's A, B, X and Y, and only while it
-  // is the active control.
-  if (GravisGamepad && IN_GamepadActive() && !DemoMode) {
-    word buttons = IN_JoyButtons();
-    jumpbutton = (buttons >> (GravisMap[0] & 3)) & 1;
-    pogobutton = (buttons >> (GravisMap[1] & 3)) & 1;
-    firebutton = (buttons >> (GravisMap[2] & 3)) & 1;
-    if (!jumpbutton) jumpheld = false;
-    if (!pogobutton) pogoheld = false;
-    if (!firebutton) fireheld = false;
-  } else if (oldshooting || DemoMode) {
-    if (c.button0 && c.button1) {
-      firebutton = true;
-      jumpbutton = jumpheld = pogobutton = pogoheld = false;
-    } else {
-      firebutton = fireheld = false;
-      if (c.button0)
-        jumpbutton = true;
-      else
-        jumpbutton = jumpheld = false;
-      if (c.button1) {
-        if (oldfirecount <= 8)
-          oldfirecount = static_cast<sword>(oldfirecount + tics);
-        else
-          pogobutton = true;
-      } else {
-        if (oldfirecount)
-          pogobutton = true;
-        else
-          pogobutton = pogoheld = false;
-        oldfirecount = 0;
+  // Port: co-op. Each player reads the gamepad bound to them, or the keyboard.
+  for (int i = 0; i < numplayers; i++) {
+    PlayerState& ps = players[i];
+    // any gamepad: the first one his brother doesn't use
+    if (ps.pad == kAnyGamepad) {
+      for (int p = 0; p < IN_GamepadCount(); p++) {
+        std::uint32_t id = IN_GamepadId(p);
+        if (id && id != players[1 - i].pad) {
+          ps.pad = id;
+          break;
+        }
       }
     }
-  } else {
-    jumpbutton = c.button0;
-    pogobutton = c.button1;
-    firebutton = Keyboard[firescan];
-    // Port: X or Y fires on a gamepad.
-    if (IN_GamepadActive() && (IN_JoyButtons() & 0xC)) firebutton = true;
-    if (!jumpbutton) jumpheld = false;
-    if (!pogobutton) pogoheld = false;
-    if (!firebutton) fireheld = false;
+    if (ps.pad) {
+      ps.padconnected = IN_ReadGamepad(ps.pad, &ps.c, &ps.padbuttons);
+      PollPlayerControls(ps, GravisGamepad, true, static_cast<word>(ps.padbuttons & 0xF), false);
+    } else {
+      Controls[1] = ctrl_Keyboard1;
+      IN_ReadControl(1, &ps.c);
+      ps.padconnected = true;
+      ps.padbuttons = 0;
+      PollPlayerControls(ps, false, false, 0, Keyboard[firescan]);
+    }
   }
 }
 
@@ -865,13 +1087,22 @@ void StartMusic(sword level) {
 // 06BD:21C6
 void PlayLoop() {
   StartMusic(gamestate.mapon);
-  jumpheld = upheld = pogoheld = fireheld = false;
+  for (int i = 0; i < numplayers; i++) {
+    PlayerState& ps = players[i];
+    ps.jumpheld = ps.upheld = ps.pogoheld = ps.fireheld = false;
+    ps.oldfirecount = 0;
+    ps.invincible = 0;
+  }
   ingame = true;
   playstate = ex_stillplaying;
-  oldfirecount = 0;
   lockscroll = false;
-  invincible = 0;
-  CenterActor(player);
+  RF_SetCameraMode(numplayers > 1);
+  if (numplayers > 1) {
+    CoopStartLevel(loadedgame);
+    CoopCenter();
+  } else {
+    CenterActor(player);
+  }
 
   if (DemoMode)
     US_InitRndT(false);
@@ -884,19 +1115,17 @@ void PlayLoop() {
 
   do {
     PollControls();
+    if (numplayers > 1) CoopCheckPads();  // port
 
     // go through state changes and propose movements
     for (objtype* obj = player; obj; obj = obj->next) {
-      if (!obj->active && obj->tileright >= static_cast<word>(originxtile - 1) &&
-          obj->tileleft <= static_cast<word>(originxtilemax + 1) &&
-          obj->tiletop <= static_cast<word>(originytilemax + 1) &&
-          obj->tilebottom >= static_cast<word>(originytile - 1)) {
+      if (numplayers > 1 && CoopHidden(obj)) continue;
+      if (!obj->active && NearAView(obj)) {
         obj->needtoreact = true;
         obj->active = ac_yes;
       }
       if (obj->active) {
-        if (obj->tileright < inactivateleft || obj->tileleft > inactivateright ||
-            obj->tiletop > inactivatebottom || obj->tilebottom < inactivatetop) {
+        if (FarFromViews(obj)) {
           if (obj->active == ac_removable) {
             RemoveObj(obj);
             continue;
@@ -914,13 +1143,14 @@ void PlayLoop() {
       }
     }
 
-    if (gamestate.riding) HandleRiding(player);
+    for (int i = 0; i < numplayers; i++)
+      if (players[i].riding && !CoopHidden(players[i].ob)) HandleRiding(players[i].ob);
 
     // check for and handle collisions between objects
     for (objtype* obj = player; obj; obj = obj->next) {
-      if (!obj->active) continue;
+      if (!obj->active || (numplayers > 1 && CoopHidden(obj))) continue;
       for (objtype* check = obj->next; check; check = check->next) {
-        if (!check->active) continue;
+        if (!check->active || (numplayers > 1 && CoopHidden(check))) continue;
         if (obj->right > check->left && obj->left < check->right && obj->top < check->bottom &&
             obj->bottom > check->top) {
           if (obj->state->contact) obj->state->contact(obj, check);
@@ -931,15 +1161,25 @@ void PlayLoop() {
     }
 
     // check intiles
-    if (mapon)
-      CheckInTiles(player);
-    else
-      CheckWorldInTiles(player);
+    for (int i = 0; i < numplayers; i++) {
+      if (numplayers > 1 && CoopHidden(players[i].ob)) continue;
+      if (mapon)
+        CheckInTiles(players[i].ob);
+      else
+        CheckWorldInTiles(players[i].ob);
+    }
 
     // react to whatever happened, and post sprites to the refresh manager
     for (objtype* obj = player; obj; obj = obj->next) {
       if (!obj->active) continue;
-      if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
+      if (numplayers > 1 && PlayerIndex(obj) >= 0) {
+        // port: co-op Keens are never removed, even when eaten
+        if (CoopHidden(obj)) continue;
+        if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
+          CoopKeenGone(obj);
+          continue;
+        }
+      } else if (obj->tilebottom >= static_cast<word>(mapheight - 1)) {
         if (obj->obclass == keenobj)
           playstate = ex_died;
         else
@@ -953,18 +1193,28 @@ void PlayLoop() {
     }
 
     // scroll the screen and update the score box
-    if (mapon != 0 && mapon != 17)
-      ScrollScreen(player);
-    else
-      WorldScrollScreen(player);
-    UpdateScore(scoreobj);
+    if (numplayers > 1) {
+      CoopFrame();
+      CoopScroll();
+      for (int i = 0; i < numplayers; i++) UpdateScore(players[i].scorebox);
+    } else {
+      if (mapon != 0 && mapon != 17)
+        ScrollScreen(player);
+      else
+        WorldScrollScreen(player);
+      UpdateScore(scoreobj);
+    }
     if (loadedgame) loadedgame = false;
 
+    SyncCameras();
     RF_Refresh();
 
-    if (invincible) {
-      invincible = static_cast<sword>(invincible - tics);
-      if (invincible < 0) invincible = 0;
+    for (int i = 0; i < numplayers; i++) {
+      PlayerState& ps = players[i];
+      if (ps.invincible) {
+        ps.invincible = static_cast<sword>(ps.invincible - tics);
+        if (ps.invincible < 0) ps.invincible = 0;
+      }
     }
 
     if (singlestep) {
@@ -992,5 +1242,6 @@ void PlayLoop() {
     }
   } while (playstate == ex_stillplaying);
 
+  if (numplayers > 1) CoopEndLevel();
   ingame = false;
 }

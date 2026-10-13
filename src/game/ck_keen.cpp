@@ -3,7 +3,7 @@
 #include "game/ck_def.h"
 
 extern sword xtry, ytry;
-void SpawnShot(word x, word y, sword dir);  // CK_KEEN2
+void SpawnShot(objtype* shooter, word x, word y, sword dir);  // CK_KEEN2
 void ExplodeShot(objtype* shot);
 void SpawnDropSplash(word tilex, word tiley);  // K4_ACT1
 void OracleCouncilMember();  // K4_SPEC: the fake member in level 14
@@ -65,10 +65,8 @@ constexpr int SND_WORLDWALK1 = 0, SND_WORLDWALK2 = 1, SND_JUMP = 2, SND_LAND = 3
               SND_GETWATER = 10, SND_HELMETHIT = 15, SND_EXTRAKEEN = 17, SND_OPENDOOR = 18,
               SND_PLUMMET = 20, SND_USESWITCH = 21, SND_KEENDEAD = 23, SND_FOUNDMEMBER = 31;
 
-// CK_KEEN globals (DGROUP CAB5..CABB).
-word moonok;
-std::int32_t leavepoletime;
-word jumptime;
+// The CK_KEEN globals (DGROUP CAB5..CABB: moonok, leavepoletime, jumptime)
+// are kept per player in PlayerState.
 
 sword walkspeed(sword slope) { return g_exe.Int(static_cast<std::uint16_t>(0x13BE + (slope & 7) * 2)); }
 sword polexspeed(sword xaxis) { return g_exe.Int(static_cast<std::uint16_t>(0x13D0 + xaxis * 2)); }
@@ -87,13 +85,14 @@ void KeenStandActions(objtype* ob);
 
 // 0B80:0052
 boolean CheckGrabPole(objtype* ob) {
-  if (static_cast<std::int32_t>(lasttimecount) < leavepoletime)
-    leavepoletime = 0;
-  else if (static_cast<std::int32_t>(lasttimecount) - leavepoletime < 19)
+  PlayerState& ps = PlayerOf(ob);
+  if (static_cast<std::int32_t>(lasttimecount) < ps.leavepoletime)
+    ps.leavepoletime = 0;
+  else if (static_cast<std::int32_t>(lasttimecount) - ps.leavepoletime < 19)
     return false;
 
   word* map;
-  if (c.yaxis == -1)
+  if (ps.c.yaxis == -1)
     map = FGSpot(0, static_cast<word>((ob->top + 6 * PIXGLOBAL) >> G_T_SHIFT));
   else
     map = FGSpot(0, static_cast<word>(ob->tilebottom + 1));
@@ -102,7 +101,7 @@ boolean CheckGrabPole(objtype* ob) {
   if ((TINF_IN(*map) & 0x7F) == 1) {
     ob->x = static_cast<word>(((ob->tilemidx - 1) << G_T_SHIFT) + 8 * PIXGLOBAL);
     xtry = 0;
-    ytry = static_cast<sword>(c.yaxis << 5);
+    ytry = static_cast<sword>(ps.c.yaxis << 5);
     ob->needtoclip = cl_noclip;
     ob->state = ST(s_keenpole);
     return true;
@@ -112,6 +111,7 @@ boolean CheckGrabPole(objtype* ob) {
 
 // 0B80:0137: switches and doors are used by pressing up.
 boolean CheckEnterHouse(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   word intile = TINF_IN(*FGSpot(ob->tilemidx, ob->tiletop));
   if (intile == 5 || intile == 6 || intile == 15) {
     word x = static_cast<word>((ob->tilemidx << G_T_SHIFT) - 4 * PIXGLOBAL);
@@ -121,7 +121,7 @@ boolean CheckEnterHouse(objtype* ob) {
     } else {
       ob->state = ST(s_keenswitch);
     }
-    upheld = true;
+    ps.upheld = true;
     return true;
   }
   if (intile == 2 || intile == 32) {
@@ -132,11 +132,11 @@ boolean CheckEnterHouse(objtype* ob) {
       ob->temp1 = static_cast<sword>(x);
       ob->state = ST(s_keenlineup);
     } else {
-      invincible = 110;
+      ps.invincible = 110;
       ob->state = ST(s_keenenter1);
       ob->priority = 0;
     }
-    upheld = true;
+    ps.upheld = true;
     return true;
   }
   return false;
@@ -148,48 +148,49 @@ void KeenWalkSound2(objtype*) { SD_PlaySound(SND_WORLDWALK2); }
 
 // 0B80:0265
 void KeenStandActions(objtype* ob) {
-  if (c.xaxis) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.xaxis) {
     ob->state = ST(s_keenwalk1);
     KeenWalkThink(ob);
     xtry = static_cast<sword>(static_cast<sword>(ob->xdir * ob->state->xmove * static_cast<sword>(tics)) / 4);
     return;
   }
 
-  if (firebutton && !fireheld) {
-    fireheld = true;
-    if (c.yaxis == -1)
+  if (ps.firebutton && !ps.fireheld) {
+    ps.fireheld = true;
+    if (ps.c.yaxis == -1)
       ob->state = ST(s_keenshootup1);
     else
       ob->state = ST(s_keenshoot1);
     return;
   }
 
-  if (jumpbutton && !jumpheld) {
-    jumpheld = true;
+  if (ps.jumpbutton && !ps.jumpheld) {
+    ps.jumpheld = true;
     SD_PlaySound(SND_JUMP);
     ob->xspeed = 0;
     ob->yspeed = -40;
     ytry = 0;
-    jumptime = 18;
+    ps.jumptime = 18;
     ob->state = ST(s_keenjump1);
     return;
   }
 
-  if (pogobutton && !pogoheld) {
-    pogoheld = true;
+  if (ps.pogobutton && !ps.pogoheld) {
+    ps.pogoheld = true;
     SD_PlaySound(SND_JUMP);
     ob->state = ST(s_keenpogodown);
     ob->xspeed = 0;
     ob->yspeed = -48;
     ytry = 0;
-    jumptime = 24;
+    ps.jumptime = 24;
     return;
   }
 
-  switch (c.yaxis) {
+  switch (ps.c.yaxis) {
     case -1:
       if (CheckGrabPole(ob)) return;
-      if (!upheld && CheckEnterHouse(ob)) return;
+      if (!ps.upheld && CheckEnterHouse(ob)) return;
       ob->state = ST(s_keenlookup);
       return;
     case 1:
@@ -203,7 +204,8 @@ void KeenStandActions(objtype* ob) {
 
 // 0B80:0395
 void KeenStandThink(objtype* ob) {
-  if (c.dir != dir_None || jumpbutton || pogobutton || firebutton) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.dir != dir_None || ps.jumpbutton || ps.pogobutton || ps.firebutton) {
     ob->temp1 = ob->temp2 = 0;
     ob->state = ST(s_keenstand);
     KeenStandActions(ob);
@@ -224,8 +226,8 @@ void KeenStandThink(objtype* ob) {
       if (ob->temp1 > 300) {
         ob->temp2++;
         ob->temp1 = 0;
-        if (moonok == 1) {
-          moonok = 2;
+        if (ps.moonok == 1) {
+          ps.moonok = 2;
           ob->state = ST(s_keenmoon1);
         } else {
           ob->state = ST(s_keenwait1);
@@ -244,11 +246,12 @@ void KeenStandThink(objtype* ob) {
 
 // 0B80:045C
 void KeenReadThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (storedemo) {
     playstate = ex_abortgame;
     IN_ClearKeysDown();
   }
-  if (c.dir != dir_None || jumpbutton || pogobutton) {
+  if (ps.c.dir != dir_None || ps.jumpbutton || ps.pogobutton) {
     ob->temp1 = ob->temp2 = 0;
     ob->state = ST(s_keenstopread1);
   }
@@ -256,7 +259,9 @@ void KeenReadThink(objtype* ob) {
 
 // 0B80:049A
 void KeenLookUpThink(objtype* ob) {
-  if (c.yaxis != -1 || c.xaxis || (jumpbutton && !jumpheld) || (pogobutton && !pogoheld) || firebutton) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.yaxis != -1 || ps.c.xaxis || (ps.jumpbutton && !ps.jumpheld) || (ps.pogobutton && !ps.pogoheld) ||
+      ps.firebutton) {
     ob->state = ST(s_keenstand);
     KeenStandActions(ob);
   }
@@ -264,9 +269,10 @@ void KeenLookUpThink(objtype* ob) {
 
 // 0B80:04E2
 void KeenLookDownThink(objtype* ob) {
-  if (jumpbutton && !jumpheld && (ob->hitnorth & 7) == 1) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.jumpbutton && !ps.jumpheld && (ob->hitnorth & 7) == 1) {
     // drop down through a one-way platform
-    jumpheld = true;
+    ps.jumpheld = true;
     word* map = FGSpot(ob->tilemidx, ob->tilebottom);
     word tile = *map;
     if (TINF_W(tile) || TINF_E(tile) || TINF_S(tile)) return;
@@ -275,9 +281,9 @@ void KeenLookDownThink(objtype* ob) {
     if (TINF_W(tile) || TINF_E(tile) || TINF_S(tile)) return;
 
     sword ymove = static_cast<sword>((tics < 4 ? 4 : tics) << 4);
-    if (gamestate.riding) ymove = static_cast<sword>(ymove + gamestate.riding->ymove);
+    if (ps.riding) ymove = static_cast<sword>(ymove + ps.riding->ymove);
     ob->bottom = static_cast<word>(ob->bottom + ymove);
-    gamestate.riding = nullptr;
+    ps.riding = nullptr;
     ob->y = static_cast<word>(ob->y + ymove);
     xtry = ytry = 0;
     ob->state = ST(s_keenjump3);
@@ -286,24 +292,25 @@ void KeenLookDownThink(objtype* ob) {
     return;
   }
 
-  if (c.yaxis != 1 || c.xaxis || (jumpbutton && !jumpheld) || (pogobutton && !pogoheld))
+  if (ps.c.yaxis != 1 || ps.c.xaxis || (ps.jumpbutton && !ps.jumpheld) || (ps.pogobutton && !ps.pogoheld))
     ob->state = ST(s_keenlookdown4);
 }
 
 // 0B80:062C
 void KeenWalkThink(objtype* ob) {
-  if (!c.xaxis) {
+  PlayerState& ps = PlayerOf(ob);
+  if (!ps.c.xaxis) {
     ob->state = ST(s_keenstand);
     KeenStandActions(ob);
     return;
   }
 
-  ob->xdir = c.xaxis;
+  ob->xdir = ps.c.xaxis;
 
-  switch (c.yaxis) {
+  switch (ps.c.yaxis) {
     case -1:
       if (CheckGrabPole(ob)) return;
-      if (upheld) return;
+      if (ps.upheld) return;
       if (CheckEnterHouse(ob)) return;
       break;
     case 1:
@@ -313,33 +320,33 @@ void KeenWalkThink(objtype* ob) {
       break;
   }
 
-  if (firebutton && !fireheld) {
-    fireheld = true;
-    if (c.yaxis == -1)
+  if (ps.firebutton && !ps.fireheld) {
+    ps.fireheld = true;
+    if (ps.c.yaxis == -1)
       ob->state = ST(s_keenshootup1);
     else
       ob->state = ST(s_keenshoot1);
     return;
   }
 
-  if (jumpbutton && !jumpheld) {
-    jumpheld = true;
+  if (ps.jumpbutton && !ps.jumpheld) {
+    ps.jumpheld = true;
     SD_PlaySound(SND_JUMP);
     ob->xspeed = static_cast<sword>(ob->xdir << 4);
     ob->yspeed = -40;
     ytry = xtry = 0;
-    jumptime = 18;
+    ps.jumptime = 18;
     ob->state = ST(s_keenjump1);
   }
 
-  if (pogobutton && !pogoheld) {
-    pogoheld = true;
+  if (ps.pogobutton && !ps.pogoheld) {
+    ps.pogoheld = true;
     ob->state = ST(s_keenpogodown);
     SD_PlaySound(SND_JUMP);
     ob->xspeed = static_cast<sword>(ob->xdir << 4);
     ob->yspeed = -48;
     xtry = 0;
-    jumptime = 24;
+    ps.jumptime = 24;
     return;
   }
 
@@ -383,7 +390,11 @@ void KeenEnterThink(objtype* ob) {
   ob->needtoclip = cl_noclip;
   ChangeState(ob, ob->state->nextstate);
   ob->needtoclip = cl_midclip;
-  CenterActor(ob);
+  // port: on a split screen only his own camera follows him
+  if (numplayers > 1 && numcameras > 1)
+    CoopCenterOn(ob);
+  else
+    CenterActor(ob);
 }
 
 // 0B80:08B9
@@ -450,22 +461,23 @@ void KeenKeyThink(objtype* ob) {
 
 // 0B80:0B5B
 void KeenAirThink(objtype* ob) {
-  if (jumpcheat && jumpbutton) {
+  PlayerState& ps = PlayerOf(ob);
+  if (jumpcheat && ps.jumpbutton) {
     ob->yspeed = -40;
-    jumptime = 18;
-    jumpheld = true;
+    ps.jumptime = 18;
+    ps.jumpheld = true;
   }
 
-  if (jumptime) {
-    if (jumptime <= tics) {
-      ytry = static_cast<sword>(ob->yspeed * static_cast<sword>(jumptime));
-      jumptime = 0;
+  if (ps.jumptime) {
+    if (ps.jumptime <= tics) {
+      ytry = static_cast<sword>(ob->yspeed * static_cast<sword>(ps.jumptime));
+      ps.jumptime = 0;
     } else {
       ytry = static_cast<sword>(ob->yspeed * static_cast<sword>(tics));
-      if (!jumpcheat) jumptime = static_cast<word>(jumptime - tics);
+      if (!jumpcheat) ps.jumptime = static_cast<word>(ps.jumptime - tics);
     }
-    if (!jumpbutton) jumptime = 0;
-    if (!jumptime && ob->state->nextstate) ob->state = ob->state->nextstate;
+    if (!ps.jumpbutton) ps.jumptime = 0;
+    if (!ps.jumptime && ob->state->nextstate) ob->state = ob->state->nextstate;
   } else {
     if (gamestate.difficulty == gd_Easy)
       DoWeakGravity(ob);
@@ -475,9 +487,9 @@ void KeenAirThink(objtype* ob) {
       ob->state = ob->state->nextstate;
   }
 
-  if (c.xaxis) {
-    ob->xdir = c.xaxis;
-    AccelerateX(ob, static_cast<sword>(c.xaxis * 2), 24);
+  if (ps.c.xaxis) {
+    ob->xdir = ps.c.xaxis;
+    AccelerateX(ob, static_cast<sword>(ps.c.xaxis * 2), 24);
   } else {
     FrictionX(ob);
   }
@@ -487,45 +499,47 @@ void KeenAirThink(objtype* ob) {
     ob->xspeed = 0;
   }
 
-  if (firebutton && !fireheld) {
-    fireheld = true;
-    switch (c.yaxis) {
+  if (ps.firebutton && !ps.fireheld) {
+    ps.fireheld = true;
+    switch (ps.c.yaxis) {
       case -1: ob->state = ST(s_keenairshootup1); return;
       case 0: ob->state = ST(s_keenairshoot1); return;
       case 1: ob->state = ST(s_keenairshootdown1); return;
     }
   }
 
-  if (pogobutton && !pogoheld) {
-    pogoheld = true;
+  if (ps.pogobutton && !ps.pogoheld) {
+    ps.pogoheld = true;
     ob->state = ST(s_keenpogo);
-    jumptime = 0;
+    ps.jumptime = 0;
     return;
   }
 
-  if (c.yaxis == -1) CheckGrabPole(ob);
+  if (ps.c.yaxis == -1) CheckGrabPole(ob);
 }
 
 // 0B80:0CC9
 void KeenBounceThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   ob->yspeed = -48;
   ytry = static_cast<sword>(ob->yspeed * 6);
-  jumptime = 24;
+  ps.jumptime = 24;
   SD_PlaySound(SND_POGOBOUNCE);
 }
 
 // 0B80:0CF5
 void KeenPogoThink(objtype* ob) {
-  if (jumptime) {
-    if (jumpbutton || static_cast<sword>(jumptime) <= 9)
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.jumptime) {
+    if (ps.jumpbutton || static_cast<sword>(ps.jumptime) <= 9)
       DoTinyGravity(ob);
     else
       DoGravity(ob);
-    if (jumptime <= tics)
-      jumptime = 0;
+    if (ps.jumptime <= tics)
+      ps.jumptime = 0;
     else
-      jumptime = static_cast<word>(jumptime - tics);
-    if (!jumptime && ob->state->nextstate) ob->state = ob->state->nextstate;
+      ps.jumptime = static_cast<word>(ps.jumptime - tics);
+    if (!ps.jumptime && ob->state->nextstate) ob->state = ob->state->nextstate;
   } else {
     if (gamestate.difficulty == gd_Easy)
       DoWeakGravity(ob);
@@ -533,9 +547,9 @@ void KeenPogoThink(objtype* ob) {
       DoGravity(ob);
   }
 
-  if (c.xaxis) {
-    if (!ob->xspeed) ob->xdir = c.xaxis;
-    AccelerateX(ob, c.xaxis, 24);
+  if (ps.c.xaxis) {
+    if (!ob->xspeed) ob->xdir = ps.c.xaxis;
+    AccelerateX(ob, ps.c.xaxis, 24);
   } else {
     xtry = static_cast<sword>(xtry + ob->xspeed * static_cast<sword>(tics));
     if (ob->xspeed > 0)
@@ -549,44 +563,45 @@ void KeenPogoThink(objtype* ob) {
     ob->xspeed = 0;
   }
 
-  if (firebutton && !fireheld) {
-    fireheld = true;
-    switch (c.yaxis) {
+  if (ps.firebutton && !ps.fireheld) {
+    ps.fireheld = true;
+    switch (ps.c.yaxis) {
       case -1: ob->state = ST(s_keenairshootup1); return;
       case 0: ob->state = ST(s_keenairshoot1); return;
       case 1: ob->state = ST(s_keenairshootdown1); return;
     }
   }
 
-  if (pogobutton && !pogoheld) {
-    pogoheld = true;
+  if (ps.pogobutton && !ps.pogoheld) {
+    ps.pogoheld = true;
     ob->state = ST(s_keenjump3);
   }
 }
 
 // 0B80:0E2D: shooting and jumping off a pole.
 void PoleActions(objtype* ob) {
-  if (c.xaxis) ob->xdir = c.xaxis;
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.xaxis) ob->xdir = ps.c.xaxis;
 
-  if (firebutton && !fireheld) {
-    fireheld = true;
-    switch (c.yaxis) {
+  if (ps.firebutton && !ps.fireheld) {
+    ps.fireheld = true;
+    switch (ps.c.yaxis) {
       case -1: ob->state = ST(s_keenpoleshootup1); break;
       case 0: ob->state = ST(s_keenpoleshoot1); break;
       case 1: ob->state = ST(s_keenpoleshootdown1); break;
     }
   }
 
-  if (jumpbutton && !jumpheld) {
-    jumpheld = true;
+  if (ps.jumpbutton && !ps.jumpheld) {
+    ps.jumpheld = true;
     SD_PlaySound(SND_JUMP);
-    ob->xspeed = polexspeed(c.xaxis);
+    ob->xspeed = polexspeed(ps.c.xaxis);
     ob->yspeed = -20;
     ob->needtoclip = cl_midclip;
-    jumptime = 10;
+    ps.jumptime = 10;
     ob->state = ST(s_keenjump1);
     ob->ydir = 1;
-    leavepoletime = static_cast<std::int32_t>(lasttimecount);
+    ps.leavepoletime = static_cast<std::int32_t>(lasttimecount);
   }
 }
 
@@ -594,7 +609,8 @@ void KeenSlideThink(objtype* ob);
 
 // 0B80:0ED3
 void KeenPoleThink(objtype* ob) {
-  switch (c.yaxis) {
+  PlayerState& ps = PlayerOf(ob);
+  switch (ps.c.yaxis) {
     case -1:
       ob->state = ST(s_keenclimb1);
       ob->ydir = -1;
@@ -608,14 +624,14 @@ void KeenPoleThink(objtype* ob) {
       break;
   }
 
-  if (c.xaxis) {
+  if (ps.c.xaxis) {
     // jumping off the pole onto a floor
     word tile = *FGSpot(ob->tilemidx, static_cast<word>(ob->tilebottom + 1));
     if (TINF_N(tile)) {
       ob->xspeed = 0;
       ob->yspeed = 0;
       ob->needtoclip = cl_midclip;
-      jumptime = 0;
+      ps.jumptime = 0;
       ob->state = ST(s_keenjump3);
       ob->ydir = 1;
       SD_PlaySound(SND_PLUMMET);
@@ -627,6 +643,7 @@ void KeenPoleThink(objtype* ob) {
 
 // 0B80:0F89
 void KeenClimbThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   word tile = *FGSpot(ob->tilemidx, ob->tiletop);
   if ((TINF_IN(tile) & 0x7F) != 1) {
     ytry = 0;
@@ -634,7 +651,7 @@ void KeenClimbThink(objtype* ob) {
     PoleActions(ob);
     return;
   }
-  switch (c.yaxis) {
+  switch (ps.c.yaxis) {
     case 0:
       ob->state = ST(s_keenpole);
       ob->ydir = 0;
@@ -650,20 +667,21 @@ void KeenClimbThink(objtype* ob) {
 
 // 0B80:101C
 void KeenSlideThink(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   word y = static_cast<word>((ob->bottom - 4 * PIXGLOBAL) >> G_T_SHIFT);
   word tile = *FGSpot(ob->tilemidx, y);
   if ((TINF_IN(tile) & 0x7F) != 1) {
     // off the bottom of the pole
     SD_PlaySound(SND_PLUMMET);
     ob->state = ST(s_keenjump3);
-    jumptime = 0;
-    ob->xspeed = polexspeed(c.xaxis);
+    ps.jumptime = 0;
+    ob->xspeed = polexspeed(ps.c.xaxis);
     ob->yspeed = 0;
     ob->needtoclip = cl_midclip;
     ob->tilebottom--;
     return;
   }
-  switch (c.yaxis) {
+  switch (ps.c.yaxis) {
     case -1:
       ob->state = ST(s_keenclimb1);
       ob->ydir = -1;
@@ -681,7 +699,8 @@ void KeenDropThink(objtype* ob) { ob->needtoclip = cl_midclip; }
 
 // 0B80:10E0: hanging on a ledge.
 void KeenHoldThink(objtype* ob) {
-  if (c.yaxis == -1 || ob->xdir == c.xaxis) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.c.yaxis == -1 || ob->xdir == ps.c.xaxis) {
     ob->state = ST(s_keenclimbup1);
     word tile;
     if (ob->xdir == 1)
@@ -693,7 +712,7 @@ void KeenHoldThink(objtype* ob) {
     else
       ytry = -128;
     if (!(TINF_IN(tile) & 0x80)) ob->priority = 3;
-  } else if (c.yaxis == 1 || (c.xaxis && ob->xdir != c.xaxis)) {
+  } else if (ps.c.yaxis == 1 || (ps.c.xaxis && ob->xdir != ps.c.xaxis)) {
     ob->state = ST(s_keenjump3);
     ob->needtoclip = cl_midclip;
   }
@@ -703,39 +722,39 @@ void KeenHoldThink(objtype* ob) {
 void KeenShootThink(objtype* ob) {
   if (ob->state == ST(s_keenshoot1)) {
     if (ob->xdir == 1)
-      SpawnShot(static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 2);
+      SpawnShot(ob, static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 2);
     else
-      SpawnShot(static_cast<word>(ob->x - 8 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 6);
+      SpawnShot(ob, static_cast<word>(ob->x - 8 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 6);
   }
   if (ob->state == ST(s_keenairshoot2)) {
     if (ob->xdir == 1)
-      SpawnShot(static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 2 * PIXGLOBAL), 2);
+      SpawnShot(ob, static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 2 * PIXGLOBAL), 2);
     else
-      SpawnShot(ob->x, static_cast<word>(ob->y + 2 * PIXGLOBAL), 6);
+      SpawnShot(ob, ob->x, static_cast<word>(ob->y + 2 * PIXGLOBAL), 6);
   }
   if (ob->state == ST(s_keenairshootdown2))
-    SpawnShot(static_cast<word>(ob->x + 8 * PIXGLOBAL), static_cast<word>(ob->y + 18 * PIXGLOBAL), 4);
+    SpawnShot(ob, static_cast<word>(ob->x + 8 * PIXGLOBAL), static_cast<word>(ob->y + 18 * PIXGLOBAL), 4);
   if (ob->state == ST(s_keenairshootup2))
-    SpawnShot(static_cast<word>(ob->x + 5 * PIXGLOBAL), static_cast<word>(ob->y - 10 * PIXGLOBAL), 0);
+    SpawnShot(ob, static_cast<word>(ob->x + 5 * PIXGLOBAL), static_cast<word>(ob->y - 10 * PIXGLOBAL), 0);
   if (ob->state == ST(s_keenshootup1))
-    SpawnShot(static_cast<word>(ob->x + 5 * PIXGLOBAL), static_cast<word>(ob->y - 10 * PIXGLOBAL), 0);
+    SpawnShot(ob, static_cast<word>(ob->x + 5 * PIXGLOBAL), static_cast<word>(ob->y - 10 * PIXGLOBAL), 0);
   if (ob->state == ST(s_keenpoleshoot1)) {
     if (ob->xdir == 1)
-      SpawnShot(static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 2);
+      SpawnShot(ob, static_cast<word>(ob->x + 16 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 2);
     else
-      SpawnShot(static_cast<word>(ob->x - 8 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 6);
+      SpawnShot(ob, static_cast<word>(ob->x - 8 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 6);
   }
   if (ob->state == ST(s_keenpoleshootup1)) {
     if (ob->xdir == 1)
-      SpawnShot(static_cast<word>(ob->x + 6 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 0);
+      SpawnShot(ob, static_cast<word>(ob->x + 6 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 0);
     else
-      SpawnShot(static_cast<word>(ob->x + 12 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 0);
+      SpawnShot(ob, static_cast<word>(ob->x + 12 * PIXGLOBAL), static_cast<word>(ob->y + 4 * PIXGLOBAL), 0);
   }
   if (ob->state == ST(s_keenpoleshootdown1)) {
     if (ob->xdir == 1)
-      SpawnShot(static_cast<word>(ob->x + 6 * PIXGLOBAL), static_cast<word>(ob->y + 24 * PIXGLOBAL), 4);
+      SpawnShot(ob, static_cast<word>(ob->x + 6 * PIXGLOBAL), static_cast<word>(ob->y + 24 * PIXGLOBAL), 4);
     else
-      SpawnShot(static_cast<word>(ob->x + 12 * PIXGLOBAL), static_cast<word>(ob->y + 24 * PIXGLOBAL), 4);
+      SpawnShot(ob, static_cast<word>(ob->x + 12 * PIXGLOBAL), static_cast<word>(ob->y + 24 * PIXGLOBAL), 4);
   }
 }
 
@@ -769,20 +788,25 @@ void T_PulledUp(objtype* ob) {
 void KeenDieThink(objtype* ob) {
   DoWeakGravity(ob);
   xtry = static_cast<sword>(ob->xspeed * static_cast<sword>(tics));
-  if (!OnScreen(ob)) playstate = ex_died;
+  if (!OnScreen(ob)) {
+    if (numplayers > 1)
+      CoopKeenGone(ob);
+    else
+      playstate = ex_died;
+  }
 }
 
 // 0B80:1775: items placed as foreground tiles.
-void GetBonus(word tilex, word tiley, int type) {
+void GetBonus(objtype* ob, word tilex, word tiley, int type) {
   RF_MemToMap(&zeromap, 1, tilex, tiley, 1, 1);
   SD_PlaySound(bonussound(type));
-  GivePoints(bonuspoints(type));
+  GivePoints(ob, bonuspoints(type));
   if (type < 4)
     gamestate.keys[type]++;
   else if (type == 10)
     gamestate.lives++;
   else if (type == 11)
-    gamestate.ammo = static_cast<sword>(gamestate.ammo + ammopickup(gamestate.difficulty));
+    PlayerOf(ob).ammo = static_cast<sword>(PlayerOf(ob).ammo + ammopickup(gamestate.difficulty));
 
   // the score that rises up
   GetNewObj(true);
@@ -798,12 +822,13 @@ void GetBonus(word tilex, word tiley, int type) {
 }
 
 // 0B80:183F
-void GetDrop(word tilex, word tiley) {
+void GetDrop(objtype* ob, word tilex, word tiley) {
+  PlayerState& ps = PlayerOf(ob);
   RF_MemToMap(&zeromap, 1, tilex, tiley, 1, 1);
   SD_PlaySound(SND_GETWATER);
   SpawnDropSplash(tilex, tiley);
-  if (++gamestate.drops == 100) {
-    gamestate.drops = 0;
+  if (++ps.drops == 100) {
+    ps.drops = 0;
     SD_PlaySound(SND_EXTRAKEEN);
     gamestate.lives++;
     GetNewObj(true);
@@ -821,6 +846,7 @@ void GetDrop(word tilex, word tiley) {
 
 // 0B80:14A9
 void KeenContact(objtype* ob, objtype* hit) {
+  PlayerState& ps = PlayerOf(ob);
   switch (hit->obclass) {
     case bonusobj: {
       int type = hit->temp1;
@@ -829,13 +855,13 @@ void KeenContact(objtype* ob, objtype* hit) {
       hit->obclass = inertobj;
       hit->priority = 3;
       hit->shapenum = bonusshape(type);
-      GivePoints(bonuspoints(type));
+      GivePoints(ob, bonuspoints(type));
       if (type < 4)
         gamestate.keys[type]++;
       else if (type == 10)
         gamestate.lives++;
       else if (type == 11)
-        gamestate.ammo = static_cast<sword>(gamestate.ammo + ammopickup(gamestate.difficulty));
+        ps.ammo = static_cast<sword>(ps.ammo + ammopickup(gamestate.difficulty));
       ChangeState(hit, ST(s_bonusrise));
       break;
     }
@@ -854,7 +880,7 @@ void KeenContact(objtype* ob, objtype* hit) {
       if (hit->temp4 != bounderobj) break;
       [[fallthrough]];
     case platformobj:
-      if (!gamestate.riding) ClipToSpriteTop(ob, hit);
+      if (!ps.riding) ClipToSpriteTop(ob, hit);
       break;
     case bounderobj:
       ClipToSprite(ob, hit, false);
@@ -874,25 +900,26 @@ void KeenContact(objtype* ob, objtype* hit) {
 
 // 0B80:1632: contact while on a pole, climbing or hanging.
 void KeenPosContact(objtype* ob, objtype* hit) {
+  PlayerState& ps = PlayerOf(ob);
   switch (hit->obclass) {
     case platformobj:
       ob->needtoclip = cl_midclip;
       ChangeState(ob, ST(s_keenjump3));
       ob->yspeed = ob->xspeed = 0;
-      jumptime = 0;
+      ps.jumptime = 0;
       ClipToSpriteTop(ob, hit);
       break;
     case madmushroomobj:
     case arachnutobj:
     case berkeloidobj:
-      KillKeen();
+      KillKeen(ob);
       break;
     case bounderobj:
       ob->priority = 1;
       ob->needtoclip = cl_midclip;
       ChangeState(ob, ST(s_keenjump3));
       ob->yspeed = ob->xspeed = 0;
-      jumptime = 0;
+      ps.jumptime = 0;
       ClipToSprite(ob, hit, false);
       break;
     default:
@@ -907,15 +934,16 @@ void KeenSimpleReact(objtype* ob) {
 
 // 0B80:1AA2
 void KeenStandReact(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (!ob->hitnorth) {
     // walked off an edge
     SD_PlaySound(SND_PLUMMET);
     ob->xspeed = static_cast<sword>(ob->xdir * 8);
     ob->yspeed = 0;
     ChangeState(ob, ST(s_keenjump3));
-    jumptime = 0;
+    ps.jumptime = 0;
   } else if ((ob->hitnorth & ~7) == 8) {
-    KillKeen();
+    KillKeen(ob);
   } else if (ob->hitnorth == 41) {
     xtry = static_cast<sword>(tics * 8);
     ytry = 0;
@@ -932,14 +960,15 @@ void KeenStandReact(objtype* ob) {
 
 // 0B80:1B5F
 void KeenWalkReact(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (!ob->hitnorth) {
     SD_PlaySound(SND_PLUMMET);
     ob->xspeed = static_cast<sword>(ob->xdir * 8);
     ob->yspeed = 0;
     ChangeState(ob, ST(s_keenjump3));
-    jumptime = 0;
+    ps.jumptime = 0;
   } else if ((ob->hitnorth & ~7) == 8) {
-    KillKeen();
+    KillKeen(ob);
   } else if (ob->hitnorth == 41) {
     xtry = static_cast<sword>(tics * 8);
     ytry = 0;
@@ -960,6 +989,7 @@ void KeenWalkReact(objtype* ob) {
 
 // Shared head-bump handling of KeenAirReact and KeenPogoReact.
 void HitCeiling(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if (ob->hitsouth == 17) {
     // jumping up through a pole hole
     ob->y = static_cast<word>(ob->y - 2 * PIXGLOBAL);
@@ -974,12 +1004,13 @@ void HitCeiling(objtype* ob) {
     } else {
       ob->yspeed = 0;
     }
-    jumptime = 0;
+    ps.jumptime = 0;
   }
 }
 
 // 0B80:1C48
 void KeenAirReact(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if ((ob->hiteast && ob->xdir == -1) || (ob->hitwest && ob->xdir == 1)) ob->xspeed = 0;
 
   if (ob->hitsouth) HitCeiling(ob);
@@ -987,14 +1018,14 @@ void KeenAirReact(objtype* ob) {
   if (ob->hitnorth) {
     ob->ymove = 0;
     if ((ob->hitnorth & ~7) == 8) {
-      KillKeen();
-    } else if (!(ob->hitnorth == 25 && jumptime)) {
+      KillKeen(ob);
+    } else if (!(ob->hitnorth == 25 && ps.jumptime)) {
       ob->temp1 = ob->temp2 = 0;
       if (ob->state == ST(s_keenairshoot1))
         ChangeState(ob, ST(s_keenshoot1));
       else if (ob->state == ST(s_keenairshootup1))
         ChangeState(ob, ST(s_keenshootup1));
-      else if (c.xaxis)
+      else if (ps.c.xaxis)
         ChangeState(ob, ST(s_keenwalk1));
       else
         ChangeState(ob, ST(s_keenstand));
@@ -1006,7 +1037,7 @@ void KeenAirReact(objtype* ob) {
     word graby = static_cast<word>(((ob->top - 4 * PIXGLOBAL) & 0xFF00) + 4 * PIXGLOBAL);
     word ty = static_cast<word>((graby >> G_T_SHIFT) - 1);
     if (oldtop < graby && ob->top >= graby) {
-      if (c.xaxis == -1) {
+      if (ps.c.xaxis == -1) {
         word* map = FGSpot(ob->tileleft, ty);
         if (ob->hiteast) map--;
         word tile = *map;
@@ -1019,7 +1050,7 @@ void KeenAirReact(objtype* ob) {
           ob->yspeed = ob->ymove = 0;
           ChangeState(ob, ST(s_keenholdon));
         }
-      } else if (c.xaxis == 1) {
+      } else if (ps.c.xaxis == 1) {
         word* map = FGSpot(ob->tileright, ty);
         if (ob->hitwest) map++;
         word tile = *map;
@@ -1041,6 +1072,7 @@ void KeenAirReact(objtype* ob) {
 
 // 0B80:1F81
 void KeenPogoReact(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
   if ((ob->hiteast && ob->xdir == -1) || (ob->hitwest && ob->xdir == 1)) ob->xspeed = 0;
 
   if (ob->hitsouth) HitCeiling(ob);
@@ -1048,10 +1080,10 @@ void KeenPogoReact(objtype* ob) {
   if (ob->hitnorth) {
     ob->ymove = 0;
     if ((ob->hitnorth & ~7) == 8) {
-      KillKeen();
-    } else if (!(ob->hitnorth == 25 && jumptime)) {
+      KillKeen(ob);
+    } else if (!(ob->hitnorth == 25 && ps.jumptime)) {
       ob->yspeed = -48;
-      jumptime = 24;
+      ps.jumptime = 24;
       SD_PlaySound(SND_POGOBOUNCE);
       ChangeState(ob, ST(s_keenpogo));
     }
@@ -1077,52 +1109,57 @@ void KeenPoleReact(objtype* ob) {
 }  // namespace
 
 // 0B80:000E
-void SpawnKeen(word tilex, word tiley, sword dir) {
-  player->obclass = keenobj;
-  player->active = ac_allways;
-  player->priority = 1;
-  player->x = static_cast<word>(tilex << G_T_SHIFT);
-  player->y = static_cast<word>((tiley << G_T_SHIFT) - 241);
-  player->xdir = dir;
-  player->ydir = 1;
-  NewState(player, ST(s_keenstand));
+void SpawnKeenObj(objtype* ob, word tilex, word tiley, sword dir) {
+  ob->obclass = keenobj;
+  ob->active = ac_allways;
+  ob->priority = 1;
+  ob->x = static_cast<word>(tilex << G_T_SHIFT);
+  ob->y = static_cast<word>((tiley << G_T_SHIFT) - 241);
+  ob->xdir = dir;
+  ob->ydir = 1;
+  NewState(ob, ST(s_keenstand));
 }
 
-// 0B80:13E9
-void KillKeen() {
-  if (invincible || godmode) return;
-  if (player->state == ST(s_keendead)) return;
+void SpawnKeen(word tilex, word tiley, sword dir) { SpawnKeenObj(player, tilex, tiley, dir); }
 
-  moonok = 0;
-  invincible = 30;
-  lockscroll = true;
-  player->needtoclip = cl_noclip;
-  player->priority = 3;
+// 0B80:13E9
+void KillKeen(objtype* ob) {
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.invincible || ps.flicker || godmode) return;
+  if (ob->state == ST(s_keendead)) return;
+
+  ps.moonok = 0;
+  ps.invincible = 30;
+  // port: in co-op the camera goes on following his brother
+  if (numplayers == 1) lockscroll = true;
+  ob->needtoclip = cl_noclip;
+  ob->priority = 3;
   if (mapon == 17) {
     if (US_RndT() < 0x80)
-      ChangeState(player, ST(s_keensuitdie1));
+      ChangeState(ob, ST(s_keensuitdie1));
     else
-      ChangeState(player, ST(s_keensuitdie2));
+      ChangeState(ob, ST(s_keensuitdie2));
   } else {
     if (US_RndT() < 0x80)
-      ChangeState(player, ST(s_keendie1));
+      ChangeState(ob, ST(s_keendie1));
     else
-      ChangeState(player, ST(s_keendie2));
+      ChangeState(ob, ST(s_keendie2));
   }
   SD_PlaySound(SND_KEENDEAD);
-  player->yspeed = -40;
-  player->xspeed = 16;
+  ob->yspeed = -40;
+  ob->xspeed = 16;
 }
 
 // 0B80:16CD
 void HandleRiding(objtype* ob) {
-  objtype* plat = gamestate.riding;
+  PlayerState& ps = PlayerOf(ob);
+  objtype* plat = ps.riding;
   if (ob->right < plat->left || ob->left > plat->right) {
-    gamestate.riding = nullptr;
+    ps.riding = nullptr;
     return;
   }
   if (ob->ymove < 0) {
-    gamestate.riding = nullptr;
+    ps.riding = nullptr;
     if (plat->ymove < 0) {
       xtry = 0;
       ytry = plat->ymove;
@@ -1140,7 +1177,7 @@ void HandleRiding(objtype* ob) {
     ob->x = static_cast<word>(ob->x | (plat->x & 0x1F));
 
   if (ob->hitsouth) {
-    gamestate.riding = nullptr;
+    ps.riding = nullptr;
     return;
   }
   ob->hitnorth = 25;
@@ -1148,7 +1185,8 @@ void HandleRiding(objtype* ob) {
 
 // 0B80:18E9
 void CheckInTiles(objtype* ob) {
-  if (moonok == 1) moonok = 0;
+  PlayerState& ps = PlayerOf(ob);
+  if (ps.moonok == 1) ps.moonok = 0;
 
   word* map = FGSpot(ob->tileleft, ob->tiletop);
   word rowdelta = static_cast<word>(mapwidth - (ob->tileright - ob->tileleft + 1));
@@ -1158,10 +1196,10 @@ void CheckInTiles(objtype* ob) {
       if (!intile) continue;
       switch (intile) {
         case 3:
-          KillKeen();
+          KillKeen(ob);
           break;
         case 4:
-          GetDrop(x, y);
+          GetDrop(ob, x, y);
           break;
         case 7:
         case 8:
@@ -1181,7 +1219,7 @@ void CheckInTiles(objtype* ob) {
           break;
         }
         case 16:
-          if (!moonok) moonok = 1;
+          if (!ps.moonok) ps.moonok = 1;
           break;
         case 21:
         case 22:
@@ -1191,7 +1229,7 @@ void CheckInTiles(objtype* ob) {
         case 26:
         case 27:
         case 28:
-          GetBonus(x, y, static_cast<int>(intile - 21 + 4));
+          GetBonus(ob, x, y, static_cast<int>(intile - 21 + 4));
           break;
         default:
           break;
@@ -1199,10 +1237,6 @@ void CheckInTiles(objtype* ob) {
     }
   }
 }
-
-// Moon state exit (K4 "mooning" easter egg) shares this global.
-word& KeenMoonOk() { return moonok; }
-word& KeenJumpTime() { return jumptime; }
 
 CK_FUNC(0x0B80, 0x0234, KeenWalkSound1);
 CK_FUNC(0x0B80, 0x024C, KeenWalkSound2);
