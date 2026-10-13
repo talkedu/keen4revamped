@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to create, e.g. v1.1
+        description: Release tag to create, e.g. v1.2
         required: true
-        default: v1.1
+        default: v1.2
   push:
     tags: ['v*']
 
@@ -57,19 +57,21 @@ jobs:
         if: matrix.preset == 'windows-cross'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
-          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale"
+          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale" "$dir/tools/keen4-curate"
           cp build/windows/keen4.exe build/windows/keen4-extract.exe README.md "$dir"
-          cp docs/ART.md "$dir/docs"
+          cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
+          cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           zip -qr "$dir.zip" "$dir"
       - name: Package (Linux)
         if: matrix.preset == 'release'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
-          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale"
+          mkdir -p "$dir/docs" "$dir/tools/keen4-upscale" "$dir/tools/keen4-curate"
           cp build/release/keen4 build/release/keen4-extract README.md "$dir"
-          cp docs/ART.md "$dir/docs"
+          cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
+          cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           tar czf "$dir.tar.gz" "$dir"
       - uses: actions/upload-artifact@v4
         with:
@@ -93,16 +95,18 @@ jobs:
           name: keen4revamped ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           body: |
-            keen4revamped v1.1 adds the remaster renderer: Keen 4 in 16:9 at your screen's resolution, with smooth motion and a pipeline for new art. Levels and physics are unchanged.
+            keen4revamped v1.2 adds two-player co-op, gamepads, Brazilian Portuguese, and optional remastered audio and hand-curated art. Levels and physics are unchanged.
 
-            - The remaster view is now the default: 356x200 in 16:9 at the window's native resolution, the original map border kept hidden, and the camera and sprites interpolated between game frames at the display's refresh rate. The status window and dialogs are drawn as in the original.
-            - F11 switches between the remaster and the classic 320x200 view (or start with `--classic`). The classic view is unchanged from v1.0.
-            - Art: the remaster loads new art from `art/manifest.txt` (`--art DIR`, F12 reloads it). Anything without new art is the original scaled 4x (Scale4x, or `--nearest` for plain pixels). Collision boxes always come from the original, so art cannot change gameplay.
-            - New tools for making that art from your own copy of the game: `keen4-extract` exports every tile, sprite and picture as PNG, and `tools/keen4-upscale/keen4_upscale.py` builds a 4x set with Scale4x or the Real-ESRGAN AI upscaler, upscaling tiles together with their level neighbours so edges match, and writes a review page. See docs/ART.md.
-            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the upscale script and the docs.
+            - Co-op: CO-OP GAME in the main menu starts a game for two, Billy and his twin brother Tom, one on the keyboard and one on a gamepad or each on a gamepad of his own. Lives, keys and rescued council members are shared; score, ammo and raindrops are each player's own. A fallen Keen comes back next to his brother, the screen splits when the Keens are far apart, and co-op games save and load like any other. `/TEDLEVEL n COOP` jumps to a level in co-op.
+            - Gamepads: Xbox, PlayStation, Switch Pro and other pads SDL knows work as soon as they are plugged in, also mid-game, in play and in menus. The control panel's Gravis gamepad option remaps the buttons.
+            - Languages: the game's menus, messages, help, story and ending can be shown in English or Brazilian Portuguese. Pick it with the LANGUAGE item of the main menu or `--lang en|pt-BR`.
+            - Remastered audio: `--remastered-audio` plays new songs and effects listed in `audio/manifest.txt` instead of the emulated AdLib, with Shift+F11 to switch back and `--music-volume`/`--sfx-volume`. See docs/AUDIO.md.
+            - Curated art: `--curated` layers hand-made art from `art-curated/` over the upscaled set, managed with the new `tools/keen4-curate/keen4_curate.py`; Shift+F12 shows sprite hitboxes. See docs/ART.md.
+            - Smoother remaster: the inchworm and other step-moving enemies now glide at a steady pace instead of jittering.
+            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the art tools and the docs. macOS builds are paused for this release.
 
-            Game data and art are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Art made from it with the tools stays on your machine. See README.md.
+            Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Co-op needs at least one gamepad. See README.md.
 
-            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.0...${{ env.TAG }}
+            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.1...${{ env.TAG }}
           files: dist/*
           fail_on_unmatched_files: true
