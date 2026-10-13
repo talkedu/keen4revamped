@@ -132,6 +132,7 @@ std::string PlatformAssetSuffix() {
 
 std::string ClientId() { return Env("KEEN4_GITHUB_CLIENT_ID", KEEN4_GITHUB_CLIENT_ID); }
 std::string Repo() { return Env("KEEN4_UPDATE_REPO", KEEN4_UPDATE_REPO); }
+bool IsGitHubApp() { return ClientId().compare(0, 2, "Iv") == 0; }
 
 std::string LoadToken() {
   // a token in the environment (for scripted runs) wins over the saved one

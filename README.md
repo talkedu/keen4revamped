@@ -173,7 +173,10 @@ in Program Files asks for administrator rights to replace its files; on Linux th
 must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs libcurl, which
 desktop distributions have.
 
-Builds sign in with a GitHub OAuth app that has device flow enabled. Its client id is set when
+Builds sign in with a GitHub OAuth app or GitHub App that has device flow enabled. A GitHub
+App needs the Contents (read-only) repository permission and must be installed on the
+repository; turn off user token expiration in its optional features, or players sign in again
+every 8 hours. Its client id is set when
 configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository variable
 `KEEN4_GITHUB_CLIENT_ID`); without one the item says updates are off. `KEEN4_GITHUB_CLIENT_ID`,
 `KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
