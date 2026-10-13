@@ -1,5 +1,36 @@
 cmake_minimum_required(VERSION 3.25)
-project(keen4revamped VERSION 1.2.0 LANGUAGES C CXX)
+
+# The version is not kept in the source tree. The release workflow passes the
+# version it is about to tag (-DKEEN4_VERSION=x.y.z); other builds use the
+# latest v* git tag, or 0.0.0 without one.
+set(KEEN4_VERSION "" CACHE STRING "Version baked into the build (empty: latest v* git tag)")
+set(_keen4_version "${KEEN4_VERSION}")
+if(NOT _keen4_version)
+  execute_process(
+    COMMAND git describe --tags --abbrev=0 --match "v[0-9]*"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE _keen4_version OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET RESULT_VARIABLE _keen4_git_result)
+  if(NOT _keen4_git_result EQUAL 0)
+    set(_keen4_version "")
+  endif()
+endif()
+# "v1.2" and "1.2.1" both become x.y.z.
+if(_keen4_version MATCHES "^v?([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$")
+  set(_keen4_patch "${CMAKE_MATCH_4}")
+  if(_keen4_patch STREQUAL "")
+    set(_keen4_patch 0)
+  endif()
+  set(_keen4_version "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${_keen4_patch}")
+else()
+  if(KEEN4_VERSION)
+    message(FATAL_ERROR "KEEN4_VERSION must look like 1.2.3, got '${KEEN4_VERSION}'")
+  endif()
+  set(_keen4_version 0.0.0)
+endif()
+
+project(keen4revamped VERSION ${_keen4_version} LANGUAGES C CXX)
+message(STATUS "keen4revamped version ${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +66,7 @@ target_include_directories(audio_codecs SYSTEM PUBLIC third_party)
 add_library(keen4_engine STATIC
   src/engine/version.cpp
   src/engine/datafiles.cpp
+  src/engine/gamedata_search.cpp
   src/engine/png_writer.cpp
   src/engine/lang.cpp
   src/lang/pt_br.cpp
@@ -63,6 +95,9 @@ target_include_directories(keen4_engine PUBLIC src)
 # stb_image (public domain / MIT) loads PNG art; its own warnings are not ours.
 target_include_directories(keen4_engine SYSTEM PRIVATE third_party/stb)
 target_link_libraries(keen4_engine PUBLIC nuked_opl3 PRIVATE audio_codecs)
+if(WIN32)
+  target_link_libraries(keen4_engine PRIVATE advapi32)  # Steam location in the registry
+endif()
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 set_source_files_properties(src/engine/version.cpp PROPERTIES
   COMPILE_DEFINITIONS "KEEN4_VERSION=\"${PROJECT_VERSION}\"")
@@ -122,6 +157,7 @@ if(KEEN4_WITH_SDL3)
   target_compile_definitions(keen4 PRIVATE KEEN4_WITH_SDL3=1)
   if(WIN32)
     set_target_properties(keen4 PROPERTIES WIN32_EXECUTABLE ON)
+    target_sources(keen4 PRIVATE packaging/windows/keen4.rc)
   endif()
 endif()
 

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <vector>
 
+#include "engine/datafiles.h"
+#include "engine/gamedata_search.h"
 #include "engine/lang.h"
 #include "engine/version.h"
 #include "game/coop_split.h"
@@ -322,6 +324,35 @@ int main() {
     VW_DrawPropString("\xC1");
     CHECK(ink(17) == 0 && ink(18) == 2 && ink(19) == 2 && ink(20) == 3 && ink(22) == 5);
     grsegs[STARTFONT] = saved;
+  }
+
+  // Steam data search: libraryfolders.vdf lists extra libraries (escaped
+  // Windows paths), and the install is found whatever its folder-name case.
+  {
+    using namespace keen4::files;
+    std::vector<std::string> paths = ParseLibraryFolders(
+        "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n"
+        "\t\t\"apps\"\n\t\t{\n\t\t\t\"7\"\t\t\"123\"\n\t\t}\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"/run/media/games\"\n\t}\n}\n");
+    CHECK(paths.size() == 2 && paths[0] == "C:\\Program Files (x86)\\Steam" && paths[1] == "/run/media/games");
+
+    namespace fs = std::filesystem;
+    fs::path tmp = fs::temp_directory_path() / "keen4_steam_test";
+    fs::remove_all(tmp);
+    fs::path root = tmp / "Steam", library = tmp / "Library2";
+    fs::create_directories(root / "steamapps");
+    fs::path game = library / "SteamApps" / "common" / "Commander Keen" / "BASE4";
+    fs::create_directories(game);
+    std::ofstream(game / "Keen4e.exe") << "x";
+    std::string escaped;
+    for (char c : library.string()) escaped += c == '\\' ? std::string("\\\\") : std::string(1, c);
+    std::ofstream(root / "steamapps" / "libraryfolders.vdf")
+        << "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"" << escaped << "\"\n\t}\n}\n";
+    std::vector<std::string> libraries = SteamLibraries({root.string(), root.string(), (tmp / "missing").string()});
+    CHECK(libraries.size() == 2);
+    CHECK(KeenInLibrary(root.string()).empty());
+    std::string found = libraries.size() == 2 ? KeenInLibrary(libraries[1]) : "";
+    CHECK(!found.empty() && fs::equivalent(found, game) && !FindIn(found, "KEEN4E.EXE").empty());
+    fs::remove_all(tmp);
   }
 
   if (failures == 0) std::printf("all tests passed\n");

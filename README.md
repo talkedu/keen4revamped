@@ -18,6 +18,22 @@ This repository contains no game data. The port loads the original `.CK4` files 
 copy you own (for example the Steam release). Never commit game files, the original
 executable, or anything extracted from it; `.gitignore` blocks the usual names.
 
+## Installing
+
+Each [release](https://github.com/talkedu/keen4revamped/releases) has installers next to the
+plain archives. Neither includes game data; after installing, point the game at your copy as
+described in [Running](#running).
+
+- Windows: run `keen4revamped-vX.Y-windows-x64-installer.exe`. It installs to Program Files,
+  adds Start menu and desktop shortcuts and an entry in Settings > Apps for uninstalling.
+- Linux: run `sh keen4revamped-vX.Y-linux-x64-installer.sh` (no root needed). It installs to
+  `~/.local/lib/keen4revamped`, links `keen4` and `keen4-extract` into `~/.local/bin` and adds
+  an app-menu entry and a desktop shortcut. `--no-desktop-shortcut` skips the shortcut,
+  `--prefix DIR` installs somewhere else, and `~/.local/lib/keen4revamped/uninstall.sh`
+  removes it again. The same `install.sh` is in the `.tar.gz`.
+
+Uninstalling removes only the installed files; saved games and the configuration stay.
+
 ## Building
 
 Requires CMake 3.25+ and a C++20 compiler (MSVC 2022, GCC 12+, Clang 15+).
@@ -35,6 +51,17 @@ WSL, the "run on Windows" task builds it and starts it on the Windows host.
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).
 
+The version is not stored in the source: a build takes it from the latest `v*` git tag
+(0.0.0 without one), and `-DKEEN4_VERSION=1.2.3` overrides it.
+
+## Releases
+
+Every pull request merged to main becomes a release. The release workflow bumps the version
+from the latest `v*` tag, builds and tests Windows and Linux, and publishes the packages on
+the Releases page with the pull request's title and description as the notes. Start the
+pull request title with `[MAJOR]`, `[MINOR]` or `[PATCH]` to pick the bump, for example
+`[MINOR] Add a level editor`; a title without one is released as a patch.
+
 ## Decompilation tools
 
 Python scripts in [tools/decomp](tools/decomp) unpack the executable, extract the data
@@ -43,16 +70,34 @@ header tables and produce disassembly listings. Progress notes are in
 
 ## Running
 
-Put `KEEN4E.EXE` (version 1.4 EGA) and the `.CK4` files in a folder and run:
+The game needs your own copy of Keen 4: `KEEN4E.EXE` (version 1.4 EGA) and its `.CK4`
+files. If you own "Commander Keen" on Steam, just install it there and run `keen4`; the
+game files are found automatically. Otherwise point the game at a folder with them:
 
 ```sh
 keen4 --data path/to/keen4
 ```
 
-Without `--data` the game looks in the current folder, `./gamedata`, and on Windows the
-default Steam folder. It never writes there: configuration, saved games and high scores go to
-`%APPDATA%\keen4revamped` on Windows or `~/.local/share/keen4revamped` elsewhere
-(or `--save DIR`).
+or set `KEEN4_DATA_DIR=path/to/keen4` once in your environment. The game looks, in order:
+
+1. `--data DIR`
+2. the `KEEN4_DATA_DIR` environment variable
+3. the current folder, then `gamedata/` and `base4/` under it, then the same three next to
+   the `keen4` executable
+4. `steamapps/common/Commander Keen/base4` in every Steam library: the Steam install itself
+   and each extra library listed in its `steamapps/libraryfolders.vdf`. Steam is looked
+   for in the registry and `Program Files (x86)\Steam` on Windows; `~/.steam/steam`,
+   `~/.local/share/Steam` and the Flatpak and Snap folders on Linux (SteamOS, Bazzite and
+   other distributions); `~/Library/Application Support/Steam` on macOS
+
+File names are matched without regard to case, so `Keen4e.exe` and `Audio.ck4` from Steam
+work as well as `KEEN4E.EXE` and `AUDIO.CK4` from a DOS copy. If nothing is found, `keen4`
+says so and lists the folders it tried. `keen4-extract` searches the same way when `--data`
+is left out.
+
+The game data is only read, never changed, and is not part of this project or its releases.
+Configuration, saved games and high scores go to `%APPDATA%\keen4revamped` on Windows or
+`~/.local/share/keen4revamped` elsewhere (or `--save DIR`, or `KEEN4_SAVE_DIR`).
 
 The default renderer is the remaster (milestone 6): a 16:9 view at the window's resolution,
 the upscaled art in `art/` (or the original scaled 4x), and smooth motion between frames.

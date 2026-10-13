@@ -1,0 +1,2 @@
+// Gives keen4.exe its icon in Explorer, the taskbar and shortcuts.
+1 ICON "../icon/keen4revamped.ico"

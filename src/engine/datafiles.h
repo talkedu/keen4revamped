@@ -15,6 +15,9 @@ const std::string& DataDir();
 // Returns an empty string if there is no such file.
 std::string Find(const std::string& name);
 
+// The same for a file (or, with `directory`, a folder) inside `dir`.
+std::string FindIn(const std::string& dir, const std::string& name, bool directory = false);
+
 // Reads a whole data file. Returns false if it does not exist.
 bool ReadAll(const std::string& name, std::vector<std::uint8_t>* out);
 

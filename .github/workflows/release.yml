@@ -1,29 +1,111 @@
 name: Release
 
-# Builds keen4 for Windows and Linux and publishes a GitHub release.
-# Run it from the Actions tab (or push a v* tag). Game data is never packaged:
-# players supply their own copy of Keen 4.
+# Every merge to main is released: the version is bumped from the latest v*
+# tag, Windows and Linux are built with that version, and a GitHub release is
+# published with notes from the merged pull request.
+#
+# The pull request title picks the bump: "[MAJOR] Title", "[MINOR] Title" or
+# "[PATCH] Title". A title without a tag is a patch.
+#
+# Game data is never packaged: players supply their own copy of Keen 4.
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag to create, e.g. v1.2
-        required: true
-        default: v1.2
   push:
-    tags: ['v*']
+    branches: [main]
 
 permissions:
   contents: write
+  pull-requests: read
 
-env:
-  TAG: ${{ inputs.tag || github.ref_name }}
-
-# Linux and Windows build on the self-hosted runner in WSL (label "wsl");
-# Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
-# it needs a GitHub-hosted runner, which the Actions spending limit blocks.
 jobs:
+  version:
+    runs-on: [self-hosted, Linux, X64, wsl]
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+      version: ${{ steps.next.outputs.version }}
+      notes: ${{ steps.next.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the next version and reserve its tag
+        id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+                 --jq '[.[] | select(.merged_at != null)] | .[0] // empty')
+          if [ -n "$pr" ]; then
+            title=$(jq -r .title <<<"$pr")
+            body=$(jq -r '.body // ""' <<<"$pr")
+            number=$(jq -r .number <<<"$pr")
+          else
+            # pushed straight to main, not through a pull request
+            title=$(git log -1 --format=%s "$GITHUB_SHA")
+            body=$(git log -1 --format=%b "$GITHUB_SHA")
+            number=
+          fi
+
+          bump=patch
+          shopt -s nocasematch
+          if [[ $title =~ ^[[:space:]]*\[(major|minor|patch)\][[:space:]]*(.*)$ ]]; then
+            bump=${BASH_REMATCH[1],,}
+            title=${BASH_REMATCH[2]}
+          fi
+          shopt -u nocasematch
+
+          # The tag is pushed before the build, so merges released at the same
+          # time never pick the same version: if another run took it, bump again.
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet --force --tags origin
+            prev=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -n1 || true)
+            IFS=. read -r major minor patch <<<"${prev#v}"
+            major=${major:-0} minor=${minor:-0} patch=${patch:-0}
+            case $bump in
+              major) major=$((major + 1)) minor=0 patch=0 ;;
+              minor) minor=$((minor + 1)) patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            version="$major.$minor.$patch"
+            tag="v$version"
+            git tag "$tag" "$GITHUB_SHA"
+            if git push --quiet origin "refs/tags/$tag"; then
+              break
+            fi
+            git tag -d "$tag"
+            if [ "$attempt" = 5 ]; then
+              echo "::error::could not reserve a release tag"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Releasing $tag ($bump bump from ${prev:-no previous tag})"
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "notes<<KEEN4_NOTES_EOF"
+            echo "## $title"
+            echo
+            if [ -n "$body" ]; then
+              printf '%s\n\n' "$body"
+            fi
+            echo "Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release). See README.md."
+            echo
+            if [ -n "$number" ]; then
+              echo "Pull request: https://github.com/$GITHUB_REPOSITORY/pull/$number"
+            fi
+            if [ -n "$prev" ]; then
+              echo "Full changes: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$tag"
+            fi
+            echo "KEEN4_NOTES_EOF"
+          } >>"$GITHUB_OUTPUT"
+
+  # Linux and Windows build on the self-hosted runner in WSL (label "wsl");
+  # Windows is cross-compiled there with MinGW-w64. macOS is disabled for now:
+  # it needs a GitHub-hosted runner, which the Actions spending limit blocks.
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +117,9 @@ jobs:
             runs-on: [self-hosted, Linux, X64, wsl]
             preset: release
     runs-on: ${{ matrix.runs-on }}
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install SDL3 build dependencies
@@ -47,7 +132,7 @@ jobs:
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
         # the OAuth app the in-game updater signs in with (see README, Updating)
-        run: cmake --preset ${{ matrix.preset }} -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
+        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION" -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
@@ -64,50 +149,66 @@ jobs:
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           zip -qr "$dir.zip" "$dir"
+      - name: Installer (Windows)
+        # NSIS builds the setup .exe on Linux. The runner has no passwordless
+        # sudo, so without a system makensis the Ubuntu package is unpacked locally.
+        if: matrix.preset == 'windows-cross'
+        run: |
+          if command -v makensis >/dev/null; then
+            makensis=makensis
+          else
+            nsis="$RUNNER_TEMP/nsis"
+            rm -rf "$nsis" && mkdir -p "$nsis" && cd "$nsis"
+            apt-get download nsis nsis-common
+            for deb in *.deb; do dpkg -x "$deb" root; done
+            cd "$GITHUB_WORKSPACE"
+            export NSISDIR="$nsis/root/usr/share/nsis"
+            makensis="$nsis/root/usr/bin/makensis"
+          fi
+          dir="keen4revamped-$TAG-${{ matrix.name }}"
+          "$makensis" -V2 -DVERSION="$VERSION" -DSRCDIR="$PWD/$dir" \
+            -DOUTFILE="$PWD/$dir-installer.exe" packaging/windows/keen4revamped.nsi
       - name: Package (Linux)
         if: matrix.preset == 'release'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
           mkdir -p "$dir/docs" "$dir/tools/keen4-upscale" "$dir/tools/keen4-curate"
           cp build/release/keen4 build/release/keen4-extract README.md "$dir"
+          cp packaging/linux/install.sh packaging/linux/uninstall.sh packaging/icon/keen4revamped.png "$dir"
           cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           tar czf "$dir.tar.gz" "$dir"
+          sh packaging/linux/make-installer.sh "$dir" "$dir-installer.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: |
             keen4revamped-*.zip
             keen4revamped-*.tar.gz
+            keen4revamped-*-installer.exe
+            keen4revamped-*-installer.sh
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [version, build]
     runs-on: [self-hosted, Linux, X64, wsl]
     steps:
+      # the self-hosted runner keeps its workspace between runs
+      - name: Clear earlier downloads
+        run: rm -rf dist notes.md
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: keen4revamped ${{ env.TAG }}
-          target_commitish: ${{ github.sha }}
-          body: |
-            keen4revamped v1.2 adds two-player co-op, gamepads, Brazilian Portuguese, and optional remastered audio and hand-curated art. Levels and physics are unchanged.
-
-            - Co-op: CO-OP GAME in the main menu starts a game for two, Billy and his twin brother Tom, one on the keyboard and one on a gamepad or each on a gamepad of his own. Lives, keys and rescued council members are shared; score, ammo and raindrops are each player's own. A fallen Keen comes back next to his brother, the screen splits when the Keens are far apart, and co-op games save and load like any other. `/TEDLEVEL n COOP` jumps to a level in co-op.
-            - Gamepads: Xbox, PlayStation, Switch Pro and other pads SDL knows work as soon as they are plugged in, also mid-game, in play and in menus. The control panel's Gravis gamepad option remaps the buttons.
-            - Languages: the game's menus, messages, help, story and ending can be shown in English or Brazilian Portuguese. Pick it with the LANGUAGE item of the main menu or `--lang en|pt-BR`.
-            - Remastered audio: `--remastered-audio` plays new songs and effects listed in `audio/manifest.txt` instead of the emulated AdLib, with Shift+F11 to switch back and `--music-volume`/`--sfx-volume`. See docs/AUDIO.md.
-            - Curated art: `--curated` layers hand-made art from `art-curated/` over the upscaled set, managed with the new `tools/keen4-curate/keen4_curate.py`; Shift+F12 shows sprite hitboxes. See docs/ART.md.
-            - Smoother remaster: the inchworm and other step-moving enemies now glide at a steady pace instead of jittering.
-            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the art tools and the docs. macOS builds are paused for this release.
-
-            Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Co-op needs at least one gamepad. See README.md.
-
-            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.1...${{ env.TAG }}
-          files: dist/*
-          fail_on_unmatched_files: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          NOTES: ${{ needs.version.outputs.notes }}
+        run: |
+          printf '%s\n' "$NOTES" >notes.md
+          # The tag already exists (reserved above); --target only matters if
+          # someone deleted it before this job ran.
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "keen4revamped $TAG" --notes-file notes.md --target "$GITHUB_SHA"

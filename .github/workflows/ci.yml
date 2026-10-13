@@ -1,8 +1,7 @@
 name: CI
 
+# Merges to main are built, tested and released by release.yml.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 # Linux and Windows build on the self-hosted runner in WSL (label "wsl");

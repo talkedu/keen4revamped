@@ -26,6 +26,7 @@
 
 #include "audio/remaster_audio.h"
 #include "engine/datafiles.h"
+#include "engine/gamedata_search.h"
 #include "engine/lang.h"
 #include "engine/png_writer.h"
 #include "engine/version.h"
@@ -155,23 +156,6 @@ std::string DefaultSaveDir() {
   return "keen4-save";
 }
 
-bool HasExe(const std::string& dir) {
-  keen4::files::SetDataDir(dir);
-  return !keen4::files::Find("KEEN4E.EXE").empty();
-}
-
-std::string FindDataDir(const std::string& requested) {
-  if (!requested.empty()) return requested;
-  std::vector<std::string> candidates = {".", "gamedata", "base4"};
-#ifdef _WIN32
-  candidates.push_back("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Commander Keen\\base4");
-#endif
-  for (const std::string& dir : candidates) {
-    if (HasExe(dir)) return dir;
-  }
-  return ".";
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -261,7 +245,22 @@ int main(int argc, char** argv) {
       gameargs.push_back(argv[i]);
   }
 
-  datadir = FindDataDir(datadir);
+  // --data, then KEEN4_DATA_DIR, then a search of the usual places and Steam libraries.
+  if (datadir.empty() && std::getenv("KEEN4_DATA_DIR")) datadir = std::getenv("KEEN4_DATA_DIR");
+  std::vector<std::string> searched;
+  if (datadir.empty()) datadir = keen4::files::LocateGameData(&searched);
+  if (datadir.empty()) {
+    std::string text =
+        "Could not find Commander Keen 4 (KEEN4E.EXE v1.4 EGA and its .CK4 files).\n"
+        "Install \"Commander Keen\" from Steam, or set KEEN4_DATA_DIR to the folder with\n"
+        "your Keen 4 files (or pass --data DIR).";
+    std::fprintf(stderr, "%s\nSearched:\n", text.c_str());
+    for (const std::string& dir : searched) std::fprintf(stderr, "  %s\n", dir.c_str());
+#ifdef KEEN4_WITH_SDL3
+    if (!headless) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Commander Keen 4", text.c_str(), nullptr);
+#endif
+    return 1;
+  }
   keen4::files::SetDataDir(datadir);
   // Never write into the game folder: config, saves and scores go elsewhere.
   if (savedir.empty() && std::getenv("KEEN4_SAVE_DIR")) savedir = std::getenv("KEEN4_SAVE_DIR");
@@ -275,12 +274,12 @@ int main(int argc, char** argv) {
   if (exe.empty() || !keen4::exe::g_exe.Load(exe, &error)) {
     std::fprintf(stderr,
                  "Could not load KEEN4E.EXE (v1.4 EGA) from '%s'%s%s\n"
-                 "Copy your Keen 4 files (KEEN4E.EXE, *.CK4) there or pass --data DIR.\n",
+                 "Copy your Keen 4 files (KEEN4E.EXE, *.CK4) there, or point KEEN4_DATA_DIR or --data elsewhere.\n",
                  datadir.c_str(), error.empty() ? "" : ": ", error.c_str());
 #ifdef KEEN4_WITH_SDL3
     if (!headless) {
       std::string text = "Could not load KEEN4E.EXE (v1.4 EGA) from '" + datadir +
-                         "'.\nCopy your Keen 4 files there, or pass --data DIR.";
+                         "'.\nCopy your Keen 4 files there, or point KEEN4_DATA_DIR or --data elsewhere.";
       SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Commander Keen 4", text.c_str(), nullptr);
     }
 #endif
