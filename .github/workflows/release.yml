@@ -63,22 +63,46 @@ jobs:
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           zip -qr "$dir.zip" "$dir"
+      - name: Installer (Windows)
+        # NSIS builds the setup .exe on Linux. The runner has no passwordless
+        # sudo, so without a system makensis the Ubuntu package is unpacked locally.
+        if: matrix.preset == 'windows-cross'
+        run: |
+          if command -v makensis >/dev/null; then
+            makensis=makensis
+          else
+            nsis="$RUNNER_TEMP/nsis"
+            rm -rf "$nsis" && mkdir -p "$nsis" && cd "$nsis"
+            apt-get download nsis nsis-common
+            for deb in *.deb; do dpkg -x "$deb" root; done
+            cd "$GITHUB_WORKSPACE"
+            export NSISDIR="$nsis/root/usr/share/nsis"
+            makensis="$nsis/root/usr/bin/makensis"
+          fi
+          version=$(sed -n 's/^project(keen4revamped VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          dir="keen4revamped-$TAG-${{ matrix.name }}"
+          "$makensis" -V2 -DVERSION="$version" -DSRCDIR="$PWD/$dir" \
+            -DOUTFILE="$PWD/$dir-installer.exe" packaging/windows/keen4revamped.nsi
       - name: Package (Linux)
         if: matrix.preset == 'release'
         run: |
           dir="keen4revamped-$TAG-${{ matrix.name }}"
           mkdir -p "$dir/docs" "$dir/tools/keen4-upscale" "$dir/tools/keen4-curate"
           cp build/release/keen4 build/release/keen4-extract README.md "$dir"
+          cp packaging/linux/install.sh packaging/linux/uninstall.sh packaging/icon/keen4revamped.png "$dir"
           cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
           tar czf "$dir.tar.gz" "$dir"
+          sh packaging/linux/make-installer.sh "$dir" "$dir-installer.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: |
             keen4revamped-*.zip
             keen4revamped-*.tar.gz
+            keen4revamped-*-installer.exe
+            keen4revamped-*-installer.sh
           if-no-files-found: error
 
   release:
