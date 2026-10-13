@@ -1,8 +1,10 @@
 // keen4-extract: exports the original Keen 4 graphics as 1x PNG files, the
 // reference grid for artists and the input of tools/keen4-upscale.
 //
-//   keen4-extract --data DIR --out DIR
+//   keen4-extract [--data DIR] [--out DIR]
 //
+// Without --data it finds the game like keen4 does (KEEN4_DATA_DIR, the
+// current folder, Steam libraries).
 // Writes tile16/NNNN.png (background tiles), tile16m/NNNN.png (foreground
 // tiles with transparency), sprite/NNNN.png (sprite chunks with transparency),
 // sprite2/NNNN.png (Keen's sprites in Tom's colours, for co-op), pic/NNNN.png
@@ -17,6 +19,7 @@
 #include <vector>
 
 #include "engine/datafiles.h"
+#include "engine/gamedata_search.h"
 #include "engine/png_writer.h"
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
@@ -95,7 +98,7 @@ bool ExportPic(int chunk, bool masked, const fs::path& dir) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::string data = ".", out = "extracted-art";
+  std::string data, out = "extracted-art";
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "--data" && i + 1 < argc)
@@ -103,9 +106,16 @@ int main(int argc, char** argv) {
     else if (a == "--out" && i + 1 < argc)
       out = argv[++i];
     else {
-      std::fprintf(stderr, "usage: keen4-extract --data DIR --out DIR\n");
+      std::fprintf(stderr, "usage: keen4-extract [--data DIR] [--out DIR]\n");
       return 2;
     }
+  }
+  if (data.empty() && std::getenv("KEEN4_DATA_DIR")) data = std::getenv("KEEN4_DATA_DIR");
+  std::vector<std::string> searched;
+  if (data.empty()) data = keen4::files::LocateGameData(&searched);
+  if (data.empty()) {
+    std::fprintf(stderr, "Could not find the Keen 4 files; set KEEN4_DATA_DIR or pass --data DIR.\n");
+    return 1;
   }
 
   keen4::files::SetDataDir(data);
