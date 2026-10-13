@@ -1,7 +1,7 @@
 # Languages
 
 The game can show its text in English (the original) or Brazilian Portuguese. The LANGUAGE
-item of the main menu cycles through the languages; the choice is saved at the end of
+item of the CONFIGURE card cycles through the languages; the choice is saved at the end of
 `CONFIG.CK4` (older files without it keep working) and `--lang en|pt-BR` overrides it for
 one run.
 

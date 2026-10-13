@@ -39,6 +39,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(KEEN4_WITH_SDL3 "Build the SDL3 platform backend (needed for a window)" ON)
 option(KEEN4_BUILD_TESTS "Build the test suite" ON)
 
+# In-game updater (main menu, CHECK FOR UPDATES): the GitHub OAuth app players
+# sign in with (its client id is public; empty turns the updater off) and the
+# repository whose releases it installs.
+set(KEEN4_GITHUB_CLIENT_ID "" CACHE STRING "Client id of the GitHub OAuth app the updater signs in with")
+set(KEEN4_UPDATE_REPO "talkedu/keen4revamped" CACHE STRING "owner/name of the repository the updater installs releases from")
+
 if(MSVC)
   set(KEEN4_WARNINGS /W3)
   # Translations are UTF-8 source text.
@@ -80,6 +86,10 @@ add_library(keen4_engine STATIC
   src/render/scene.cpp
   src/audio/audio_file.cpp
   src/audio/remaster_audio.cpp
+  src/update/json.cpp
+  src/update/http.cpp
+  src/update/github.cpp
+  src/update/install.cpp
 )
 target_include_directories(keen4_engine PUBLIC src)
 # stb_image (public domain / MIT) loads PNG art; its own warnings are not ours.
@@ -91,6 +101,17 @@ endif()
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 set_source_files_properties(src/engine/version.cpp PROPERTIES
   COMPILE_DEFINITIONS "KEEN4_VERSION=\"${PROJECT_VERSION}\"")
+set_source_files_properties(src/update/github.cpp PROPERTIES
+  COMPILE_DEFINITIONS "KEEN4_GITHUB_CLIENT_ID=\"${KEEN4_GITHUB_CLIENT_ID}\";KEEN4_UPDATE_REPO=\"${KEEN4_UPDATE_REPO}\"")
+# The updater talks HTTPS through WinHTTP on Windows and through the system's
+# libcurl, loaded at run time, elsewhere; it works in a background thread.
+find_package(Threads REQUIRED)
+target_link_libraries(keen4_engine PRIVATE Threads::Threads)
+if(WIN32)
+  target_link_libraries(keen4_engine PRIVATE winhttp shell32 ole32)
+else()
+  target_link_libraries(keen4_engine PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # Game: the ported CK_* and K4_* modules.
 add_library(keen4_game STATIC
@@ -153,6 +174,10 @@ if(KEEN4_BUILD_TESTS)
   add_executable(keen4_audio_tests tests/test_audio.cpp)
   target_link_libraries(keen4_audio_tests PRIVATE keen4_game)
   add_test(NAME keen4_audio_tests COMMAND keen4_audio_tests)
+  add_executable(keen4_update_tests tests/test_update.cpp)
+  target_link_libraries(keen4_update_tests PRIVATE keen4_engine)
+  target_compile_options(keen4_update_tests PRIVATE ${KEEN4_WARNINGS})
+  add_test(NAME keen4_update_tests COMMAND keen4_update_tests)
   # Co-op scenarios run the game headless; they need the game data (KEEN4_DATA)
   # and are skipped without it.
   add_executable(keen4_coop_tests tests/test_coop.cpp)

@@ -280,6 +280,13 @@ class SdlPlatform final : public IPlatform {
   void LockAudio() override { audio_mutex_.lock(); }
   void UnlockAudio() override { audio_mutex_.unlock(); }
 
+  bool OpenUrl(const char* url) override {
+    // leave fullscreen, or the browser opens behind the game
+    if (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) SDL_SetWindowFullscreen(window_, false);
+    return SDL_OpenURL(url);
+  }
+  void SetClipboardText(const char* text) override { SDL_SetClipboardText(text); }
+
  private:
   static void Read(SDL_Gamepad* pad, GamepadState* state) {
     static constexpr struct {

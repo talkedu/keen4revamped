@@ -131,7 +131,8 @@ jobs:
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION"
+        # the OAuth app the in-game updater signs in with (see README, Updating)
+        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION" -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test

@@ -111,8 +111,8 @@ plays the songs and effects listed in `audio/manifest.txt` instead (`--audio DIR
 folder; Shift+F11 then switches between remastered and original), and `--music-volume N` and
 `--sfx-volume N` set the volumes. See [docs/AUDIO.md](docs/AUDIO.md).
 
-The game's text is in English or Brazilian Portuguese: the LANGUAGE item of the main menu
-switches between them and the choice is saved with the configuration. `--lang en` or
+The game's text is in English or Brazilian Portuguese: the LANGUAGE item of the CONFIGURE
+card switches between them and the choice is saved with the configuration. `--lang en` or
 `--lang pt-BR` picks one for a single run. See [docs/LANGUAGES.md](docs/LANGUAGES.md).
 
 Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
@@ -157,3 +157,24 @@ on a gamepad of his own.
 
 `/TEDLEVEL n COOP` plays one level in co-op, player 1 on the keyboard and player 2 on the
 first gamepad; `/TEDLEVEL n COOPPAD` the other way round.
+
+## Updating
+
+The main menu shows the game's version on its title line. CHECK FOR UPDATES, on the CONFIGURE
+card, compares it with the latest release on GitHub and, if there is a newer one, downloads it
+with a progress bar, puts its files in place of the running game's and restarts. It is greyed
+out during a game.
+
+The repository is private, so the first check signs in to GitHub: the game opens
+github.com/login/device in the browser and shows a code to enter there (it is also on the
+clipboard). The account needs access to the repository. The token is kept in
+`github-token.txt` next to `CONFIG.CK4`; delete it to sign out. On Windows, a game installed
+in Program Files asks for administrator rights to replace its files; on Linux the game folder
+must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs libcurl, which
+desktop distributions have.
+
+Builds sign in with a GitHub OAuth app that has device flow enabled. Its client id is set when
+configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository variable
+`KEEN4_GITHUB_CLIENT_ID`); without one the item says updates are off. `KEEN4_GITHUB_CLIENT_ID`,
+`KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
+client id, the repository and the saved token.
