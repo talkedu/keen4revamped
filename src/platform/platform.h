@@ -77,6 +77,10 @@ class IPlatform {
   virtual int StartAudio(AudioCallback callback, void* user) = 0;
   virtual void LockAudio() = 0;
   virtual void UnlockAudio() = 0;
+
+  // Opens a web page in the player's browser (the updater's GitHub sign-in).
+  virtual bool OpenUrl(const char*) { return false; }
+  virtual void SetClipboardText(const char*) {}
 };
 
 // The active backend.

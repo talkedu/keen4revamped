@@ -4,16 +4,23 @@
 // lives in far data segments of the original program. It is read from the
 // player's exe at startup into the same shape, so the code below can walk and
 // modify it as the original does (enabling items, changing option texts).
+#include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
+#include <string>
+#include <thread>
 #include <vector>
 
 #include "engine/datafiles.h"
 #include "engine/lang.h"
+#include "engine/version.h"
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
 #include "id/id_in.h"
@@ -22,6 +29,9 @@
 #include "id/id_sys.h"
 #include "id/id_us.h"
 #include "id/id_vw.h"
+#include "platform/platform.h"
+#include "update/github.h"
+#include "update/install.h"
 
 // Game-side globals the panel edits (CK_PLAY / CK_MAIN).
 extern boolean showscorebox, jerk, oldshooting, QuietFX, GravisGamepad;
@@ -66,6 +76,7 @@ enum { ui_Pushed = 1, ui_Selected = 2, ui_Disabled = 4, ui_Separated = 8 };
 enum { uc_None, uc_Return, uc_Abort, uc_Quit, uc_Loaded, uc_SEasy, uc_SNormal, uc_SHard };
 constexpr word uc_Language = 0x100;  // port: the main menu's language item
 constexpr word uc_Coop = 0x101;      // port: the main menu's co-op item
+constexpr word uc_Update = 0x102;    // port: the main menu's update item
 enum { uic_SetupCard, uic_DrawCard, uic_TouchupCard, uic_DrawIcon, uic_Draw, uic_Hit };
 
 struct UserItemGroup;
@@ -187,15 +198,20 @@ void LoadTree() {
   keybuttonitems = LoadItems(0x1FBD, 0);
   configitems = LoadItems(0x1FCC, 0);
 
-  // Port: a language item above QUIT, and a co-op item under NEW GAME. The
-  // list starts right under the card's title and its ten items are seven
-  // pixels apart, so it still ends above the footer.
+  // Port: language and update items above QUIT, and a co-op item under NEW
+  // GAME. The list starts right under the card's title, its eleven items are
+  // seven pixels apart and the footer is one line (see DrawCtlPanelFooter).
   std::vector<UserItem>& items = itemarrays[Linear(0x1FD8, 0)];
   UserItem language{};
   language.type = uii_Button;
   language.comm = uc_Language;
   language.text = keen4::lang::MenuLabel();
   items.insert(items.end() - 2, language);
+  UserItem update{};
+  update.type = uii_Button;
+  update.comm = uc_Update;
+  update.text = "CHECK FOR UPDATES";
+  items.insert(items.end() - 2, update);
   UserItem coop{};
   coop.type = uii_Button;
   coop.comm = uc_Coop;
@@ -209,7 +225,7 @@ void LoadTree() {
 // comes after NEW GAME).
 UserItem& RootItem(int original) { return rootitems[original >= 1 ? original + 1 : original]; }
 
-// Item rows are 8 pixels apart; the root card's ten are 7.
+// Item rows are 8 pixels apart; the root card's eleven are 7.
 int RowHeight(const UserItemGroup* card) { return card == rootgroup ? 7 : 8; }
 
 // ---------------------------------------------------------------------------
@@ -299,20 +315,40 @@ void DrawItem(UserItem* item) {
 
 // 1A89:01A6
 void DrawCtlPanelFooter() {
+  // Port: the main menu's list reaches one line further down, so its footer
+  // leaves out "ESC to quit" (QUIT is on the menu).
+  bool root = topcard == rootgroup;
+  int top = root ? 0x8D : 0x85;
   word w, h;
   fontcolor = HiliteColor;
   px = CTL_X + 4;
-  py = 0x87;
+  py = static_cast<sword>(top + 2);
   DrawString(footerstrings[2]);
   Measure(footerstrings[1], &w, &h);
   px = static_cast<sword>(0xE6 - w);
   DrawString(footerstrings[1]);
-  Measure(footerstrings[0], &w, &h);
-  px = static_cast<sword>(CTL_X + (CTL_W - w) / 2);
-  py = static_cast<sword>(py + h + 1);
-  DrawString(footerstrings[0]);
+  if (!root) {
+    Measure(footerstrings[0], &w, &h);
+    px = static_cast<sword>(CTL_X + (CTL_W - w) / 2);
+    py = static_cast<sword>(py + h + 1);
+    DrawString(footerstrings[0]);
+  }
   fontcolor = 0;
-  VWB_Hlin(0x4D, 0xE7, 0x85, HiliteColor);
+  VWB_Hlin(0x4D, 0xE7, top, HiliteColor);
+}
+
+// Port: the game's version, on the right of the main menu's title line.
+void DrawVersion() {
+  std::string text = std::string("V") + keen4::VersionNumber();
+  word w, h;
+  Measure(text.c_str(), &w, &h);
+  int x = 0xE6 - w;
+  VWB_Bar(x - 3, 0x37 - 3, w + 5, h, BackColor);
+  fontcolor = HiliteColor;
+  px = static_cast<sword>(x);
+  py = 0x37 - 3;
+  DrawString(text.c_str());
+  fontcolor = 15;
 }
 
 // 1A89:024C
@@ -321,6 +357,7 @@ void DrawCtlPanelContents() {
   if (topcard->picnum) {
     VWB_Hlin(0x4D, 0xE7, 0x37, HiliteColor);
     VWB_DrawPic(0x50, 0x30, topcard->picnum);
+    if (topcard == rootgroup) DrawVersion();
   }
   DrawCtlPanelFooter();
   if (!topcard->items) return;
@@ -506,6 +543,280 @@ boolean CoopInputSetup() {
   restartpads[1] = chosen[1];
   IN_ClearKeysDown();
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Port: CHECK FOR UPDATES. Signs in to GitHub (the repository is private),
+// compares the latest release with this version, downloads it with a
+// progress bar and restarts the game on the new files. See src/update/.
+
+namespace update = keen4::update;
+using keen4::lang::Tr;
+
+// Text that fits a dialog: longer error messages are cut.
+std::string Fit(std::string s) {
+  word w, h;
+  for (Measure(s.c_str(), &w, &h); w > CTL_W - 14 && s.size() > 3; Measure(s.c_str(), &w, &h))
+    s.erase(s.size() - 4) += "...";
+  return s;
+}
+
+std::string Upper(std::string s) {
+  for (char& c : s) {
+    if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+  }
+  return s;
+}
+
+// A panel with a title, more lines and, when `permille` is 0..1000, a
+// progress bar above the last line.
+void DrawUpdatePanel(const std::vector<std::string>& lines, int permille = -1) {
+  constexpr word kBarW = 120, kBarH = 7;
+  word w = 0, h = 0, lw;
+  for (const std::string& s : lines) {
+    Measure(s.c_str(), &lw, &h);
+    if (lw > w) w = lw;
+  }
+  if (permille >= 0 && w < kBarW) w = kBarW;
+  w = static_cast<word>(w + 8);
+  word total = static_cast<word>(h * lines.size() + h / 2 + 3 + (permille >= 0 ? kBarH + 3 : 0));
+  word x, y;
+  // the menu behind, so a smaller panel does not show the last one's edges
+  VWB_DrawPic(0, 0, CP_MENUSCREENPIC);
+  DrawCtlPanelContents();
+  DrawPanel(w, total, &x, &y);
+  py = static_cast<sword>(y + 2);
+  for (std::size_t i = 0; i < lines.size(); i++) {
+    if (permille >= 0 && i + 1 == lines.size()) {
+      int bx = x + (w - kBarW) / 2, by = py;
+      VWB_Hlin(bx, bx + kBarW - 1, by, HiliteColor);
+      VWB_Hlin(bx, bx + kBarW - 1, by + kBarH - 1, HiliteColor);
+      VWB_Vlin(by, by + kBarH - 1, bx, HiliteColor);
+      VWB_Vlin(by, by + kBarH - 1, bx + kBarW - 1, HiliteColor);
+      int fill = (kBarW - 4) * (permille > 1000 ? 1000 : permille) / 1000;
+      if (fill > 0) VWB_Bar(bx + 2, by + 2, fill, kBarH - 4, NohiliteColor);
+      py = static_cast<sword>(py + kBarH + 3);
+    }
+    fontcolor = i == 0 ? NohiliteColor : HiliteColor;
+    Measure(lines[i].c_str(), &lw, &h);
+    px = static_cast<sword>(x + (w - lw) / 2);
+    DrawString(lines[i].c_str());
+    py = static_cast<sword>(py + h + (i == 0 ? h / 2 + 1 : 0));
+  }
+  fontcolor = 15;
+}
+
+// Runs `work` on another thread while the panel keeps drawing and watches
+// for Escape (or B), which sets `cancel`. Returns false if the player canceled.
+bool RunInBackground(const std::function<void()>& work, const std::function<void()>& draw,
+                     std::atomic<bool>* cancel) {
+  std::atomic<bool> done{false};
+  std::thread worker([&] {
+    work();
+    done = true;
+  });
+  IN_ClearKeysDown();
+  auto last = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+  bool canceled = false;
+  while (!done) {
+    SYS_Idle();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    CursorInfo cursor;
+    IN_ReadCursor(&cursor);
+    if (cancel && !canceled && (LastScan == sc_Escape || cursor.button1)) {
+      canceled = true;
+      *cancel = true;
+    }
+    auto now = std::chrono::steady_clock::now();
+    if (now - last >= std::chrono::milliseconds(100)) {
+      last = now;
+      draw();
+      VW_UpdateScreen();
+    }
+  }
+  worker.join();
+  IN_ClearKeysDown();
+  return !canceled;
+}
+
+void UpdateFailed(const std::string& error) {
+  std::fprintf(stderr, "Update failed: %s\n", error.c_str());
+  CtlDialog("UPDATE FAILED", Fit(error).c_str(), S(0x49F6));  // "PRESS ANY KEY"
+}
+
+// The OAuth device flow: GitHub gives a code, the player enters it at
+// github.com/login/device (opened in the browser), the game polls for the token.
+bool SignIn(std::string* token) {
+  std::atomic<bool> cancel{false};
+  update::DeviceCode code;
+  std::string error;
+  bool ok = false;
+  if (!RunInBackground([&] { ok = update::RequestDeviceCode(&code, &error); },
+                       [] { DrawUpdatePanel({Tr("CHECK FOR UPDATES"), Tr("CONNECTING TO GITHUB"), S(0x4922)}); },
+                       &cancel))
+    return false;
+  if (!ok) {
+    UpdateFailed(error);
+    return false;
+  }
+  keen4::platform::Get().SetClipboardText(code.user_code.c_str());
+  keen4::platform::Get().OpenUrl(code.verification_uri.c_str());
+  std::string where = code.verification_uri;
+  if (where.compare(0, 8, "https://") == 0) where.erase(0, 8);
+  std::string open = std::string(Tr("OPEN")) + " " + where;
+
+  update::Poll result = update::Poll::Pending;
+  RunInBackground(
+      [&] {
+        using clock = std::chrono::steady_clock;
+        auto deadline = clock::now() + std::chrono::seconds(code.expires_in);
+        int interval = code.interval > 0 ? code.interval : 5;
+        while (!cancel) {
+          auto wake = clock::now() + std::chrono::seconds(interval);
+          while (!cancel && clock::now() < wake) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          if (cancel) return;
+          result = update::PollForToken(code, token, &error);
+          if (result == update::Poll::SlowDown) interval += 5;
+          if (result != update::Poll::Pending && result != update::Poll::SlowDown) return;
+          if (clock::now() > deadline) {
+            result = update::Poll::Expired;
+            return;
+          }
+        }
+      },
+      [&] { DrawUpdatePanel({Tr("SIGN IN TO GITHUB"), open, Tr("AND ENTER THIS CODE:"), code.user_code, S(0x4922)}); },
+      &cancel);
+  if (cancel) return false;
+  switch (result) {
+    case update::Poll::Token:
+      update::SaveToken(*token);
+      return true;
+    case update::Poll::Denied:
+      CtlDialog("SIGN-IN CANCELED", "ON GITHUB", S(0x49F6));
+      return false;
+    case update::Poll::Expired:
+      CtlDialog("THE CODE EXPIRED", "PLEASE TRY AGAIN", S(0x49F6));
+      return false;
+    default:
+      UpdateFailed(error);
+      return false;
+  }
+}
+
+void CheckForUpdates() {
+  if (update::ClientId().empty()) {
+    CtlDialog("UPDATES ARE OFF", "IN THIS BUILD", S(0x49F6));
+    return;
+  }
+  std::string error;
+  if (!keen4::http::Available(&error)) {
+    UpdateFailed(error);
+    return;
+  }
+  std::string token = update::LoadToken();
+  if (token.empty() && !SignIn(&token)) return;
+
+  // the latest release; a token GitHub no longer takes means signing in again
+  std::atomic<bool> cancel{false};
+  update::Release release;
+  update::Check check = update::Check::Failed;
+  for (int attempt = 0;; attempt++) {
+    if (!RunInBackground([&] { check = update::FetchLatestRelease(token, &release, &error); },
+                         [] { DrawUpdatePanel({Tr("CHECK FOR UPDATES"), Tr("CONNECTING TO GITHUB"), S(0x4922)}); },
+                         &cancel))
+      return;
+    if (check != update::Check::SignIn) break;
+    update::ForgetToken();
+    token.clear();
+    if (attempt > 0 || !SignIn(&token)) return;
+  }
+  switch (check) {
+    case update::Check::Ok:
+      break;
+    case update::Check::NoAccess:
+      update::ForgetToken();  // so the next try can sign in with another account
+      CtlDialog("NO ACCESS TO THE GAME", "ON THIS GITHUB ACCOUNT", S(0x49F6));
+      return;
+    case update::Check::NoRelease:
+      CtlDialog("NO RELEASES YET", "ON GITHUB", S(0x49F6));
+      return;
+    default:
+      UpdateFailed(error);
+      return;
+  }
+
+  std::string version = Upper(release.tag);
+  if (update::CompareVersions(release.tag, keen4::VersionNumber()) <= 0) {
+    std::string latest = std::string("V") + keen4::VersionNumber() + " " + Tr("IS THE LATEST");
+    CtlDialog("NO UPDATE AVAILABLE", latest.c_str(), S(0x49F6));
+    return;
+  }
+  const update::Asset* asset = update::PickAsset(release, update::PlatformAssetSuffix());
+  if (!asset) {
+    UpdateFailed(release.tag + " has no download for this system");
+    return;
+  }
+  std::string offer = std::string(Tr("NEW VERSION:")) + " " + version;
+  if (!CtlDialog(offer.c_str(), "PRESS Y TO UPDATE", S(0x4922))) return;
+
+  // download
+  namespace fs = std::filesystem;
+  fs::path staging = keen4::files::WritePath("update");
+  std::error_code ec;
+  fs::remove_all(staging, ec);
+  fs::create_directories(staging, ec);
+  std::string archive = (staging / asset->name).string();
+  std::atomic<std::uint64_t> done{0}, total{asset->size};
+  bool ok = false, canceled = false;
+  std::string title = std::string(Tr("DOWNLOADING")) + " " + version;
+  RunInBackground(
+      [&] {
+        ok = update::DownloadAsset(
+            token, *asset, archive,
+            [&](std::uint64_t d, std::uint64_t t) {
+              done = d;
+              if (t) total = t;
+              return !cancel;
+            },
+            &canceled, &error);
+      },
+      [&] {
+        std::uint64_t d = done, t = total;
+        char amount[48];
+        std::snprintf(amount, sizeof amount, "%.1f / %.1f MB", d / 1048576.0, t / 1048576.0);
+        DrawUpdatePanel({title, amount, S(0x4922)}, t ? static_cast<int>(d * 1000 / t) : 0);
+      },
+      &cancel);
+  if (cancel || canceled || !ok) {
+    fs::remove_all(staging, ec);
+    if (!cancel && !canceled) UpdateFailed(error);
+    return;
+  }
+
+  // unpack and put the files in place (on Windows maybe with a UAC prompt)
+  update::Apply applied = update::Apply::Failed;
+  std::string installing = std::string(Tr("INSTALLING")) + " " + version;
+  RunInBackground(
+      [&] {
+        std::string root;
+        if (update::Extract(archive, (staging / "files").string(), &root, &error))
+          applied = update::ApplyUpdate(root, &error);
+      },
+      [&] { DrawUpdatePanel({installing, Tr("PLEASE WAIT")}); }, nullptr);
+  fs::remove_all(staging, ec);
+  if (applied == update::Apply::Declined) {
+    CtlDialog("UPDATE CANCELED", "WINDOWS DID NOT ALLOW IT", S(0x49F6));
+    return;
+  }
+  if (applied != update::Apply::Done) {
+    UpdateFailed(error);
+    return;
+  }
+  std::string updated = std::string(Tr("UPDATED TO")) + " " + version;
+  CtlDialog(updated.c_str(), S(0x49F6), "TO RESTART THE GAME");  // "PRESS ANY KEY"
+  update::RelaunchOnExit();
+  lastcomm = uc_Quit;
+  ctlpaneldone = true;
 }
 
 // 1A89:06E8
@@ -1323,6 +1634,11 @@ void DoItem() {
     DrawCtlPanel();
     return;
   }
+  if (item->comm == uc_Update) {
+    CheckForUpdates();
+    if (!ctlpaneldone) DrawCtlPanel();
+    return;
+  }
   if (item->comm == uc_Coop) {
     // the NEW GAME card, for two players; player 2 needs a gamepad
     if (!IN_GamepadCount()) {
@@ -1368,6 +1684,10 @@ void SetControlValues() {
   if (!ingame) {
     RootItem(2).flags |= ui_Disabled;
     RootItem(5).flags |= ui_Disabled;
+  }
+  // updating restarts the game, so not in the middle of one
+  for (UserItem* item = rootitems; item->type; item++) {
+    if (item->comm == uc_Update && ingame) item->flags |= ui_Disabled;
   }
   rootgroup->cursor = static_cast<word>(ingame ? &RootItem(4) - rootitems : 0);
   SetOptionsText();
