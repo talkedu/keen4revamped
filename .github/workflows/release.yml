@@ -9,7 +9,7 @@ on:
       tag:
         description: Release tag to create, e.g. v1.2
         required: true
-        default: v1.2
+        default: v1.2.1
   push:
     tags: ['v*']
 
@@ -95,18 +95,13 @@ jobs:
           name: keen4revamped ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           body: |
-            keen4revamped v1.2 adds two-player co-op, gamepads, Brazilian Portuguese, and optional remastered audio and hand-curated art. Levels and physics are unchanged.
+            keen4revamped v1.2.1 finds your game data on its own. Gameplay is unchanged from v1.2.
 
-            - Co-op: CO-OP GAME in the main menu starts a game for two, Billy and his twin brother Tom, one on the keyboard and one on a gamepad or each on a gamepad of his own. Lives, keys and rescued council members are shared; score, ammo and raindrops are each player's own. A fallen Keen comes back next to his brother, the screen splits when the Keens are far apart, and co-op games save and load like any other. `/TEDLEVEL n COOP` jumps to a level in co-op.
-            - Gamepads: Xbox, PlayStation, Switch Pro and other pads SDL knows work as soon as they are plugged in, also mid-game, in play and in menus. The control panel's Gravis gamepad option remaps the buttons.
-            - Languages: the game's menus, messages, help, story and ending can be shown in English or Brazilian Portuguese. Pick it with the LANGUAGE item of the main menu or `--lang en|pt-BR`.
-            - Remastered audio: `--remastered-audio` plays new songs and effects listed in `audio/manifest.txt` instead of the emulated AdLib, with Shift+F11 to switch back and `--music-volume`/`--sfx-volume`. See docs/AUDIO.md.
-            - Curated art: `--curated` layers hand-made art from `art-curated/` over the upscaled set, managed with the new `tools/keen4-curate/keen4_curate.py`; Shift+F12 shows sprite hitboxes. See docs/ART.md.
-            - Smoother remaster: the inchworm and other step-moving enemies now glide at a steady pace instead of jittering.
-            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the art tools and the docs. macOS builds are paused for this release.
+            - Steam data lookup: `keen4` and `keen4-extract` no longer need `--data` when Keen 4 is installed through Steam. They look in `--data`, then `KEEN4_DATA_DIR`, then the current and program folders, then every Steam library on Windows, Linux (including Flatpak, Snap, SteamOS and Bazzite) and macOS, including extra library drives. File and folder names match in any case. If nothing is found, the error lists every folder it tried.
+            - Builds for Windows and Linux below, each with `keen4`, `keen4-extract`, the art tools and the docs. macOS builds are still paused.
 
-            Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release); run `keen4 --data path/to/keen4`. Co-op needs at least one gamepad. See README.md.
+            Game data, art and audio are not included. You need your own copy of Keen 4 v1.4 EGA (KEEN4E.EXE and the .CK4 files, for example from the Steam release). See README.md.
 
-            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.1...${{ env.TAG }}
+            Full changes: https://github.com/talkedu/keen4revamped/compare/v1.2...${{ env.TAG }}
           files: dist/*
           fail_on_unmatched_files: true
