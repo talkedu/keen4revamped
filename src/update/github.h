@@ -37,6 +37,8 @@ std::string PlatformAssetSuffix();
 // values the build was configured with. An empty client id disables updates.
 std::string ClientId();
 std::string Repo();
+// True when the client id is a GitHub App's ("Iv..."), not an OAuth app's.
+bool IsGitHubApp();
 
 // The player's token, kept in the folder with CONFIG.CK4 and the saved games
 // (or KEEN4_GITHUB_TOKEN in the environment).
