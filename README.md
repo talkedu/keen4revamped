@@ -43,16 +43,34 @@ header tables and produce disassembly listings. Progress notes are in
 
 ## Running
 
-Put `KEEN4E.EXE` (version 1.4 EGA) and the `.CK4` files in a folder and run:
+The game needs your own copy of Keen 4: `KEEN4E.EXE` (version 1.4 EGA) and its `.CK4`
+files. If you own "Commander Keen" on Steam, just install it there and run `keen4`; the
+game files are found automatically. Otherwise point the game at a folder with them:
 
 ```sh
 keen4 --data path/to/keen4
 ```
 
-Without `--data` the game looks in the current folder, `./gamedata`, and on Windows the
-default Steam folder. It never writes there: configuration, saved games and high scores go to
-`%APPDATA%\keen4revamped` on Windows or `~/.local/share/keen4revamped` elsewhere
-(or `--save DIR`).
+or set `KEEN4_DATA_DIR=path/to/keen4` once in your environment. The game looks, in order:
+
+1. `--data DIR`
+2. the `KEEN4_DATA_DIR` environment variable
+3. the current folder, then `gamedata/` and `base4/` under it, then the same three next to
+   the `keen4` executable
+4. `steamapps/common/Commander Keen/base4` in every Steam library: the Steam install itself
+   and each extra library listed in its `steamapps/libraryfolders.vdf`. Steam is looked
+   for in the registry and `Program Files (x86)\Steam` on Windows; `~/.steam/steam`,
+   `~/.local/share/Steam` and the Flatpak and Snap folders on Linux (SteamOS, Bazzite and
+   other distributions); `~/Library/Application Support/Steam` on macOS
+
+File names are matched without regard to case, so `Keen4e.exe` and `Audio.ck4` from Steam
+work as well as `KEEN4E.EXE` and `AUDIO.CK4` from a DOS copy. If nothing is found, `keen4`
+says so and lists the folders it tried. `keen4-extract` searches the same way when `--data`
+is left out.
+
+The game data is only read, never changed, and is not part of this project or its releases.
+Configuration, saved games and high scores go to `%APPDATA%\keen4revamped` on Windows or
+`~/.local/share/keen4revamped` elsewhere (or `--save DIR`, or `KEEN4_SAVE_DIR`).
 
 The default renderer is the remaster (milestone 6): a 16:9 view at the window's resolution,
 the upscaled art in `art/` (or the original scaled 4x), and smooth motion between frames.

@@ -29,6 +29,7 @@ target_include_directories(audio_codecs SYSTEM PUBLIC third_party)
 add_library(keen4_engine STATIC
   src/engine/version.cpp
   src/engine/datafiles.cpp
+  src/engine/gamedata_search.cpp
   src/engine/png_writer.cpp
   src/engine/lang.cpp
   src/lang/pt_br.cpp
@@ -53,6 +54,9 @@ target_include_directories(keen4_engine PUBLIC src)
 # stb_image (public domain / MIT) loads PNG art; its own warnings are not ours.
 target_include_directories(keen4_engine SYSTEM PRIVATE third_party/stb)
 target_link_libraries(keen4_engine PUBLIC nuked_opl3 PRIVATE audio_codecs)
+if(WIN32)
+  target_link_libraries(keen4_engine PRIVATE advapi32)  # Steam location in the registry
+endif()
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 
 # Game: the ported CK_* and K4_* modules.
