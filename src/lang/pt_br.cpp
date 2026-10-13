@@ -224,7 +224,7 @@ constexpr ExeEntry kExe[] = {
     {DG(0x4EA1), "Saindo..."},                  // Quitting...
 };
 
-// Text the port prints from its own source (CK_PLAY).
+// Text the port prints from its own source (CK_PLAY, co-op).
 constexpr TextEntry kText[] = {
     {"God mode OFF", "Modo Deus OFF"},
     {"God mode ON", "Modo Deus ON"},
@@ -264,6 +264,9 @@ constexpr TextEntry kText[] = {
     {"PLAYER 2: TOM", "JOGADOR 2: TOM"},
     {"PRESS A ON", "APERTE A NO"},
     {"ANOTHER GAMEPAD", "OUTRO CONTROLE"},
+    // co-op in play (CK_COOP)
+    {"WAITING", "ESPERANDO"},
+    {"Reconnect gamepad", "Reconecte o controle"},
 };
 
 // ComputerWrist help (chunk 4739)

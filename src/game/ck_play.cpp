@@ -1094,7 +1094,7 @@ void PlayLoop() {
   lockscroll = false;
   RF_SetCameraMode(numplayers > 1);
   if (numplayers > 1) {
-    CoopStartLevel();
+    CoopStartLevel(loadedgame);
     CoopCenter();
   } else {
     CenterActor(player);
@@ -1111,6 +1111,7 @@ void PlayLoop() {
 
   do {
     PollControls();
+    if (numplayers > 1) CoopCheckPads();  // port
 
     // go through state changes and propose movements
     for (objtype* obj = player; obj; obj = obj->next) {

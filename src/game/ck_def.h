@@ -219,8 +219,15 @@ boolean CoopHidden(const objtype* ob);
 // True while the Keen is in play and not dying: the one the camera follows
 // and the actors chase.
 boolean CoopInPlay(int player);
-// Level start: both Keens in play.
-void CoopStartLevel();
+// Level start: both Keens in play; for a loaded game, as they were saved,
+// with the devices picked after loading.
+void CoopStartLevel(boolean loaded);
+// A player's co-op status and respawn tics left, for saving and loading.
+void CoopSaveStatus(int player, sword* status, word* respawnleft);
+void CoopLoadStatus(int player, sword status, word respawnleft);
+// Pauses with "Reconnect gamepad" while a player's gamepad is unplugged,
+// and gives him the next gamepad that is plugged in.
+void CoopCheckPads();
 // Spawns Tom and his score box next to Billy, who was just spawned at
 // (tilex, tiley). `kind`: 0 on foot, 1 on the world map, 2 swimming.
 void CoopSpawnTom(word tilex, word tiley, sword dir, int kind);
@@ -433,7 +440,10 @@ void StarWars();
 void ShowTitle();
 void RunDemo(int num);
 void DrawHighScores();
-void CheckHighScore(std::int32_t score, word completed);
+// Port: `name` starts the name entry (co-op: "Billy", "Tom").
+void CheckHighScore(std::int32_t score, word completed, const char* name = nullptr);
+// Port: CheckHighScore for every player.
+void HighScores();
 void ShowHighScores();
 
 // CK_TEXT

@@ -929,6 +929,8 @@ void DoLoadGame(UserItem* item) {
     ctlpaneldone = false;
   } else {
     loadedgame = true;
+    // port: a co-op game asks each player for a device again
+    if (restartcoop && !CoopInputSetup()) restartpads[0] = restartpads[1] = 0;
   }
   game->present = true;
   if (loadedgame) Paused = true;

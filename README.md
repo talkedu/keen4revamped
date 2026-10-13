@@ -87,3 +87,26 @@ fire and status to any of A, B, X and Y.
 
 `--headless --frames N --shot-every K --out DIR --keys "tic:scancode:down,..."` runs
 without a window and saves frames as PNG, which is how the port is checked in CI and tests.
+`--gamepad` and `--gamepad2` script a first and second gamepad the same way.
+
+## Two-player co-op
+
+CO-OP GAME in the main menu starts a game for two: Billy, and his twin brother Tom in a red
+helmet, green shirt and gray pants. It needs a gamepad for player 2. After the difficulty,
+player 1 presses A on a gamepad or any key (the keyboard is player 1's only), and player 2
+presses A on another gamepad.
+
+- Lives are shared, and so are keys, the wetsuit and the rescued council members. Score,
+  raindrops, ammo and extra Keens at 20,000 points are each player's own, with a score box
+  each.
+- A Keen who dies comes back after 3 seconds where his brother last stood on solid ground,
+  for a life, and flickers for 2 seconds, unhurt. The level fails when the last Keen still
+  in play dies.
+- The first Keen to walk off the map waits for the other; the level ends when both are out.
+  Rescuing a council member or riding the foot ends it for both.
+- The screen splits, side by side or one above the other, when the Keens are too far apart
+  for one view, and joins again when they come back together.
+- If a gamepad is unplugged the game pauses until one is plugged in. Co-op games save and
+  load like any other.
+
+`/TEDLEVEL n COOP` plays one level in co-op, player 2 on the first gamepad.

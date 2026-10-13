@@ -112,7 +112,7 @@ void DrawHighScores() {
 }
 
 // 03ED:1BFE
-void CheckHighScore(std::int32_t score, word completed) {
+void CheckHighScore(std::int32_t score, word completed, const char* name) {
   HighScore myscore{};
   std::strcpy(myscore.name, g_exe.String(0x0242));
   myscore.score = score;
@@ -139,7 +139,7 @@ void CheckHighScore(std::int32_t score, word completed) {
     RF_Refresh();
     PrintY = static_cast<word>(i * 16 + 0x33);
     PrintX = 0x18;
-    US_LineInput(PrintX, PrintY, Scores[n].name, nullptr, true, MaxHighName, 0x70);
+    US_LineInput(PrintX, PrintY, Scores[n].name, name, true, MaxHighName, 0x70);
     scorescreenkludge = false;
   }
 }

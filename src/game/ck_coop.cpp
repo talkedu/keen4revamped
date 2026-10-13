@@ -6,6 +6,7 @@
 
 #include "engine/lang.h"
 #include "game/ck_def.h"
+#include "id/id_sys.h"
 #include "render/art.h"
 
 namespace {
@@ -30,6 +31,8 @@ constexpr int SCOREBOXSPR = 253;
 std::vector<byte> tomscorebox;
 int peakactors;
 word flickerframe;
+sword loadstatus[MAXPLAYERS];  // from a saved game, for CoopStartLevel
+word loadrespawnleft[MAXPLAYERS];
 
 // Co-op events go to stderr; the co-op test reads them.
 void Log(const char* event, int player) {
@@ -260,7 +263,7 @@ boolean CoopInPlay(int player) {
   return ps.status == coop_playing && !Dying(ps.ob);
 }
 
-void CoopStartLevel() {
+void CoopStartLevel(boolean loaded) {
   RF_SetVariantRemap(1, keen4::render::TomColours());
   RF_SetOverlayHook(DrawBadges);
   RF_SetViews(nullptr, 0);
@@ -276,7 +279,58 @@ void CoopStartLevel() {
     ps.groundx = ps.ob->x;
     ps.groundy = ps.ob->y;
     ps.lastpadbuttons = ps.padbuttons;
+    if (!loaded) continue;
+    // a loaded game: the devices picked after loading, and each Keen as he was
+    ps.pad = restartpads[i];
+    if (loadstatus[i] == coop_respawning) {
+      Hide(ps, coop_respawning);
+      ps.respawntime = 3 + loadrespawnleft[i];  // PlayLoop starts the clock at 3
+    } else if (loadstatus[i] == coop_atexit) {
+      Hide(ps, coop_atexit);
+    }
   }
+}
+
+void CoopSaveStatus(int player, sword* status, word* respawnleft) {
+  const PlayerState& ps = players[player];
+  *status = ps.status;
+  std::int32_t left = static_cast<std::int32_t>(ps.respawntime - lasttimecount);
+  *respawnleft = static_cast<word>(ps.status == coop_respawning && left > 0 ? left : 0);
+}
+
+void CoopLoadStatus(int player, sword status, word respawnleft) {
+  loadstatus[player] = status;
+  loadrespawnleft[player] = respawnleft;
+}
+
+void CoopCheckPads() {
+  int lost = -1;
+  for (int i = 0; i < numplayers; i++)
+    if (players[i].pad && !players[i].padconnected) lost = i;
+  if (lost < 0) return;
+  Log("lost his gamepad", lost);
+  SD_MusicOff();
+  US_CenterWindow(20, 3);
+  US_PrintCentered("Reconnect gamepad");
+  VW_UpdateScreen();
+  // the next gamepad plugged in that his brother doesn't use is his
+  std::uint32_t found = 0;
+  while (!found) {
+    SYS_Idle();
+    for (int p = 0; p < IN_GamepadCount() && !found; p++) {
+      std::uint32_t id = IN_GamepadId(p);
+      if (id && id != players[1 - lost].pad) found = id;
+    }
+    if (LastScan == sc_Escape) break;  // the control panel, then this again
+  }
+  if (found) {
+    players[lost].pad = found;
+    Log("has a gamepad again", lost);
+  }
+  if (found) IN_ClearKeysDown();  // else Escape opens the control panel
+  SD_MusicOn();
+  RF_ForceRefresh();
+  lasttimecount = TimeCount;
 }
 
 void CoopSpawnTom(word tilex, word tiley, sword dir, int kind) {
