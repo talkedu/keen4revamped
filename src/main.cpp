@@ -1,8 +1,10 @@
 // Entry point: finds the game data, loads KEEN4E.EXE, sets up the platform
 // layer and runs the ported CK_MAIN.
 //
-//   keen4 [--data DIR] [--save DIR] [--fullscreen] [--scale N] [--nosound] [--lang en|pt-BR]
+//   keen4 [--data DIR] [--save DIR] [--fullscreen|--windowed] [--vsync|--no-vsync]
+//         [--classic] [--scale N] [--nosound] [--lang en|pt-BR]
 //         [original parameters such as /NOWAIT, /TEDLEVEL n, EASY]
+// The video flags override the VIDEO card's saved settings, as --lang does the language.
 //
 // Headless mode renders without a window, for tests and CI:
 //   keen4 --headless --frames N [--shot-every K] [--out DIR]
@@ -165,7 +167,8 @@ int main(int argc, char** argv) {
   keen4::update::Init(argc, argv);
 
   std::string datadir, savedir;
-  bool headless = false, fullscreen = false, sound = true, vsync = false;
+  bool headless = false, sound = true;
+  int fullscreen = -1, vsync = -1;  // -1: the saved setting
   bool classic = false, nearest = false, interpolate = true, hdshots = false;
   std::vector<std::string> artdirs;
   bool curated = false, remastered_audio = false;
@@ -198,7 +201,9 @@ int main(int argc, char** argv) {
     else if (a == "--tics")
       scripted->max_tics = std::strtoull(next().c_str(), nullptr, 10);
     else if (a == "--fullscreen")
-      fullscreen = true;
+      fullscreen = 1;
+    else if (a == "--windowed")
+      fullscreen = 0;
     else if (a == "--scale")
       scale = std::atoi(next().c_str());
     else if (a == "--nosound")
@@ -217,7 +222,9 @@ int main(int argc, char** argv) {
     else if (a == "--sim-vsync")
       scripted->vsync_hz = std::atoi(next().c_str());
     else if (a == "--vsync")
-      vsync = true;
+      vsync = 1;
+    else if (a == "--no-vsync")
+      vsync = 0;
     else if (a == "--classic")
       classic = true;
     else if (a == "--art")
@@ -296,15 +303,23 @@ int main(int argc, char** argv) {
   // recordings in audio/ instead, and the original for anything not listed.
   if (remastered_audio && keen4::audio::AudioOptions().dir.empty()) keen4::audio::AudioOptions().dir = "audio";
 
+  // The VIDEO card's settings, read before the window opens so it opens in
+  // the saved mode; the command line wins. Released builds start in full
+  // screen, development builds in a window.
+  keen4::platform::VideoSettings video;
+  video.fullscreen = keen4::IsReleaseBuild();
+  US_ReadVideoConfig(&video);
+  if (fullscreen >= 0) video.fullscreen = fullscreen != 0;
+  if (vsync >= 0) video.vsync = vsync != 0;
+  if (classic) video.upscaled = false;
+
   std::unique_ptr<keen4::platform::IPlatform> platform;
 #ifdef KEEN4_WITH_SDL3
   if (!headless) {
     keen4::platform::SdlOptions options;
     options.scale = scale;
-    options.fullscreen = fullscreen;
     options.audio = sound;
-    options.vsync = vsync;
-    options.remaster = !classic;
+    options.video = video;
     options.interpolate = interpolate;
     options.nearest = nearest;
     options.art_dirs = artdirs;
@@ -354,7 +369,10 @@ int main(int argc, char** argv) {
   (void)interpolate;
   (void)classic;
 #endif
-  if (headless) platform = std::move(scripted);
+  if (headless) {
+    scripted->SetVideo(video);
+    platform = std::move(scripted);
+  }
   keen4::platform::Set(platform.get());
 
   gameargs.push_back(nullptr);

@@ -137,6 +137,7 @@ class SdlPlatform final : public IPlatform {
     remaster_renderer_.reset();
     for (SDL_Gamepad* pad : gamepads_) SDL_CloseGamepad(pad);
     if (stream_) SDL_DestroyAudioStream(stream_);
+    if (target_) SDL_DestroyTexture(target_);
     if (texture_) SDL_DestroyTexture(texture_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
     if (window_) SDL_DestroyWindow(window_);
@@ -153,10 +154,15 @@ class SdlPlatform final : public IPlatform {
     if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
       std::fprintf(stderr, "No gamepad support: %s\n", SDL_GetError());
     int scale = options.scale > 0 ? options.scale : 3;
-    remaster_ = options.remaster;
+    video_ = options.video;
     // the remaster view is 16:9, the classic one 4:3
-    int winw = remaster_ ? 427 * scale : 320 * scale;
-    window_ = SDL_CreateWindow("Commander Keen 4", winw, 240 * scale, SDL_WINDOW_RESIZABLE);
+    int winw = video_.upscaled ? 427 * scale : 320 * scale, winh = 240 * scale;
+    if (video_.upscaled && video_.width > 0 && video_.height > 0) {
+      winw = video_.width;
+      winh = video_.height;
+    }
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | (video_.fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+    window_ = SDL_CreateWindow("Commander Keen 4", winw, winh, flags);
     if (!window_) {
       std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
       return false;
@@ -166,8 +172,6 @@ class SdlPlatform final : public IPlatform {
       std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
       return false;
     }
-    vsync_ = options.vsync;
-    remaster_vsync_ = options.remaster_vsync;
     art_.SetDirectories(options.art_dirs);
     art_.SetFallback(options.nearest ? render::Fallback::Nearest : render::Fallback::Scale4x);
     ReloadArt();
@@ -179,7 +183,6 @@ class SdlPlatform final : public IPlatform {
     float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
     refresh_ns_ = static_cast<Uint64>(1e9 / hz);
     ApplyMode();
-    if (options.fullscreen) SDL_SetWindowFullscreen(window_, true);
     start_ns_ = SDL_GetTicksNS();
     return true;
   }
@@ -189,7 +192,7 @@ class SdlPlatform final : public IPlatform {
   void Delay(int ms) override {
     // While the game waits for its next frame, keep drawing in-between frames
     // so motion stays smooth at the display's refresh rate.
-    if (remaster_ && have_frame_ && remaster_renderer_->interpolate) {
+    if (video_.upscaled && have_frame_ && remaster_renderer_->interpolate) {
       Uint64 now = SDL_GetTicksNS();
       if (now - last_draw_ns_ >= refresh_ns_) {
         DrawRemaster(now);
@@ -201,7 +204,7 @@ class SdlPlatform final : public IPlatform {
 
   void Present(const std::uint8_t* pixels, int width, int height,
                const std::uint32_t* palette) override {
-    if (remaster_ && width == render::kClassicWidth && height == render::kClassicHeight) {
+    if (video_.upscaled && width == render::kClassicWidth && height == render::kClassicHeight) {
       frame_.assign(pixels, pixels + width * height);
       std::memcpy(palette_, palette, sizeof palette_);
       have_frame_ = true;
@@ -220,7 +223,7 @@ class SdlPlatform final : public IPlatform {
       tex_h_ = height;
       rgb_.resize(static_cast<std::size_t>(width) * height);
     }
-    if (!vsync_) {
+    if (!video_.vsync) {
       // Menus redraw in tight loops; keep them to the original 70 Hz.
       const Uint64 period = 1000000000ull / 70;
       Uint64 now = SDL_GetTicksNS();
@@ -282,10 +285,40 @@ class SdlPlatform final : public IPlatform {
 
   bool OpenUrl(const char* url) override {
     // leave fullscreen, or the browser opens behind the game
-    if (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) SDL_SetWindowFullscreen(window_, false);
+    if (video_.fullscreen) {
+      VideoSettings video = video_;
+      video.fullscreen = false;
+      SetVideo(video);
+    }
     return SDL_OpenURL(url);
   }
   void SetClipboardText(const char* text) override { SDL_SetClipboardText(text); }
+
+  void SetVideo(const VideoSettings& video) override {
+    VideoSettings old = video_;
+    video_ = video;
+    if (video_.width <= 0 || video_.height <= 0) video_.width = video_.height = 0;
+    if (video_.fullscreen != old.fullscreen) SDL_SetWindowFullscreen(window_, video_.fullscreen);
+    // In a window, a fixed resolution is also the window's size.
+    bool sized = video_.upscaled && video_.width > 0;
+    bool resized = video_.width != old.width || video_.height != old.height ||
+                   video_.fullscreen != old.fullscreen || video_.upscaled != old.upscaled;
+    if (!video_.fullscreen && sized && resized) SDL_SetWindowSize(window_, video_.width, video_.height);
+    ApplyMode();
+  }
+
+  std::vector<Resolution> Resolutions() override {
+    SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+    const SDL_DisplayMode* mode = display ? SDL_GetDesktopDisplayMode(display) : nullptr;
+    if (!mode) return StandardResolutions();
+    float density = mode->pixel_density > 0 ? mode->pixel_density : 1.0f;
+    int maxw = static_cast<int>(mode->w * density), maxh = static_cast<int>(mode->h * density);
+    std::vector<Resolution> fits;
+    for (const Resolution& r : StandardResolutions())
+      if (r.width <= maxw && r.height <= maxh) fits.push_back(r);
+    if (fits.empty()) fits.push_back(StandardResolutions().front());
+    return fits;
+  }
 
  private:
   static void Read(SDL_Gamepad* pad, GamepadState* state) {
@@ -322,12 +355,37 @@ class SdlPlatform final : public IPlatform {
   }
 
   void ApplyMode() {
-    if (remaster_) {
-      SDL_SetRenderVSync(renderer_, remaster_vsync_ ? 1 : 0);
+    SDL_SetRenderVSync(renderer_, video_.vsync ? 1 : 0);
+    bool fixed = video_.upscaled && video_.width > 0;
+    if (target_ && (!fixed || target_w_ != video_.width || target_h_ != video_.height)) {
+      SDL_DestroyTexture(target_);
+      target_ = nullptr;
+    }
+    if (fixed && !target_) {
+      // A fixed resolution: the remaster view is drawn into an image of that
+      // size, which is then scaled to the window.
+      target_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, video_.width,
+                                  video_.height);
+      if (!target_) {
+        std::fprintf(stderr, "video: no %dx%d render target: %s\n", video_.width, video_.height, SDL_GetError());
+        fixed = false;
+      } else {
+        target_w_ = video_.width;
+        target_h_ = video_.height;
+        SDL_SetTextureScaleMode(target_, SDL_SCALEMODE_LINEAR);
+        // each render target keeps its own logical presentation
+        SDL_SetRenderTarget(renderer_, target_);
+        SDL_SetRenderLogicalPresentation(renderer_, render::kWideWidth, render::kClassicHeight,
+                                         SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        SDL_SetRenderTarget(renderer_, nullptr);
+      }
+    }
+    if (fixed) {
+      SDL_SetRenderLogicalPresentation(renderer_, target_w_, target_h_, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    } else if (video_.upscaled) {
       SDL_SetRenderLogicalPresentation(renderer_, render::kWideWidth, render::kClassicHeight,
                                        SDL_LOGICAL_PRESENTATION_LETTERBOX);
     } else {
-      SDL_SetRenderVSync(renderer_, vsync_ ? 1 : 0);
       // 320x200 shown with the 4:3 aspect of a CRT, as 320x240.
       SDL_SetRenderLogicalPresentation(renderer_, 320, 240, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     }
@@ -341,12 +399,21 @@ class SdlPlatform final : public IPlatform {
   }
 
   void DrawRemaster(Uint64 now) {
-    if (!remaster_vsync_) {
+    if (!video_.vsync) {
       // without vsync, stay at the display's rate
       if (now - last_draw_ns_ < refresh_ns_) SDL_DelayNS(refresh_ns_ - (now - last_draw_ns_));
       now = SDL_GetTicksNS();
     }
-    remaster_renderer_->Draw(frame_.data(), palette_, now);
+    if (target_) {
+      SDL_SetRenderTarget(renderer_, target_);
+      remaster_renderer_->Draw(frame_.data(), palette_, now);
+      SDL_SetRenderTarget(renderer_, nullptr);
+      SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+      SDL_RenderClear(renderer_);
+      SDL_RenderTexture(renderer_, target_, nullptr, nullptr);
+    } else {
+      remaster_renderer_->Draw(frame_.data(), palette_, now);
+    }
     SDL_RenderPresent(renderer_);
     last_draw_ns_ = now;
   }
@@ -370,8 +437,9 @@ class SdlPlatform final : public IPlatform {
               break;
             }
             // F11: switch between the remaster and the classic renderer
-            remaster_ = !remaster_;
-            ApplyMode();
+            VideoSettings video = video_;
+            video.upscaled = !video.upscaled;
+            SetVideo(video);
             break;
           }
           if (down && ev.key.scancode == SDL_SCANCODE_F12 && !ev.key.repeat) {
@@ -386,8 +454,9 @@ class SdlPlatform final : public IPlatform {
           }
           if (ev.key.scancode == SDL_SCANCODE_F11 || ev.key.scancode == SDL_SCANCODE_F12) break;
           if (down && ev.key.scancode == SDL_SCANCODE_RETURN && (ev.key.mod & SDL_KMOD_ALT)) {
-            fullscreen_ = !fullscreen_;
-            SDL_SetWindowFullscreen(window_, fullscreen_);
+            VideoSettings video = video_;
+            video.fullscreen = !video.fullscreen;
+            SetVideo(video);
             break;
           }
           XtCode xt = ToXt(ev.key.scancode);
@@ -399,6 +468,13 @@ class SdlPlatform final : public IPlatform {
           keys_.push_back({xt.code, down, xt.extended});
           break;
         }
+        // the window manager can change the mode too (such as a maximize button)
+        case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+          video_.fullscreen = true;
+          break;
+        case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+          video_.fullscreen = false;
+          break;
         case SDL_EVENT_GAMEPAD_ADDED:
           if (SDL_Gamepad* pad = SDL_OpenGamepad(ev.gdevice.which)) {
             if (std::find(gamepads_.begin(), gamepads_.end(), pad) == gamepads_.end())
@@ -429,13 +505,11 @@ class SdlPlatform final : public IPlatform {
   std::vector<std::uint32_t> rgb_;
   std::deque<KeyEvent> keys_;
   std::vector<SDL_Gamepad*> gamepads_;  // in connection order
+  SDL_Texture* target_ = nullptr;  // the remaster view at a fixed resolution
+  int target_w_ = 0, target_h_ = 0;
   bool quit_ = false;
-  bool fullscreen_ = false;
   Uint64 start_ns_ = 0;
   Uint64 last_present_ns_ = 0;
-  bool vsync_ = false;
-  bool remaster_ = false;
-  bool remaster_vsync_ = true;
   render::ArtLibrary art_;
   std::unique_ptr<RemasterRenderer> remaster_renderer_;
   std::vector<std::uint8_t> frame_;

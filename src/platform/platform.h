@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 // Platform interface. Engine and game code reach the operating system only
 // through this; the SDL3 and headless backends implement it.
@@ -39,6 +40,23 @@ struct GamepadState {
 
 // Fills `count` stereo frames (2 floats each, -1..1) at the rate StartAudio returned.
 using AudioCallback = void (*)(float* frames, int count, void* user);
+
+// The VIDEO card's settings, saved in the config file.
+struct VideoSettings {
+  bool fullscreen = false;
+  bool vsync = true;
+  bool upscaled = true;  // the remaster renderer; false shows the original 320x200 frame
+  // The size the upscaled view is drawn at before it is scaled to the window;
+  // 0x0 (AUTO) draws it at the window's own size.
+  int width = 0, height = 0;
+};
+
+struct Resolution {
+  int width, height;
+};
+
+// The 16:9 sizes the VIDEO card offers, smallest first.
+std::vector<Resolution> StandardResolutions();
 
 class IPlatform {
  public:
@@ -81,6 +99,16 @@ class IPlatform {
   // Opens a web page in the player's browser (the updater's GitHub sign-in).
   virtual bool OpenUrl(const char*) { return false; }
   virtual void SetClipboardText(const char*) {}
+
+  // Screen mode, vsync, renderer and resolution. Backends without a window
+  // just keep the values, so the menu still cycles through them.
+  virtual VideoSettings GetVideo() { return video_; }
+  virtual void SetVideo(const VideoSettings& video) { video_ = video; }
+  // The resolutions that fit the display.
+  virtual std::vector<Resolution> Resolutions() { return StandardResolutions(); }
+
+ protected:
+  VideoSettings video_;
 };
 
 // The active backend.

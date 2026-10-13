@@ -10,19 +10,17 @@ namespace keen4::platform {
 
 struct SdlOptions {
   int scale = 3;          // initial window size: 320x240 times this
-  bool fullscreen = false;
   bool audio = true;
-  // Off by default: the game runs at 35 frames per second on a 70 Hz clock,
-  // and waiting for a 60 Hz vertical blank makes frames alternate between 2
-  // and 3 tics, so motion and scrolling stutter.
-  bool vsync = false;
-
-  // Remaster renderer (milestone 6): new art in a 16:9 view at native
-  // resolution, with motion interpolated between game frames. F11 switches
-  // to the classic renderer and back, F12 reloads the art manifests and
+  // Screen mode, vsync, renderer and resolution (the VIDEO card). Alt+Enter
+  // switches full screen and F11 the renderer.
+  //
+  // The remaster renderer (milestone 6) draws new art in a 16:9 view at
+  // native resolution, with motion interpolated between game frames, which
+  // hides the uneven frame steps of vsync. The classic renderer shows the
+  // 35 fps game on a 70 Hz clock; on a 60 Hz display, vsync makes its frames
+  // alternate between 2 and 3 refreshes. F12 reloads the art manifests and
   // Shift+F12 shows sprite hitboxes over the art.
-  bool remaster = true;
-  bool remaster_vsync = true;  // interpolation hides the uneven frame steps
+  VideoSettings video;
   bool interpolate = true;
   bool nearest = false;        // fallback art: nearest-neighbour instead of Scale4x
   // Folders with a manifest.txt, curated art first; the first that lists an

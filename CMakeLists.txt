@@ -101,6 +101,10 @@ endif()
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 set_source_files_properties(src/engine/version.cpp PROPERTIES
   COMPILE_DEFINITIONS "KEEN4_VERSION=\"${PROJECT_VERSION}\"")
+if(KEEN4_VERSION)
+  # a release build (see the top): it starts in full screen until the player changes it
+  set_property(SOURCE src/engine/version.cpp APPEND PROPERTY COMPILE_DEFINITIONS KEEN4_RELEASE_BUILD)
+endif()
 set_source_files_properties(src/update/github.cpp PROPERTIES
   COMPILE_DEFINITIONS "KEEN4_GITHUB_CLIENT_ID=\"${KEEN4_GITHUB_CLIENT_ID}\";KEEN4_UPDATE_REPO=\"${KEEN4_UPDATE_REPO}\"")
 # The updater talks HTTPS through WinHTTP on Windows and through the system's
