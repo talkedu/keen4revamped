@@ -182,6 +182,7 @@ UserItem* loadsaveitems;       // 1F99:0000
 UserItem* optionsitems;        // 1FAA:0000
 UserItem* keybuttonitems;      // 1FBD:0000
 UserItem* configitems;         // 1FCC:0000
+UserItemGroup* configgroup;    // the card configitems are on
 
 void LoadTree() {
   if (treeloaded) return;
@@ -198,20 +199,9 @@ void LoadTree() {
   keybuttonitems = LoadItems(0x1FBD, 0);
   configitems = LoadItems(0x1FCC, 0);
 
-  // Port: language and update items above QUIT, and a co-op item under NEW
-  // GAME. The list starts right under the card's title, its eleven items are
-  // seven pixels apart and the footer is one line (see DrawCtlPanelFooter).
+  // Port: a co-op item under NEW GAME. The list starts right under the
+  // card's title and its items are seven pixels apart.
   std::vector<UserItem>& items = itemarrays[Linear(0x1FD8, 0)];
-  UserItem language{};
-  language.type = uii_Button;
-  language.comm = uc_Language;
-  language.text = keen4::lang::MenuLabel();
-  items.insert(items.end() - 2, language);
-  UserItem update{};
-  update.type = uii_Button;
-  update.comm = uc_Update;
-  update.text = "CHECK FOR UPDATES";
-  items.insert(items.end() - 2, update);
   UserItem coop{};
   coop.type = uii_Button;
   coop.comm = uc_Coop;
@@ -219,14 +209,36 @@ void LoadTree() {
   items.insert(items.begin() + 1, coop);
   rootgroup->items = rootitems = items.data();
   rootgroup->y = 0;
+
+  // Port: language and update items under OPTIONS on the configure card.
+  // Its nine items are seven pixels apart, the gap before USE KEYBOARD is
+  // halved and the footer is one line (see DrawCtlPanelFooter).
+  std::vector<UserItem>& config = itemarrays[Linear(0x1FCC, 0)];
+  UserItem language{};
+  language.type = uii_Button;
+  language.comm = uc_Language;
+  language.text = keen4::lang::MenuLabel();
+  UserItem update{};
+  update.type = uii_Button;
+  update.comm = uc_Update;
+  update.text = "CHECK FOR UPDATES";
+  UserItem* old = configitems;
+  config.insert(config.begin() + 3, {language, update});
+  configitems = config.data();
+  for (auto& [key, group] : groups) {
+    if (group->items != old) continue;
+    group->items = configitems;
+    configgroup = group.get();
+  }
 }
 
-// The root items the original code refers to by number (the co-op item
-// comes after NEW GAME).
+// The root and configure items the original code refers to by number (the
+// co-op item comes after NEW GAME, language and update after OPTIONS).
 UserItem& RootItem(int original) { return rootitems[original >= 1 ? original + 1 : original]; }
+UserItem& ConfigItem(int original) { return configitems[original >= 3 ? original + 2 : original]; }
 
-// Item rows are 8 pixels apart; the root card's eleven are 7.
-int RowHeight(const UserItemGroup* card) { return card == rootgroup ? 7 : 8; }
+// Item rows are 8 pixels apart; the root and configure cards' are 7.
+int RowHeight(const UserItemGroup* card) { return card == rootgroup || card == configgroup ? 7 : 8; }
 
 // ---------------------------------------------------------------------------
 // State (DGROUP 78D6..78E2, E814..E834)
@@ -315,10 +327,10 @@ void DrawItem(UserItem* item) {
 
 // 1A89:01A6
 void DrawCtlPanelFooter() {
-  // Port: the main menu's list reaches one line further down, so its footer
-  // leaves out "ESC to quit" (QUIT is on the menu).
-  bool root = topcard == rootgroup;
-  int top = root ? 0x8D : 0x85;
+  // Port: the configure card's list reaches further down, so its footer
+  // leaves out "ESC to back out".
+  bool compact = topcard == configgroup;
+  int top = compact ? 0x8D : 0x85;
   word w, h;
   fontcolor = HiliteColor;
   px = CTL_X + 4;
@@ -327,7 +339,7 @@ void DrawCtlPanelFooter() {
   Measure(footerstrings[1], &w, &h);
   px = static_cast<sword>(0xE6 - w);
   DrawString(footerstrings[1]);
-  if (!root) {
+  if (!compact) {
     Measure(footerstrings[0], &w, &h);
     px = static_cast<sword>(CTL_X + (CTL_W - w) / 2);
     py = static_cast<sword>(py + h + 1);
@@ -366,7 +378,7 @@ void DrawCtlPanelContents() {
   if (x % 8) x += 8 - x % 8;
   int y = topcard->y + 0x3C;
   for (UserItem* item = topcard->items; item->type; item++) {
-    if (item->flags & ui_Separated) y += 8;
+    if (item->flags & ui_Separated) y += topcard == configgroup ? 4 : 8;
     item->x = static_cast<word>(x);
     item->y = static_cast<word>(y);
     DrawItem(item);
@@ -896,10 +908,10 @@ void SetOptionsText() {
   keybuttonitems[2].flags &= static_cast<word>(~ui_Disabled);
   if (oldshooting) keybuttonitems[2].flags |= ui_Disabled;
 
-  configitems[6].flags |= ui_Disabled;
+  ConfigItem(6).flags |= ui_Disabled;
   if (Controls[0] == ctrl_Joystick1 || Controls[0] == ctrl_Joystick2)
-    configitems[6].flags &= static_cast<word>(~ui_Disabled);
-  configitems[6].text = S(GravisGamepad ? 0x4AB0 : 0x4AC8);
+    ConfigItem(6).flags &= static_cast<word>(~ui_Disabled);
+  ConfigItem(6).text = S(GravisGamepad ? 0x4AB0 : 0x4AC8);
 }
 
 boolean ToggleOption(int msg, boolean* flag, word ontext, word offtext, word anykey) {
@@ -924,7 +936,7 @@ boolean ConfigCustom(int msg, UserItem*) {
     Measure(s, &w, &h);
     const char* name = S(g_exe.Word(static_cast<std::uint16_t>(0x4762 + Controls[0] * 2)));
     Measure(name, &w2, &h);
-    py = static_cast<sword>(0x84 - h);
+    py = static_cast<sword>(0x8C - h);  // port: above the lower footer line
     px = static_cast<sword>(CTL_X + (CTL_W - (w + w2)) / 2);
     fontcolor = HiliteColor;
     DrawString(s);
@@ -1676,9 +1688,9 @@ void SetControlValues() {
     soundmodeitems[3].flags |= ui_Disabled;
     musicmodeitems[1].flags |= ui_Disabled;
   }
-  if (!JoysPresent[0]) configitems[4].flags |= ui_Disabled;
-  if (!JoysPresent[1]) configitems[5].flags |= ui_Disabled;
-  if (!JoysPresent[0] && !JoysPresent[1]) configitems[6].flags |= ui_Disabled;
+  if (!JoysPresent[0]) ConfigItem(4).flags |= ui_Disabled;
+  if (!JoysPresent[1]) ConfigItem(5).flags |= ui_Disabled;
+  if (!JoysPresent[0] && !JoysPresent[1]) ConfigItem(6).flags |= ui_Disabled;
 
   RootItem(4).text = S(ingame ? 0x4E5A : 0x4E69);  // "RETURN TO GAME" / "RETURN TO DEMO"
   if (!ingame) {
@@ -1686,7 +1698,7 @@ void SetControlValues() {
     RootItem(5).flags |= ui_Disabled;
   }
   // updating restarts the game, so not in the middle of one
-  for (UserItem* item = rootitems; item->type; item++) {
+  for (UserItem* item = configitems; item->type; item++) {
     if (item->comm == uc_Update && ingame) item->flags |= ui_Disabled;
   }
   rootgroup->cursor = static_cast<word>(ingame ? &RootItem(4) - rootitems : 0);
