@@ -164,9 +164,8 @@ jobs:
             export NSISDIR="$nsis/root/usr/share/nsis"
             makensis="$nsis/root/usr/bin/makensis"
           fi
-          version=$(sed -n 's/^project(keen4revamped VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
           dir="keen4revamped-$TAG-${{ matrix.name }}"
-          "$makensis" -V2 -DVERSION="$version" -DSRCDIR="$PWD/$dir" \
+          "$makensis" -V2 -DVERSION="$VERSION" -DSRCDIR="$PWD/$dir" \
             -DOUTFILE="$PWD/$dir-installer.exe" packaging/windows/keen4revamped.nsi
       - name: Package (Linux)
         if: matrix.preset == 'release'
