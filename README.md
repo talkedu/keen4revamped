@@ -115,8 +115,16 @@ The game's text is in English or Brazilian Portuguese: the LANGUAGE item of the 
 card switches between them and the choice is saved with the configuration. `--lang en` or
 `--lang pt-BR` picks one for a single run. See [docs/LANGUAGES.md](docs/LANGUAGES.md).
 
-Other options: `--fullscreen` (Alt+Enter toggles), `--scale N` (window size), `--nosound`,
-`--vsync` (sync to the display; smoother on 70 Hz screens, stutters on 60 Hz ones).
+The VIDEO card of the CONFIGURE menu sets SCREEN (full screen or window, also Alt+Enter),
+VSYNC, GRAPHICS (upscaled or original, also F11) and, for the upscaled view, RESOLUTION:
+AUTO draws it at the window's size, a fixed size draws it at that size and scales it to the
+window or screen. The settings apply at once and are saved with the configuration;
+`--fullscreen`/`--windowed`, `--vsync`/`--no-vsync` and `--classic` override them for one run.
+With the original graphics on a 60 Hz display, VSYNC ON makes motion uneven (the game runs on
+a 70 Hz clock), so turn it off there. The USE KEYBOARD and joystick items are on the CONTROLS
+card.
+
+Other options: `--scale N` (window size), `--nosound`.
 The original's parameters still work, for example `/TEDLEVEL 3 HARD` to jump to a level.
 
 Controls are the original defaults: arrows move, Ctrl jumps, Alt pogos, Space fires,

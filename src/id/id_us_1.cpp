@@ -15,6 +15,7 @@
 #include "id/id_sys.h"
 #include "id/id_us.h"
 #include "id/id_vw.h"
+#include "platform/platform.h"
 
 boolean ingame, abortgame, loadedgame, NoWait;
 boolean HighScoresDirty;
@@ -121,13 +122,43 @@ void USL_WriteConfig() {
   std::fwrite(GravisMap, 8, 1, f);
   byte language = static_cast<byte>(keen4::lang::Current());
   std::fwrite(&language, 1, 1, f);
+  // Port: the VIDEO card's settings follow the language (see US_ReadVideoConfig).
+  keen4::platform::VideoSettings video = keen4::platform::Get().GetVideo();
+  byte flags[3] = {video.fullscreen, video.vsync, video.upscaled};
+  word size[2] = {static_cast<word>(video.width), static_cast<word>(video.height)};
+  std::fwrite(flags, 1, 3, f);
+  std::fwrite(size, 2, 2, f);
   std::fclose(f);
 }
+
+// Where the video settings start: after the original fields and the language.
+constexpr long kVideoOffset = 4 + 2 + sizeof Scores + 3 * 2 + 10 + 6 * 2 + 1 + 2 + 8 + 1;
 
 // The original stores the address of PrintX (DGROUP A537) as a build check.
 constexpr word kOldTest = 0xA537;
 
 }  // namespace
+
+void US_ReadVideoConfig(keen4::platform::VideoSettings* video) {
+  std::FILE* f = std::fopen(keen4::files::WritePath(kConfigName).c_str(), "rb");
+  if (!f) return;
+  char sig[4];
+  word version = 0;
+  byte flags[3];
+  word size[2];
+  // older files end before the video settings, and keep the defaults
+  if (std::fread(sig, 1, 4, f) == 4 && std::fread(&version, 2, 1, f) == 1 &&
+      std::memcmp(sig, kConfigSig, 4) == 0 && version == kConfigVersion &&
+      std::fseek(f, kVideoOffset, SEEK_SET) == 0 && std::fread(flags, 1, 3, f) == 3 &&
+      std::fread(size, 2, 2, f) == 2) {
+    video->fullscreen = flags[0] != 0;
+    video->vsync = flags[1] != 0;
+    video->upscaled = flags[2] != 0;
+    video->width = size[0];
+    video->height = size[1];
+  }
+  std::fclose(f);
+}
 
 // 1931:0490
 void USL_CheckSavedGames() {

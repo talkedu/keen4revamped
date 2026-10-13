@@ -77,6 +77,8 @@ enum { uc_None, uc_Return, uc_Abort, uc_Quit, uc_Loaded, uc_SEasy, uc_SNormal, u
 constexpr word uc_Language = 0x100;  // port: the main menu's language item
 constexpr word uc_Coop = 0x101;      // port: the main menu's co-op item
 constexpr word uc_Update = 0x102;    // port: the main menu's update item
+// Port: the VIDEO card's items, which cycle through their values.
+constexpr word uc_Screen = 0x103, uc_Vsync = 0x104, uc_Graphics = 0x105, uc_Resolution = 0x106;
 enum { uic_SetupCard, uic_DrawCard, uic_TouchupCard, uic_DrawIcon, uic_Draw, uic_Hit };
 
 struct UserItemGroup;
@@ -183,6 +185,10 @@ UserItem* optionsitems;        // 1FAA:0000
 UserItem* keybuttonitems;      // 1FBD:0000
 UserItem* configitems;         // 1FCC:0000
 UserItemGroup* configgroup;    // the card configitems are on
+// Port: the configure card's VIDEO and CONTROLS cards.
+UserItemGroup videogroup, controlsgroup;
+std::vector<UserItem> videoitems, controlitems;
+std::string videotext[4];
 
 void LoadTree() {
   if (treeloaded) return;
@@ -210,35 +216,118 @@ void LoadTree() {
   rootgroup->items = rootitems = items.data();
   rootgroup->y = 0;
 
-  // Port: language and update items under OPTIONS on the configure card.
-  // Its nine items are seven pixels apart, the gap before USE KEYBOARD is
-  // halved and the footer is one line (see DrawCtlPanelFooter).
+  // Port: the configure card becomes VIDEO, SOUND, MUSIC, OPTIONS, CONTROLS,
+  // then LANGUAGE and CHECK FOR UPDATES after a gap. The four USE items and
+  // the CONTROL: line (ConfigCustom) move to the CONTROLS card.
   std::vector<UserItem>& config = itemarrays[Linear(0x1FCC, 0)];
-  UserItem language{};
-  language.type = uii_Button;
-  language.comm = uc_Language;
-  language.text = keen4::lang::MenuLabel();
-  UserItem update{};
-  update.type = uii_Button;
-  update.comm = uc_Update;
-  update.text = "CHECK FOR UPDATES";
-  UserItem* old = configitems;
-  config.insert(config.begin() + 3, {language, update});
-  configitems = config.data();
   for (auto& [key, group] : groups) {
-    if (group->items != old) continue;
-    group->items = configitems;
-    configgroup = group.get();
+    if (group->items == configitems) configgroup = group.get();
   }
+  controlitems.assign(config.begin() + 3, config.begin() + 7);
+  controlitems.push_back(UserItem{});
+  controlitems[0].flags &= static_cast<word>(~ui_Separated);
+  controlsgroup = *configgroup;
+  controlsgroup.picnum = 0;
+  controlsgroup.items = controlitems.data();
+  controlsgroup.cursor = 0;
+
+  auto button = [](word comm) {
+    UserItem item{};
+    item.type = uii_Button;
+    item.comm = comm;
+    return item;
+  };
+  videoitems = {button(uc_Screen), button(uc_Vsync), button(uc_Graphics), button(uc_Resolution), UserItem{}};
+  videogroup = *configgroup;
+  videogroup.picnum = 0;
+  videogroup.custom = nullptr;
+  videogroup.items = videoitems.data();
+  videogroup.cursor = 0;
+
+  UserItem video{};
+  video.type = uii_Folder;
+  video.text = "VIDEO";
+  video.child = &videogroup;
+  UserItem controls{};
+  controls.type = uii_Folder;
+  controls.text = "CONTROLS";
+  controls.child = &controlsgroup;
+  UserItem language = button(uc_Language);
+  language.flags = ui_Separated;
+  language.text = keen4::lang::MenuLabel();
+  UserItem update = button(uc_Update);
+  update.text = "CHECK FOR UPDATES";
+  config = {video, config[0], config[1], config[2], controls, language, update, UserItem{}};
+  configgroup->items = configitems = config.data();
+  configgroup->custom = nullptr;
 }
 
-// The root and configure items the original code refers to by number (the
-// co-op item comes after NEW GAME, language and update after OPTIONS).
+// The root items the original code refers to by number (the co-op item comes
+// after NEW GAME).
 UserItem& RootItem(int original) { return rootitems[original >= 1 ? original + 1 : original]; }
-UserItem& ConfigItem(int original) { return configitems[original >= 3 ? original + 2 : original]; }
 
-// Item rows are 8 pixels apart; the root and configure cards' are 7.
-int RowHeight(const UserItemGroup* card) { return card == rootgroup || card == configgroup ? 7 : 8; }
+// Item rows are 8 pixels apart; the root card's are 7.
+int RowHeight(const UserItemGroup* card) { return card == rootgroup ? 7 : 8; }
+
+// Port: the VIDEO and CONTROLS cards have no title picture, so their title is
+// drawn as text.
+const char* CardTitle(const UserItemGroup* card) {
+  if (card == &videogroup) return "VIDEO";
+  if (card == &controlsgroup) return "CONTROLS";
+  return nullptr;
+}
+
+// Port: the VIDEO card's items show their current values, such as
+// "VSYNC: ON", already in the chosen language. RESOLUTION is only for the
+// upscaled view.
+void SetVideoText() {
+  using keen4::lang::Tr;
+  keen4::platform::VideoSettings video = keen4::platform::Get().GetVideo();
+  auto row = [](int i, const char* label, const std::string& value) {
+    videotext[i] = std::string(Tr(label)) + ": " + value;
+    videoitems[i].text = videotext[i].c_str();
+  };
+  row(0, "SCREEN", Tr(video.fullscreen ? "FULL SCREEN" : "WINDOW"));
+  row(1, "VSYNC", Tr(video.vsync ? "ON" : "OFF"));
+  row(2, "GRAPHICS", Tr(video.upscaled ? "UPSCALED" : "ORIGINAL"));
+  std::string size = Tr("AUTO");
+  if (video.width > 0) size = std::to_string(video.width) + "X" + std::to_string(video.height);
+  row(3, "RESOLUTION", size);
+  if (video.upscaled)
+    videoitems[3].flags &= static_cast<word>(~ui_Disabled);
+  else
+    videoitems[3].flags |= ui_Disabled;
+}
+
+// Port: the next value of a VIDEO item, applied at once.
+void ChangeVideo(word comm) {
+  keen4::platform::IPlatform& platform = keen4::platform::Get();
+  keen4::platform::VideoSettings video = platform.GetVideo();
+  switch (comm) {
+    case uc_Screen: video.fullscreen = !video.fullscreen; break;
+    case uc_Vsync: video.vsync = !video.vsync; break;
+    case uc_Graphics: video.upscaled = !video.upscaled; break;
+    case uc_Resolution: {
+      // AUTO, then each size that fits the display, then AUTO again
+      std::vector<keen4::platform::Resolution> sizes = platform.Resolutions();
+      std::size_t next = 0;
+      for (std::size_t i = 0; i < sizes.size(); i++) {
+        if (sizes[i].width == video.width && sizes[i].height == video.height) next = i + 1;
+      }
+      if (video.width == 0) next = 0;
+      if (next < sizes.size()) {
+        video.width = sizes[next].width;
+        video.height = sizes[next].height;
+      } else {
+        video.width = video.height = 0;
+      }
+      break;
+    }
+    default: break;
+  }
+  platform.SetVideo(video);
+  SetVideoText();
+}
 
 // ---------------------------------------------------------------------------
 // State (DGROUP 78D6..78E2, E814..E834)
@@ -327,10 +416,7 @@ void DrawItem(UserItem* item) {
 
 // 1A89:01A6
 void DrawCtlPanelFooter() {
-  // Port: the configure card's list reaches further down, so its footer
-  // leaves out "ESC to back out".
-  bool compact = topcard == configgroup;
-  int top = compact ? 0x8D : 0x85;
+  int top = 0x85;
   word w, h;
   fontcolor = HiliteColor;
   px = CTL_X + 4;
@@ -339,12 +425,10 @@ void DrawCtlPanelFooter() {
   Measure(footerstrings[1], &w, &h);
   px = static_cast<sword>(0xE6 - w);
   DrawString(footerstrings[1]);
-  if (!compact) {
-    Measure(footerstrings[0], &w, &h);
-    px = static_cast<sword>(CTL_X + (CTL_W - w) / 2);
-    py = static_cast<sword>(py + h + 1);
-    DrawString(footerstrings[0]);
-  }
+  Measure(footerstrings[0], &w, &h);
+  px = static_cast<sword>(CTL_X + (CTL_W - w) / 2);
+  py = static_cast<sword>(py + h + 1);
+  DrawString(footerstrings[0]);
   fontcolor = 0;
   VWB_Hlin(0x4D, 0xE7, top, HiliteColor);
 }
@@ -370,7 +454,22 @@ void DrawCtlPanelContents() {
     VWB_Hlin(0x4D, 0xE7, 0x37, HiliteColor);
     VWB_DrawPic(0x50, 0x30, topcard->picnum);
     if (topcard == rootgroup) DrawVersion();
+  } else if (const char* title = CardTitle(topcard)) {
+    // like the title pictures: a short line, the title, then a line to the
+    // right edge, in the large font
+    VWB_Hlin(0x4D, 0xE7, 0x37, HiliteColor);
+    fontnumber = 0;
+    word w, h;
+    Measure(title, &w, &h);
+    px = 0x54;
+    py = static_cast<sword>(0x38 - h / 2);
+    VWB_Bar(px - 2, py, w + 4, h, BackColor);
+    fontcolor = HiliteColor;
+    DrawString(title);
+    fontcolor = 15;
+    fontnumber = 1;
   }
+  if (topcard == &videogroup) SetVideoText();  // F11 or Alt+Enter may have changed them
   DrawCtlPanelFooter();
   if (!topcard->items) return;
 
@@ -378,7 +477,7 @@ void DrawCtlPanelContents() {
   if (x % 8) x += 8 - x % 8;
   int y = topcard->y + 0x3C;
   for (UserItem* item = topcard->items; item->type; item++) {
-    if (item->flags & ui_Separated) y += topcard == configgroup ? 4 : 8;
+    if (item->flags & ui_Separated) y += 8;
     item->x = static_cast<word>(x);
     item->y = static_cast<word>(y);
     DrawItem(item);
@@ -915,10 +1014,12 @@ void SetOptionsText() {
   keybuttonitems[2].flags &= static_cast<word>(~ui_Disabled);
   if (oldshooting) keybuttonitems[2].flags |= ui_Disabled;
 
-  ConfigItem(6).flags |= ui_Disabled;
+  // the Gravis item, on the CONTROLS card
+  UserItem& gravis = controlitems[3];
+  gravis.flags |= ui_Disabled;
   if (Controls[0] == ctrl_Joystick1 || Controls[0] == ctrl_Joystick2)
-    ConfigItem(6).flags &= static_cast<word>(~ui_Disabled);
-  ConfigItem(6).text = S(GravisGamepad ? 0x4AB0 : 0x4AC8);
+    gravis.flags &= static_cast<word>(~ui_Disabled);
+  gravis.text = S(GravisGamepad ? 0x4AB0 : 0x4AC8);
 }
 
 boolean ToggleOption(int msg, boolean* flag, word ontext, word offtext, word anykey) {
@@ -943,7 +1044,7 @@ boolean ConfigCustom(int msg, UserItem*) {
     Measure(s, &w, &h);
     const char* name = S(g_exe.Word(static_cast<std::uint16_t>(0x4762 + Controls[0] * 2)));
     Measure(name, &w2, &h);
-    py = static_cast<sword>(0x8C - h);  // port: above the lower footer line
+    py = static_cast<sword>(0x82 - h);  // port: above the footer line
     px = static_cast<sword>(CTL_X + (CTL_W - (w + w2)) / 2);
     fontcolor = HiliteColor;
     DrawString(s);
@@ -1650,6 +1751,12 @@ void DoItem() {
   if (item->comm == uc_Language) {
     keen4::lang::Next();
     item->text = keen4::lang::MenuLabel();
+    SetVideoText();
+    DrawCtlPanel();
+    return;
+  }
+  if (item->comm >= uc_Screen && item->comm <= uc_Resolution) {
+    ChangeVideo(item->comm);
     DrawCtlPanel();
     return;
   }
@@ -1695,9 +1802,10 @@ void SetControlValues() {
     soundmodeitems[3].flags |= ui_Disabled;
     musicmodeitems[1].flags |= ui_Disabled;
   }
-  if (!JoysPresent[0]) ConfigItem(4).flags |= ui_Disabled;
-  if (!JoysPresent[1]) ConfigItem(5).flags |= ui_Disabled;
-  if (!JoysPresent[0] && !JoysPresent[1]) ConfigItem(6).flags |= ui_Disabled;
+  if (!JoysPresent[0]) controlitems[1].flags |= ui_Disabled;
+  if (!JoysPresent[1]) controlitems[2].flags |= ui_Disabled;
+  if (!JoysPresent[0] && !JoysPresent[1]) controlitems[3].flags |= ui_Disabled;
+  SetVideoText();
 
   RootItem(4).text = S(ingame ? 0x4E5A : 0x4E69);  // "RETURN TO GAME" / "RETURN TO DEMO"
   if (!ingame) {

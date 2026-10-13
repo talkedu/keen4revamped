@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "id/id_heads.h"
+#include "platform/platform.h"
 
 inline constexpr int MaxX = 320;
 inline constexpr int MaxY = 200;
@@ -89,6 +90,9 @@ void USL_CheckSavedGames();
 void US_SetArgs(int argc, char** argv);
 int US_ArgCount();
 const char* US_Arg(int i);
+// Port: the VIDEO card's settings saved in CONFIG.CK4; leaves `video` as it
+// is when the file has none. Needs the write directory set.
+void US_ReadVideoConfig(keen4::platform::VideoSettings* video);
 
 // ID_US_2
 void US_ControlPanel();

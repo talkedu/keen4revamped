@@ -266,6 +266,20 @@ constexpr TextEntry kText[] = {
     // co-op in play (CK_COOP)
     {"WAITING", "ESPERANDO"},
     {"Reconnect gamepad", "Reconecte o controle"},
+    // the VIDEO and CONTROLS cards (ID_US_2 configure card)
+    {"VIDEO", "VÍDEO"},
+    {"CONTROLS", "CONTROLES"},
+    {"SCREEN", "TELA"},
+    {"FULL SCREEN", "TELA CHEIA"},
+    {"WINDOW", "JANELA"},
+    {"VSYNC", "VSYNC"},
+    {"ON", "LIGADO"},
+    {"OFF", "DESLIGADO"},
+    {"GRAPHICS", "GRÁFICOS"},
+    {"UPSCALED", "MELHORADOS"},
+    {"ORIGINAL", "ORIGINAIS"},
+    {"RESOLUTION", "RESOLUÇÃO"},
+    {"AUTO", "AUTOMÁTICA"},
     // the updater (ID_US_2 main menu)
     {"CHECK FOR UPDATES", "ATUALIZAR O JOGO"},
     {"CONNECTING TO GITHUB", "CONECTANDO AO GITHUB"},
