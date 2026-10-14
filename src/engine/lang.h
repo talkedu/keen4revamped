@@ -35,7 +35,7 @@ struct ChunkEntry {
 
 struct LanguageData {
   const char* code;        // as given to --lang and saved in the config
-  const char* menu_label;  // the main menu item, in the language itself
+  const char* name;        // as the LANGUAGE card lists it, in the language itself
   const ExeEntry* exe;
   std::size_t exe_count;
   const TextEntry* text;
@@ -52,8 +52,6 @@ constexpr std::uint32_t FAR(std::uint16_t seg, std::uint16_t ofs) {
 
 Language Current();
 void Set(Language language);
-// The next language in turn (the main menu item cycles through them).
-void Next();
 // "en" or "pt-BR". Parse also accepts "pt" and ignores case.
 const char* Code(Language language);
 bool Parse(const std::string& code, Language* language);
@@ -66,8 +64,8 @@ void SetFromConfig(Language language);
 const char* Tr(const char* s);
 // The translated article for a text chunk, or nullptr for the original.
 const char* Article(int chunk);
-// The language item of the main menu, such as "LANGUAGE: ENGLISH".
-const char* MenuLabel();
+// The language's own name, such as "ENGLISH", for the LANGUAGE card.
+const char* Name(Language language);
 
 // UTF-8 to ISO-8859-1; characters outside Latin-1 become '?'.
 std::string ToLatin1(const char* utf8);

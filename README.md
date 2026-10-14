@@ -115,8 +115,8 @@ plays the songs and effects listed in `audio/manifest.txt` instead (`--audio DIR
 folder; Shift+F11 then switches between remastered and original), and `--music-volume N` and
 `--sfx-volume N` set the volumes. See [docs/AUDIO.md](docs/AUDIO.md).
 
-The game's text is in English or Brazilian Portuguese: the LANGUAGE item of the CONFIGURE
-card switches between them and the choice is saved with the configuration. `--lang en` or
+The game's text is in English or Brazilian Portuguese: the LANGUAGE card of the CONFIGURE
+menu lists them and the choice is saved with the configuration. `--lang en` or
 `--lang pt-BR` picks one for a single run. See [docs/LANGUAGES.md](docs/LANGUAGES.md).
 
 The VIDEO card of the CONFIGURE menu sets SCREEN (full screen or window, also Alt+Enter),

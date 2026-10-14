@@ -1,7 +1,7 @@
 # Languages
 
 The game can show its text in English (the original) or Brazilian Portuguese. The LANGUAGE
-item of the CONFIGURE card cycles through the languages; the choice is saved at the end of
+card of the CONFIGURE menu lists the languages; the choice is saved at the end of
 `CONFIG.CK4` (older files without it keep working) and `--lang en|pt-BR` overrides it for
 one run.
 
@@ -36,7 +36,7 @@ overflow.
 ## Adding a language
 
 1. Add it to `Language` and to `Data`, `Parse` and `Code` in `lang.h`/`lang.cpp`.
-2. Copy `src/lang/pt_br.cpp`, translate it and add it to `keen4_engine` in `CMakeLists.txt`.
+2. Copy `src/lang/pt_br.cpp`, translate it, give it its own name for the LANGUAGE card and add it to `keen4_engine` in `CMakeLists.txt`.
 3. Run the game with `--lang` and look at the main menu cards, the help topics, a level's
    entry window (`/TEDLEVEL n`) and the status window (Enter on the map).
 
