@@ -150,7 +150,7 @@ The mouse works in the menus: a pointing hand follows it, the item under the han
 selected, a left click picks it and a right click goes back, like Esc. Elsewhere outside
 play (help, dialogs, "press a key" screens) a left click acts as Enter and a right click
 as Esc. The hand hides when a key or gamepad button is pressed and comes back when the
-mouse moves.
+mouse moves. The system pointer is hidden over the game.
 
 `--headless --frames N --shot-every K --out DIR --keys "tic:scancode:down,..."` runs
 without a window and saves frames as PNG, which is how the port is checked in CI and tests.

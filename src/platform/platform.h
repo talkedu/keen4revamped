@@ -105,7 +105,7 @@ class IPlatform {
   }
   // The mouse, in the classic frame's pixels whichever renderer shows it.
   virtual void ReadMouse(MouseState* state) { *state = MouseState{}; }
-  // Hides the system's pointer over the window while the game draws its own.
+  // Hides the system's pointer over the window (the game draws its own in menus).
   virtual void ShowSystemCursor(bool) {}
   // True once the user closed the window.
   virtual bool QuitRequested() = 0;

@@ -258,9 +258,9 @@ void VW_ShowHand(boolean on) {
 void VW_UpdateHand() {
   MouseInfo m;
   IN_ReadMouse(&m);
-  // the system's pointer gives way to the hand over the screen, even while the
-  // keyboard is in use
-  bool hide = hand::on && m.inside;
+  // the system's pointer never shows over the game's screen: in play it is
+  // hidden, and in the menus the hand stands in for it
+  bool hide = m.inside;
   if (hide != hand::hidpointer) {
     hand::hidpointer = hide;
     keen4::platform::Get().ShowSystemCursor(!hide);
