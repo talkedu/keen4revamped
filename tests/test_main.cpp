@@ -279,8 +279,9 @@ int main() {
     const char* unknown = "no such text";
     CHECK(Tr(unknown) == unknown);
     CHECK(Article(4739) && std::strncmp(Article(4739), "^P", 2) == 0);
-    CHECK(std::strcmp(MenuLabel(), "IDIOMA: PORTUGU\xCAS") == 0);
-    Next();
+    CHECK(std::strcmp(Name(Language::Portuguese), "PORTUGU\xCAS (BRASIL)") == 0);
+    CHECK(std::strcmp(Name(Language::English), "ENGLISH") == 0);
+    Set(Language::English);
     CHECK(Current() == Language::English);
 
     SetFromCommandLine(Language::English);

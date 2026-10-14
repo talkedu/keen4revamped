@@ -18,7 +18,7 @@ struct Table {
   std::unordered_map<std::uint32_t, std::string> exe;
   std::unordered_map<std::string, std::string> text;
   std::unordered_map<int, std::string> chunks;
-  std::string menu_label;
+  std::string name;
 };
 
 Language current = Language::English;
@@ -38,10 +38,10 @@ const Table& Get(Language language) {
   t.built = true;
   const LanguageData* d = Data(language);
   if (!d) {
-    t.menu_label = "LANGUAGE: ENGLISH";
+    t.name = "ENGLISH";
     return t;
   }
-  t.menu_label = ToLatin1(d->menu_label);
+  t.name = ToLatin1(d->name);
   for (std::size_t i = 0; i < d->exe_count; i++) t.exe[d->exe[i].linear] = ToLatin1(d->exe[i].text);
   for (std::size_t i = 0; i < d->text_count; i++) t.text[d->text[i].english] = ToLatin1(d->text[i].text);
   for (std::size_t i = 0; i < d->chunk_count; i++) t.chunks[d->chunks[i].chunk] = ToLatin1(d->chunks[i].text);
@@ -56,8 +56,6 @@ void Set(Language language) {
   if (static_cast<int>(language) < 0 || language >= Language::Count) language = Language::English;
   current = language;
 }
-
-void Next() { Set(static_cast<Language>((static_cast<int>(current) + 1) % static_cast<int>(Language::Count))); }
 
 const char* Code(Language language) {
   const LanguageData* d = Data(language);
@@ -106,7 +104,10 @@ const char* Article(int chunk) {
   return found != t.chunks.end() ? found->second.c_str() : nullptr;
 }
 
-const char* MenuLabel() { return Get(current).menu_label.c_str(); }
+const char* Name(Language language) {
+  if (static_cast<int>(language) < 0 || language >= Language::Count) language = Language::English;
+  return Get(language).name.c_str();
+}
 
 std::string ToLatin1(const char* utf8) {
   std::string out;

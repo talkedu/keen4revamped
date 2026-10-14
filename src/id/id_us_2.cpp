@@ -74,7 +74,7 @@ using CustomFn = boolean (*)(int msg, UserItem* item);
 enum { uii_Bad, uii_Button, uii_RadioButton, uii_Folder };
 enum { ui_Pushed = 1, ui_Selected = 2, ui_Disabled = 4, ui_Separated = 8 };
 enum { uc_None, uc_Return, uc_Abort, uc_Quit, uc_Loaded, uc_SEasy, uc_SNormal, uc_SHard };
-constexpr word uc_Language = 0x100;  // port: the main menu's language item
+constexpr word uc_Language = 0x100;  // port: a language on the LANGUAGE card
 constexpr word uc_Coop = 0x101;      // port: the main menu's co-op item
 constexpr word uc_Update = 0x102;    // port: the main menu's update item
 // Port: the VIDEO card's items, which cycle through their values.
@@ -186,9 +186,9 @@ UserItem* optionsitems;        // 1FAA:0000
 UserItem* keybuttonitems;      // 1FBD:0000
 UserItem* configitems;         // 1FCC:0000
 UserItemGroup* configgroup;    // the card configitems are on
-// Port: the configure card's VIDEO and CONTROLS cards.
-UserItemGroup videogroup, controlsgroup;
-std::vector<UserItem> videoitems, controlitems;
+// Port: the configure card's VIDEO, CONTROLS and LANGUAGE cards.
+UserItemGroup videogroup, controlsgroup, languagegroup;
+std::vector<UserItem> videoitems, controlitems, languageitems;
 std::string videotext[5];
 
 void LoadTree() {
@@ -246,6 +246,22 @@ void LoadTree() {
   videogroup.items = videoitems.data();
   videogroup.cursor = 0;
 
+  // the LANGUAGE card lists the languages, each by its own name, like the
+  // SOUND card's modes
+  languageitems.clear();
+  for (int i = 0; i < static_cast<int>(keen4::lang::Language::Count); i++) {
+    UserItem item = button(uc_Language);
+    item.type = uii_RadioButton;
+    item.text = keen4::lang::Name(static_cast<keen4::lang::Language>(i));
+    languageitems.push_back(item);
+  }
+  languageitems.push_back(UserItem{});
+  languagegroup = *configgroup;
+  languagegroup.picnum = 0;
+  languagegroup.custom = nullptr;
+  languagegroup.items = languageitems.data();
+  languagegroup.cursor = 0;
+
   UserItem video{};
   video.type = uii_Folder;
   video.text = "VIDEO";
@@ -254,9 +270,11 @@ void LoadTree() {
   controls.type = uii_Folder;
   controls.text = "CONTROLS";
   controls.child = &controlsgroup;
-  UserItem language = button(uc_Language);
+  UserItem language{};
+  language.type = uii_Folder;
   language.flags = ui_Separated;
-  language.text = keen4::lang::MenuLabel();
+  language.text = "LANGUAGE";
+  language.child = &languagegroup;
   UserItem update = button(uc_Update);
   update.text = "CHECK FOR UPDATES";
   config = {video, config[0], config[1], config[2], controls, language, update, UserItem{}};
@@ -271,11 +289,12 @@ UserItem& RootItem(int original) { return rootitems[original >= 1 ? original + 1
 // Item rows are 8 pixels apart; the root card's are 7.
 int RowHeight(const UserItemGroup* card) { return card == rootgroup ? 7 : 8; }
 
-// Port: the VIDEO and CONTROLS cards have no title picture, so their title is
+// Port: the VIDEO, CONTROLS and LANGUAGE cards have no title picture, so their title is
 // drawn as text.
 const char* CardTitle(const UserItemGroup* card) {
   if (card == &videogroup) return "VIDEO";
   if (card == &controlsgroup) return "CONTROLS";
+  if (card == &languagegroup) return "LANGUAGE";
   return nullptr;
 }
 
@@ -1766,8 +1785,9 @@ void DoItem() {
     return;
   }
   if (item->comm == uc_Language) {
-    keen4::lang::Next();
-    item->text = keen4::lang::MenuLabel();
+    // the language changes at once, so the card is drawn again in it
+    keen4::lang::Set(static_cast<keen4::lang::Language>(item - topcard->items));
+    PushItem(topcard, topcard->cursor, false);
     SetVideoText();
     DrawCtlPanel();
     return;
@@ -1814,6 +1834,7 @@ void SetControlValues() {
   if (sd == 2 && QuietFX) sd++;
   PushItem(soundgroup, sd, false);
   PushItem(musicgroup, static_cast<word>(MusicMode), false);
+  PushItem(&languagegroup, static_cast<word>(keen4::lang::Current()), false);
   if (!AdLibPresent) {
     soundmodeitems[2].flags |= ui_Disabled;
     soundmodeitems[3].flags |= ui_Disabled;

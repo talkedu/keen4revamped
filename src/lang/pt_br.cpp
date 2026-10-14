@@ -267,9 +267,10 @@ constexpr TextEntry kText[] = {
     {"WAITING", "ESPERANDO"},
     {"NO LIVES", "SEM VIDAS"},
     {"Reconnect gamepad", "Reconecte o controle"},
-    // the VIDEO and CONTROLS cards (ID_US_2 configure card)
+    // the VIDEO, CONTROLS and LANGUAGE cards (ID_US_2 configure card)
     {"VIDEO", "VÍDEO"},
     {"CONTROLS", "CONTROLES"},
+    {"LANGUAGE", "IDIOMA"},
     {"SCREEN", "TELA"},
     {"FULL SCREEN", "TELA CHEIA"},
     {"WINDOW", "JANELA"},
@@ -1029,7 +1030,7 @@ constexpr ChunkEntry kChunks[] = {
 
 extern const LanguageData kPortuguese = {
     "pt-BR",
-    "IDIOMA: PORTUGUÊS",
+    "PORTUGUÊS (BRASIL)",
     kExe,
     sizeof kExe / sizeof kExe[0],
     kText,
