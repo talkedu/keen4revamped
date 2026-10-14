@@ -96,6 +96,9 @@ int CompareVersions(const std::string& a, const std::string& b) {
     int x = i < va.size() ? va[i] : 0, y = i < vb.size() ? vb[i] : 0;
     if (x != y) return x < y ? -1 : 1;
   }
+  // a snapshot build comes before the release of its number
+  bool sa = a.find("-SNAPSHOT") != std::string::npos, sb = b.find("-SNAPSHOT") != std::string::npos;
+  if (sa != sb) return sa ? -1 : 1;
   return 0;
 }
 
