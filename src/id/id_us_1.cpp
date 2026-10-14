@@ -128,6 +128,8 @@ void USL_WriteConfig() {
   word size[2] = {static_cast<word>(video.width), static_cast<word>(video.height)};
   std::fwrite(flags, 1, 3, f);
   std::fwrite(size, 2, 2, f);
+  word refresh = static_cast<word>(video.refresh * 100 + 0.5f);  // hundredths of a Hz
+  std::fwrite(&refresh, 2, 1, f);
   std::fclose(f);
 }
 
@@ -156,6 +158,9 @@ void US_ReadVideoConfig(keen4::platform::VideoSettings* video) {
     video->upscaled = flags[2] != 0;
     video->width = size[0];
     video->height = size[1];
+    // the refresh rate came later; files without it keep AUTO
+    word refresh;
+    if (std::fread(&refresh, 2, 1, f) == 1) video->refresh = refresh / 100.0f;
   }
   std::fclose(f);
 }

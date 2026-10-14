@@ -78,7 +78,8 @@ constexpr word uc_Language = 0x100;  // port: the main menu's language item
 constexpr word uc_Coop = 0x101;      // port: the main menu's co-op item
 constexpr word uc_Update = 0x102;    // port: the main menu's update item
 // Port: the VIDEO card's items, which cycle through their values.
-constexpr word uc_Screen = 0x103, uc_Vsync = 0x104, uc_Graphics = 0x105, uc_Resolution = 0x106;
+constexpr word uc_Screen = 0x103, uc_Vsync = 0x104, uc_Graphics = 0x105, uc_Resolution = 0x106,
+               uc_Refresh = 0x107;
 enum { uic_SetupCard, uic_DrawCard, uic_TouchupCard, uic_DrawIcon, uic_Draw, uic_Hit };
 
 struct UserItemGroup;
@@ -188,7 +189,7 @@ UserItemGroup* configgroup;    // the card configitems are on
 // Port: the configure card's VIDEO and CONTROLS cards.
 UserItemGroup videogroup, controlsgroup;
 std::vector<UserItem> videoitems, controlitems;
-std::string videotext[4];
+std::string videotext[5];
 
 void LoadTree() {
   if (treeloaded) return;
@@ -237,7 +238,8 @@ void LoadTree() {
     item.comm = comm;
     return item;
   };
-  videoitems = {button(uc_Screen), button(uc_Vsync), button(uc_Graphics), button(uc_Resolution), UserItem{}};
+  videoitems = {button(uc_Screen),   button(uc_Refresh),    button(uc_Vsync),
+                button(uc_Graphics), button(uc_Resolution), UserItem{}};
   videogroup = *configgroup;
   videogroup.picnum = 0;
   videogroup.custom = nullptr;
@@ -278,25 +280,28 @@ const char* CardTitle(const UserItemGroup* card) {
 }
 
 // Port: the VIDEO card's items show their current values, such as
-// "VSYNC: ON", already in the chosen language. RESOLUTION is only for the
-// upscaled view.
+// "VSYNC: ON", already in the chosen language. REFRESH RATE is only for full
+// screen and RESOLUTION only for the upscaled view.
 void SetVideoText() {
   using keen4::lang::Tr;
   keen4::platform::VideoSettings video = keen4::platform::Get().GetVideo();
-  auto row = [](int i, const char* label, const std::string& value) {
+  auto row = [](int i, const char* label, const std::string& value, bool enabled) {
     videotext[i] = std::string(Tr(label)) + ": " + value;
     videoitems[i].text = videotext[i].c_str();
+    if (enabled)
+      videoitems[i].flags &= static_cast<word>(~ui_Disabled);
+    else
+      videoitems[i].flags |= ui_Disabled;
   };
-  row(0, "SCREEN", Tr(video.fullscreen ? "FULL SCREEN" : "WINDOW"));
-  row(1, "VSYNC", Tr(video.vsync ? "ON" : "OFF"));
-  row(2, "GRAPHICS", Tr(video.upscaled ? "UPSCALED" : "ORIGINAL"));
+  row(0, "SCREEN", Tr(video.fullscreen ? "FULL SCREEN" : "WINDOW"), true);
+  std::string rate = Tr("AUTO");
+  if (video.refresh > 0) rate = std::to_string(static_cast<int>(video.refresh + 0.5f)) + " HZ";
+  row(1, "REFRESH RATE", rate, video.fullscreen);
+  row(2, "VSYNC", Tr(video.vsync ? "ON" : "OFF"), true);
+  row(3, "GRAPHICS", Tr(video.upscaled ? "UPSCALED" : "ORIGINAL"), true);
   std::string size = Tr("AUTO");
   if (video.width > 0) size = std::to_string(video.width) + "X" + std::to_string(video.height);
-  row(3, "RESOLUTION", size);
-  if (video.upscaled)
-    videoitems[3].flags &= static_cast<word>(~ui_Disabled);
-  else
-    videoitems[3].flags |= ui_Disabled;
+  row(4, "RESOLUTION", size, video.upscaled);
 }
 
 // Port: the next value of a VIDEO item, applied at once.
@@ -321,6 +326,18 @@ void ChangeVideo(word comm) {
       } else {
         video.width = video.height = 0;
       }
+      break;
+    }
+    case uc_Refresh: {
+      // AUTO (the desktop's rate), then each rate the display offers at its
+      // resolution, then AUTO again
+      std::vector<float> rates = platform.RefreshRates();
+      std::size_t next = 0;
+      for (std::size_t i = 0; i < rates.size(); i++) {
+        if (rates[i] == video.refresh) next = i + 1;
+      }
+      if (video.refresh <= 0) next = 0;
+      video.refresh = next < rates.size() ? rates[next] : 0;
       break;
     }
     default: break;
@@ -1755,7 +1772,7 @@ void DoItem() {
     DrawCtlPanel();
     return;
   }
-  if (item->comm >= uc_Screen && item->comm <= uc_Resolution) {
+  if (item->comm >= uc_Screen && item->comm <= uc_Refresh) {
     ChangeVideo(item->comm);
     DrawCtlPanel();
     return;

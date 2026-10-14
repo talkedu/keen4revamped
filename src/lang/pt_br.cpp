@@ -273,6 +273,7 @@ constexpr TextEntry kText[] = {
     {"SCREEN", "TELA"},
     {"FULL SCREEN", "TELA CHEIA"},
     {"WINDOW", "JANELA"},
+    {"REFRESH RATE", "FREQUÊNCIA"},
     {"VSYNC", "VSYNC"},
     {"ON", "LIGADO"},
     {"OFF", "DESLIGADO"},

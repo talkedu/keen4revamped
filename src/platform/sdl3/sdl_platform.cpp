@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -161,11 +162,17 @@ class SdlPlatform final : public IPlatform {
       winw = video_.width;
       winh = video_.height;
     }
-    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | (video_.fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+    // full screen starts hidden, so its mode (refresh rate) is set before it shows
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | (video_.fullscreen ? SDL_WINDOW_HIDDEN : 0);
     window_ = SDL_CreateWindow("Commander Keen 4", winw, winh, flags);
     if (!window_) {
       std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
       return false;
+    }
+    if (video_.fullscreen) {
+      ApplyFullscreenMode();
+      SDL_SetWindowFullscreen(window_, true);
+      SDL_ShowWindow(window_);
     }
     renderer_ = SDL_CreateRenderer(window_, nullptr);
     if (!renderer_) {
@@ -178,10 +185,7 @@ class SdlPlatform final : public IPlatform {
     remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
     remaster_renderer_->interpolate = options.interpolate;
     remaster_renderer_->show_hitboxes = options.hitboxes;
-    SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
-    const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
-    float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
-    refresh_ns_ = static_cast<Uint64>(1e9 / hz);
+    UpdateRefresh();
     ApplyMode();
     start_ns_ = SDL_GetTicksNS();
     return true;
@@ -298,7 +302,11 @@ class SdlPlatform final : public IPlatform {
     VideoSettings old = video_;
     video_ = video;
     if (video_.width <= 0 || video_.height <= 0) video_.width = video_.height = 0;
+    if (video_.refresh < 0) video_.refresh = 0;
+    // the mode full screen uses; it takes effect at once when already in it
+    if (video_.refresh != old.refresh || video_.fullscreen != old.fullscreen) ApplyFullscreenMode();
     if (video_.fullscreen != old.fullscreen) SDL_SetWindowFullscreen(window_, video_.fullscreen);
+    UpdateRefresh();
     // In a window, a fixed resolution is also the window's size.
     bool sized = video_.upscaled && video_.width > 0;
     bool resized = video_.width != old.width || video_.height != old.height ||
@@ -320,7 +328,52 @@ class SdlPlatform final : public IPlatform {
     return fits;
   }
 
+  std::vector<float> RefreshRates() override {
+    std::vector<float> rates;
+    SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+    const SDL_DisplayMode* desktop = display ? SDL_GetDesktopDisplayMode(display) : nullptr;
+    if (!desktop) return rates;
+    int count = 0;
+    SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(display, &count);
+    for (int i = 0; modes && i < count; i++) {
+      const SDL_DisplayMode* m = modes[i];
+      if (m->w != desktop->w || m->h != desktop->h || m->refresh_rate <= 1) continue;
+      // one entry per whole number of Hz (59.94 and 60 both show as 60)
+      bool seen = false;
+      for (float r : rates) seen = seen || std::lround(r) == std::lround(m->refresh_rate);
+      if (!seen) rates.push_back(m->refresh_rate);
+    }
+    SDL_free(modes);
+    std::sort(rates.begin(), rates.end());
+    return rates;
+  }
+
  private:
+  // Full screen at the desktop's resolution: borderless at the desktop's own
+  // refresh rate (AUTO), or the exclusive mode closest to the chosen rate.
+  void ApplyFullscreenMode() {
+    SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+    const SDL_DisplayMode* desktop = display ? SDL_GetDesktopDisplayMode(display) : nullptr;
+    SDL_DisplayMode mode;
+    if (video_.refresh > 0 && desktop &&
+        SDL_GetClosestFullscreenDisplayMode(display, desktop->w, desktop->h, video_.refresh, false, &mode)) {
+      if (!SDL_SetWindowFullscreenMode(window_, &mode))
+        std::fprintf(stderr, "video: no %.2f Hz mode: %s\n", video_.refresh, SDL_GetError());
+    } else {
+      SDL_SetWindowFullscreenMode(window_, nullptr);
+    }
+  }
+
+  // The pace frames are drawn at without vsync, and the interpolation's step.
+  void UpdateRefresh() {
+    const SDL_DisplayMode* mode = video_.fullscreen ? SDL_GetWindowFullscreenMode(window_) : nullptr;
+    if (!mode) {
+      SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+      mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
+    }
+    float hz = mode && mode->refresh_rate > 1 ? mode->refresh_rate : 60.0f;
+    refresh_ns_ = static_cast<Uint64>(1e9 / hz);
+  }
   static void Read(SDL_Gamepad* pad, GamepadState* state) {
     static constexpr struct {
       SDL_GamepadButton button;
@@ -471,9 +524,16 @@ class SdlPlatform final : public IPlatform {
         // the window manager can change the mode too (such as a maximize button)
         case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
           video_.fullscreen = true;
+          UpdateRefresh();
           break;
         case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
           video_.fullscreen = false;
+          UpdateRefresh();
+          break;
+        // a mode switch, or the window moved to another monitor
+        case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+        case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+          UpdateRefresh();
           break;
         case SDL_EVENT_GAMEPAD_ADDED:
           if (SDL_Gamepad* pad = SDL_OpenGamepad(ev.gdevice.which)) {

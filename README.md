@@ -118,10 +118,13 @@ card switches between them and the choice is saved with the configuration. `--la
 The VIDEO card of the CONFIGURE menu sets SCREEN (full screen or window, also Alt+Enter),
 VSYNC, GRAPHICS (upscaled or original, also F11) and, for the upscaled view, RESOLUTION:
 AUTO draws it at the window's size, a fixed size draws it at that size and scales it to the
-window or screen. Released builds start in full screen, local builds in a window. The settings apply at once and are saved with the configuration;
+window or screen. In full screen, REFRESH RATE picks one of the rates the display offers at
+its desktop resolution (switching the monitor to that mode), or AUTO for the desktop's own.
+Released builds start in full screen, local builds in a window. The settings apply at once and are saved with the configuration;
 `--fullscreen`/`--windowed`, `--vsync`/`--no-vsync` and `--classic` override them for one run.
-With the original graphics on a 60 Hz display, VSYNC ON makes motion uneven (the game runs on
-a 70 Hz clock), so turn it off there. The USE KEYBOARD and joystick items are on the CONTROLS
+The game runs on a 70 Hz clock whatever the display does. With the original graphics and VSYNC
+ON, a 70 Hz refresh rate (or 140 Hz) is perfectly smooth, while 60 Hz makes motion uneven, so
+turn VSYNC off there. The USE KEYBOARD and joystick items are on the CONTROLS
 card.
 
 Other options: `--scale N` (window size), `--nosound`.
