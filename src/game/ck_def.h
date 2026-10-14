@@ -201,13 +201,16 @@ struct PlayerState {
 // keys, the wetsuit and the rescued council members; score, drops and ammo
 // are each their own. A Keen that dies sits out a cool-down and comes back
 // on the last solid ground his brother stood on, flickering and immune for a
-// while; the level fails when the last Keen still in play dies. A Keen who
-// walks off the map waits there, hidden, for his brother.
+// while. A Keen that dies with no life left to come back with is out for the
+// rest of the level while his brother plays on; the level fails when the last
+// Keen still in play dies. A Keen who walks off the map waits there, hidden,
+// for his brother.
 
 enum CoopStatus : sword {
   coop_playing,     // in play (also while dying, until his death is over)
   coop_respawning,  // dead, waiting for the cool-down to end; hidden
   coop_atexit,      // walked off the map, waiting for his brother; hidden
+  coop_out,         // dead with no life left, out until the level ends; hidden
 };
 
 inline constexpr sword COOP_RESPAWNTICS = 3 * 70;

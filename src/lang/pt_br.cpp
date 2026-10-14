@@ -265,6 +265,7 @@ constexpr TextEntry kText[] = {
     {"PRESS A ON ANOTHER GAMEPAD", "APERTE A NOUTRO CONTROLE"},
     // co-op in play (CK_COOP)
     {"WAITING", "ESPERANDO"},
+    {"NO LIVES", "SEM VIDAS"},
     {"Reconnect gamepad", "Reconecte o controle"},
     // the VIDEO and CONTROLS cards (ID_US_2 configure card)
     {"VIDEO", "VÍDEO"},
