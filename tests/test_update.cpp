@@ -51,6 +51,9 @@ int main() {
     CHECK(CompareVersions("v1.2", "1.2.0") == 0);
     CHECK(CompareVersions("v1.10", "1.9.9") > 0);
     CHECK(CompareVersions("v1.2", "1.2.1") < 0);
+    CHECK(CompareVersions("v1.5.2", "1.5.2-SNAPSHOT") > 0);
+    CHECK(CompareVersions("v1.5.1", "1.5.2-SNAPSHOT") < 0);
+    CHECK(CompareVersions("1.5.2-SNAPSHOT", "keen4revamped 1.5.2-SNAPSHOT") == 0);
     CHECK(CompareVersions(std::string("v") + VersionNumber(), VersionString()) == 0);
   }
 

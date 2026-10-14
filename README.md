@@ -51,8 +51,12 @@ WSL, the "run on Windows" task builds it and starts it on the Windows host.
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).
 
-The version is not stored in the source: a build takes it from the latest `v*` git tag
-(0.0.0 without one), and `-DKEEN4_VERSION=1.2.3` overrides it.
+The version is not stored in the source. Only the release workflow builds a plain version
+(`-DKEEN4_VERSION=1.2.3`). Every other build, local or on a pull request, is the next
+version plus `-SNAPSHOT`, for example `1.5.2-SNAPSHOT` when the latest tag is `v1.5.1`. It
+counts as a patch unless `-DKEEN4_VERSION_BUMP=minor` (or `major`) says otherwise; pull
+request builds take the bump from the title's tag. Snapshot builds start in a window and
+are offered the release of their own number by CHECK FOR UPDATES.
 
 ## Releases
 

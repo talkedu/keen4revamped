@@ -1,36 +1,57 @@
 cmake_minimum_required(VERSION 3.25)
 
 # The version is not kept in the source tree. The release workflow passes the
-# version it is about to tag (-DKEEN4_VERSION=x.y.z); other builds use the
-# latest v* git tag, or 0.0.0 without one.
-set(KEEN4_VERSION "" CACHE STRING "Version baked into the build (empty: latest v* git tag)")
-set(_keen4_version "${KEEN4_VERSION}")
-if(NOT _keen4_version)
-  execute_process(
-    COMMAND git describe --tags --abbrev=0 --match "v[0-9]*"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    OUTPUT_VARIABLE _keen4_version OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET RESULT_VARIABLE _keen4_git_result)
-  if(NOT _keen4_git_result EQUAL 0)
-    set(_keen4_version "")
-  endif()
-endif()
-# "v1.2" and "1.2.1" both become x.y.z.
-if(_keen4_version MATCHES "^v?([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$")
-  set(_keen4_patch "${CMAKE_MATCH_4}")
-  if(_keen4_patch STREQUAL "")
-    set(_keen4_patch 0)
-  endif()
-  set(_keen4_version "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${_keen4_patch}")
-else()
-  if(KEEN4_VERSION)
+# version it is about to tag (-DKEEN4_VERSION=x.y.z). Every other build (pull
+# requests, branches, local builds) is the next version plus "-SNAPSHOT": the
+# latest v* git tag bumped by KEEN4_VERSION_BUMP, as the release workflow will
+# bump it when the pull request merges. 0.0.1-SNAPSHOT without any tag.
+set(KEEN4_VERSION "" CACHE STRING "Release version, x.y.z (empty: next version + -SNAPSHOT)")
+set(KEEN4_VERSION_BUMP "patch" CACHE STRING "How a snapshot build bumps the latest v* tag: major, minor or patch")
+set_property(CACHE KEEN4_VERSION_BUMP PROPERTY STRINGS major minor patch)
+if(KEEN4_VERSION)
+  if(NOT KEEN4_VERSION MATCHES "^([0-9]+)\.([0-9]+)\.([0-9]+)$")
     message(FATAL_ERROR "KEEN4_VERSION must look like 1.2.3, got '${KEEN4_VERSION}'")
   endif()
-  set(_keen4_version 0.0.0)
+  set(_keen4_version "${KEEN4_VERSION}")
+  set(KEEN4_VERSION_LABEL "${KEEN4_VERSION}")
+else()
+  # the highest tag, as the release workflow picks it ("v1.2" counts as 1.2.0)
+  execute_process(
+    COMMAND git tag --list "v*" --sort=-v:refname
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE _keen4_tags ERROR_QUIET)
+  string(REPLACE "\n" ";" _keen4_tags "${_keen4_tags}")
+  set(_keen4_major 0)
+  set(_keen4_minor 0)
+  set(_keen4_patch 0)
+  foreach(_keen4_tag IN LISTS _keen4_tags)
+    if(_keen4_tag MATCHES "^v([0-9]+)\.([0-9]+)(\.([0-9]+))?$")
+      set(_keen4_major "${CMAKE_MATCH_1}")
+      set(_keen4_minor "${CMAKE_MATCH_2}")
+      if(NOT CMAKE_MATCH_4 STREQUAL "")
+        set(_keen4_patch "${CMAKE_MATCH_4}")
+      endif()
+      break()
+    endif()
+  endforeach()
+  if(KEEN4_VERSION_BUMP STREQUAL "major")
+    math(EXPR _keen4_major "${_keen4_major} + 1")
+    set(_keen4_minor 0)
+    set(_keen4_patch 0)
+  elseif(KEEN4_VERSION_BUMP STREQUAL "minor")
+    math(EXPR _keen4_minor "${_keen4_minor} + 1")
+    set(_keen4_patch 0)
+  elseif(KEEN4_VERSION_BUMP STREQUAL "patch")
+    math(EXPR _keen4_patch "${_keen4_patch} + 1")
+  else()
+    message(FATAL_ERROR "KEEN4_VERSION_BUMP must be major, minor or patch, got '${KEEN4_VERSION_BUMP}'")
+  endif()
+  set(_keen4_version "${_keen4_major}.${_keen4_minor}.${_keen4_patch}")
+  set(KEEN4_VERSION_LABEL "${_keen4_version}-SNAPSHOT")
 endif()
 
 project(keen4revamped VERSION ${_keen4_version} LANGUAGES C CXX)
-message(STATUS "keen4revamped version ${PROJECT_VERSION}")
+message(STATUS "keen4revamped version ${KEEN4_VERSION_LABEL}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -100,7 +121,7 @@ if(WIN32)
 endif()
 target_compile_options(keen4_engine PRIVATE ${KEEN4_WARNINGS})
 set_source_files_properties(src/engine/version.cpp PROPERTIES
-  COMPILE_DEFINITIONS "KEEN4_VERSION=\"${PROJECT_VERSION}\"")
+  COMPILE_DEFINITIONS "KEEN4_VERSION=\"${KEEN4_VERSION_LABEL}\"")
 if(KEEN4_VERSION)
   # a release build (see the top): it starts in full screen until the player changes it
   set_property(SOURCE src/engine/version.cpp APPEND PROPERTY COMPILE_DEFINITIONS KEEN4_RELEASE_BUILD)

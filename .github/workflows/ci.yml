@@ -24,6 +24,8 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the v* tags, for the snapshot version
       - name: Install SDL3 build dependencies
         # The self-hosted runner already has these (and has no passwordless sudo).
         if: runner.os == 'Linux' && runner.environment == 'github-hosted'
@@ -33,8 +35,21 @@ jobs:
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        # the OAuth app the in-game updater signs in with (see README, Updating)
-        run: cmake --preset ${{ matrix.preset }} -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
+        # The build is the version this pull request will release, plus
+        # -SNAPSHOT: the title's [MAJOR]/[MINOR]/[PATCH] tag picks the bump.
+        # KEEN4_GITHUB_CLIENT_ID is the OAuth app the in-game updater signs in
+        # with (see README, Updating).
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          bump=patch
+          shopt -s nocasematch
+          if [[ $PR_TITLE =~ ^[[:space:]]*\[(major|minor|patch)\] ]]; then
+            bump=${BASH_REMATCH[1],,}
+          fi
+          shopt -u nocasematch
+          cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION_BUMP=$bump \
+            -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
