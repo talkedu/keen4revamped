@@ -234,6 +234,8 @@ void DrawBadges() {
       std::snprintf(text, sizeof text, "%s %ld", name, static_cast<long>((left + 69) / 70));
     } else if (ps.status == coop_atexit) {
       std::snprintf(text, sizeof text, "%s: %s", name, keen4::lang::Tr("WAITING"));
+    } else if (ps.status == coop_out) {
+      std::snprintf(text, sizeof text, "%s: %s", name, keen4::lang::Tr("NO LIVES"));
     } else {
       continue;
     }
@@ -285,8 +287,8 @@ void CoopStartLevel(boolean loaded) {
     if (loadstatus[i] == coop_respawning) {
       Hide(ps, coop_respawning);
       ps.respawntime = 3 + loadrespawnleft[i];  // PlayLoop starts the clock at 3
-    } else if (loadstatus[i] == coop_atexit) {
-      Hide(ps, coop_atexit);
+    } else if (loadstatus[i] == coop_atexit || loadstatus[i] == coop_out) {
+      Hide(ps, static_cast<CoopStatus>(loadstatus[i]));
     }
   }
   for (int i = 0; i < numplayers; i++)
@@ -356,11 +358,16 @@ void CoopSpawnTom(word tilex, word tiley, sword dir, int kind) {
 void CoopKeenGone(objtype* ob) {
   int i = PlayerIndex(ob);
   if (i < 0 || players[i].status != coop_playing) return;
-  // The level fails when the last Keen in play dies, or with no life left
-  // to bring him back.
-  if (!CoopInPlay(1 - i) || gamestate.lives <= 0) {
+  // The level fails when the last Keen in play dies.
+  if (!CoopInPlay(1 - i)) {
     Log("died and the level fails", i);
     playstate = ex_died;
+    return;
+  }
+  // With no life left to bring him back, his brother plays on alone.
+  if (gamestate.lives <= 0) {
+    Hide(players[i], coop_out);
+    Log("died with no lives left", i);
     return;
   }
   Hide(players[i], coop_respawning);
@@ -373,7 +380,7 @@ void CoopReachedExit(objtype* ob) {
   if (i < 0 || players[i].status != coop_playing) return;
   Hide(players[i], coop_atexit);
   Log("reached the exit", i);
-  if (players[1 - i].status == coop_atexit) playstate = ex_completed;
+  if (players[1 - i].status == coop_atexit || players[1 - i].status == coop_out) playstate = ex_completed;
 }
 
 void CoopFrame() {

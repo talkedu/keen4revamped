@@ -128,6 +128,32 @@ int main() {
     CHECK(run.end.find("(playstate 1)") != std::string::npos);  // ex_died
   }
 
+  // Tom spends all three lives coming back. Dying once more with none left he
+  // is out, and Billy plays on alone until he dies too: then the level fails.
+  {
+    Run run = Play(Press(300, {F10, TWO}) + Press(700, {F10, TWO}) + Press(1100, {F10, TWO}) +
+                       Press(1500, {F10, TWO}) + Press(2000, {F10, ONE}),
+                   2300);
+    const Event* out = Find(run, 2, "died with no lives left");
+    CHECK(out);
+    if (out) CHECK(out->lives == 0 && out->tic < 1600);
+    CHECK(!Find(run, 2, "died and the level fails"));
+    const Event* last = Find(run, 1, "died and the level fails");
+    CHECK(last);
+    if (out && last) CHECK(last->tic > out->tic + 300);
+    CHECK(run.end.find("(playstate 1)") != std::string::npos);  // ex_died
+  }
+
+  // With Tom out, Billy finishes the level alone by walking off the map.
+  {
+    Run run = Play(Press(300, {F10, TWO}) + Press(700, {F10, TWO}) + Press(1100, {F10, TWO}) +
+                       Press(1500, {F10, TWO}) + Press(1800, {F10, THREE}),
+                   2000);
+    CHECK(Find(run, 2, "died with no lives left"));
+    CHECK(Find(run, 1, "reached the exit"));
+    CHECK(run.end.find("(playstate 2)") != std::string::npos);  // ex_completed
+  }
+
   // Coming back, Tom flickers and cannot be hurt for two seconds.
   {
     Run run = Play(Press(300, {F10, TWO}) + Press(600, {F10, TWO}) + Press(900, {F10, TWO}), 1100);
