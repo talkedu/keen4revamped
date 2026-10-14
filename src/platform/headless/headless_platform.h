@@ -23,6 +23,10 @@ class HeadlessPlatform : public IPlatform {
   void ReadGamepad(GamepadState* state) override;
   int GamepadCount() override { return static_cast<int>(order_.size()); }
   void ReadGamepadAt(int index, GamepadState* state) override;
+  void ReadMouse(MouseState* state) override {
+    *state = mouse_;
+    mouse_.pressed = 0;
+  }
   bool QuitRequested() override { return quit_; }
 
   int StartAudio(AudioCallback, void*) override { return 0; }
@@ -36,6 +40,15 @@ class HeadlessPlatform : public IPlatform {
   // SetGamepad is slot 0. A slot's pad keeps its id while plugged in.
   void SetGamepad(const GamepadState& state) { SetGamepadAt(0, state); }
   void SetGamepadAt(int slot, const GamepadState& state);
+  // Moves the mouse to (x, y) of the classic frame with `held` buttons down;
+  // buttons not down before count as pressed.
+  void SetMouse(int x, int y, std::uint32_t held) {
+    mouse_.inside = x >= 0 && x < 320 && y >= 0 && y < 200;
+    mouse_.x = x;
+    mouse_.y = y;
+    mouse_.pressed |= held & ~mouse_.held;
+    mouse_.held = held;
+  }
   int frames() const { return frames_; }
   const std::vector<std::uint8_t>& last_frame() const { return frame_; }
   const std::uint32_t* last_palette() const { return palette_; }
@@ -49,6 +62,7 @@ class HeadlessPlatform : public IPlatform {
   GamepadState pads_[kSlots];
   std::vector<int> order_;  // connected slots, oldest first
   std::uint32_t nextid_ = 1;
+  MouseState mouse_;
   bool quit_ = false;
   int frames_ = 0;
   std::vector<std::uint8_t> frame_;
@@ -57,3 +71,4 @@ class HeadlessPlatform : public IPlatform {
 };
 
 }  // namespace keen4::platform
+

@@ -111,3 +111,19 @@ boolean IN_ReadGamepad(std::uint32_t id, ControlInfo* info, word* buttons);
 // Port: stands for "the first gamepad the other player doesn't use" where a
 // gamepad id is expected (co-op); 0 there means the keyboard.
 inline constexpr std::uint32_t kAnyGamepad = 0xFFFFFFFFu;
+
+// Port: the mouse, for the menus. Outside the play loop a left click types
+// Return and a right click Escape, like a gamepad's A and B, unless a screen
+// reads the clicks itself (IN_SetMouseKeys(false)). A button held through
+// IN_ClearKeysDown counts once released and pressed again.
+inline constexpr word kMouseLeft = 1, kMouseRight = 2;
+struct MouseInfo {
+  boolean inside;  // over the 320x200 screen
+  sword x, y;      // screen pixels
+  word held;       // buttons down (not counting ones held through a clear)
+  boolean shown;   // inside, and moved or clicked since the last key or gamepad press
+};
+void IN_ReadMouse(MouseInfo* info);
+// Buttons pressed since the last call or clear.
+word IN_TakeMouseClicks();
+void IN_SetMouseKeys(boolean on);

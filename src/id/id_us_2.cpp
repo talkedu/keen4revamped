@@ -40,9 +40,11 @@ extern byte firescan;
 void TEDDeath();
 void HelpScreens();
 
-// Port: the original's mouse and joystick routines (ID_IN). There is no
-// mouse; joystick 1 is an SDL gamepad (see IN_JoyButtons), which needs no
-// calibration, and joystick 2 stays disabled.
+// Port: the original's mouse and joystick routines (ID_IN). The mouse's
+// buttons are read here; its pointer is the hand (VW_ShowHand) and the main
+// loop moves the selection to the item under it. Joystick 1 is an SDL gamepad
+// (see IN_JoyButtons), which needs no calibration, and joystick 2 stays
+// disabled.
 struct CursorInfo {
   boolean button0, button1;
   sword x, y;
@@ -52,8 +54,10 @@ struct CursorInfo {
 static void IN_ReadCursor(CursorInfo* info) {
   *info = CursorInfo{};
   SYS_Idle();
-  if (!IN_GamepadActive()) return;
-  word buttons = IN_JoyButtons();
+  MouseInfo mouse;
+  IN_ReadMouse(&mouse);
+  word buttons = mouse.held;
+  if (IN_GamepadActive()) buttons |= IN_JoyButtons();
   info->button0 = static_cast<boolean>(buttons & 1);
   info->button1 = static_cast<boolean>((buttons & 2) != 0);
 }
@@ -1749,6 +1753,18 @@ void PrevItem() {
   if (topcard->cursor) SelectItem(topcard, static_cast<word>(topcard->cursor - 1), true);
 }
 
+// Port: the top card's item at screen pixel (x, y), or -1. A row spans the
+// card's width; the load and save boxes are 10 pixels high.
+int ItemAt(int x, int y) {
+  if (!topcard->items || x <= CTL_X || x >= CTL_X + CTL_W) return -1;
+  int height = topcard->items == loadsaveitems ? 10 : RowHeight(topcard);
+  int i = 0;
+  for (UserItem* item = topcard->items; item->type; item++, i++) {
+    if (y >= item->y && y < item->y + height) return i;
+  }
+  return -1;
+}
+
 // 1A89:20CA
 void SetupCard() {
   footerstrings[2] = S(0x4E09);  // "Arrows move"
@@ -1963,6 +1979,17 @@ void US_ControlPanel() {
 
   SetUpCtlPanel();
   DrawCtlPanel();
+  // Port: the mouse. The loop below reads its clicks itself; whatever an item
+  // opens (dialogs, the paddle game, typing a name) gets them as Return and
+  // Escape, so they are turned back on around it.
+  VW_ShowHand(true);
+  IN_SetMouseKeys(false);
+  auto run = [](void (*action)()) {
+    IN_SetMouseKeys(true);
+    action();
+    IN_SetMouseKeys(false);
+    IN_TakeMouseClicks();
+  };
 
   sword ydelta = 0;
   ctlpaneldone = false;
@@ -1994,23 +2021,25 @@ void US_ControlPanel() {
           resetitem = true;
           break;
         case sc_Return:
-          DoItem();
+          run(DoItem);
           resetitem = true;
           break;
         case sc_Escape:
-          UpLevel();
+          run(UpLevel);
           resetitem = true;
           break;
         case sc_F1:
-          HelpScreens();
-          DrawCtlPanel();
+          run([] {
+            HelpScreens();
+            DrawCtlPanel();
+          });
           resetitem = true;
           break;
         default:
           break;
       }
       if (!resetitem && (LastScan == KbdDefs[0].button0 || LastScan == KbdDefs[0].button1)) {
-        DoItem();
+        run(DoItem);
         resetitem = true;
       }
       if (!resetitem) {
@@ -2025,7 +2054,28 @@ void US_ControlPanel() {
       }
       IN_ClearKeysDown();
     } else {
-      // The original also moves the cursor with the mouse (none here).
+      // Port: the item under the hand is selected; a left click picks it and
+      // a right click backs out, like Escape.
+      MouseInfo mouse;
+      IN_ReadMouse(&mouse);
+      word clicks = IN_TakeMouseClicks();
+      int hit = mouse.shown ? ItemAt(mouse.x, mouse.y) : -1;
+      if (hit >= 0 && hit != static_cast<int>(topcard->cursor)) {
+        SelectItem(topcard, static_cast<word>(hit), true);
+        resetitem = true;
+      }
+      if (clicks & kMouseRight) {
+        run(UpLevel);
+        resetitem = true;
+        continue;
+      }
+      if ((clicks & kMouseLeft) && hit >= 0) {
+        run(DoItem);
+        resetitem = true;
+        continue;
+      }
+      // The original also moves the cursor with the mouse's motion; the
+      // gamepad's stick and d-pad type arrow keys instead.
       CursorInfo cursor;
       IN_ReadCursor(&cursor);
       ydelta = static_cast<sword>(ydelta + cursor.y);
@@ -2042,6 +2092,8 @@ void US_ControlPanel() {
     }
   }
 
+  VW_ShowHand(false);
+  IN_SetMouseKeys(true);
   TearDownCtlPanel();
 }
 
