@@ -49,6 +49,10 @@ struct VideoSettings {
   // The size the upscaled view is drawn at before it is scaled to the window;
   // 0x0 (AUTO) draws it at the window's own size.
   int width = 0, height = 0;
+  // Full screen only: the display's refresh rate in Hz, switching to an
+  // exclusive mode at the desktop's resolution; 0 (AUTO) keeps the desktop's
+  // mode. The game's clock stays at 70 Hz whatever the display runs at.
+  float refresh = 0;
 };
 
 struct Resolution {
@@ -106,6 +110,8 @@ class IPlatform {
   virtual void SetVideo(const VideoSettings& video) { video_ = video; }
   // The resolutions that fit the display.
   virtual std::vector<Resolution> Resolutions() { return StandardResolutions(); }
+  // The refresh rates the display offers at the desktop's resolution, lowest first.
+  virtual std::vector<float> RefreshRates() { return {60, 70, 120, 144}; }
 
  protected:
   VideoSettings video_;
