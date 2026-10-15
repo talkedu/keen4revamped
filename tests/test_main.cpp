@@ -98,6 +98,78 @@ int main() {
     Set(nullptr);
   }
 
+  // Mouse: clicks type Return and Escape outside the play loop, or are left
+  // for the screen to read; a key press hides the menu hand until the mouse
+  // moves again; a button held through a clear counts once pressed again.
+  {
+    using namespace keen4::platform;
+    HeadlessPlatform mp;
+    Set(&mp);
+    IN_ClearKeysDown();
+    mp.SetMouse(100, 50, 0);
+    IN_PumpEvents();
+    MouseInfo m;
+    IN_ReadMouse(&m);
+    CHECK(m.inside && m.x == 100 && m.y == 50 && m.shown && m.held == 0);
+    mp.SetMouse(100, 50, kMouseLeft);
+    IN_PumpEvents();
+    CHECK(LastScan == sc_Return && Keyboard[sc_Return]);
+    mp.SetMouse(100, 50, 0);
+    IN_PumpEvents();
+    CHECK(!Keyboard[sc_Return] && IN_TakeMouseClicks() == kMouseLeft && IN_TakeMouseClicks() == 0);
+
+    mp.PushKey(sc_Space, true);
+    mp.PushKey(sc_Space, false);
+    IN_PumpEvents();
+    IN_ReadMouse(&m);
+    CHECK(!m.shown);
+    mp.SetMouse(101, 50, 0);
+    IN_PumpEvents();
+    IN_ReadMouse(&m);
+    CHECK(m.shown);
+
+    IN_ClearKeysDown();
+    IN_SetMouseKeys(false);
+    mp.SetMouse(101, 50, kMouseRight);
+    IN_PumpEvents();
+    CHECK(LastScan == sc_None && IN_TakeMouseClicks() == kMouseRight);
+    IN_ClearKeysDown();
+    IN_PumpEvents();
+    IN_ReadMouse(&m);
+    CHECK(m.held == 0 && IN_TakeMouseClicks() == 0);
+    mp.SetMouse(101, 50, 0);
+    IN_PumpEvents();
+    mp.SetMouse(101, 50, kMouseRight);
+    IN_PumpEvents();
+    IN_ReadMouse(&m);
+    CHECK(m.held == kMouseRight && IN_TakeMouseClicks() == kMouseRight);
+    mp.SetMouse(101, 50, 0);
+    IN_SetMouseKeys(true);
+
+    // The hand is drawn over the shown frame, never into the framebuffer, and
+    // follows the mouse without the screen being drawn again.
+    mp.SetMouse(100, 50, 0);
+    IN_PumpEvents();
+    VW_ClearVideo(8);
+    VW_ShowHand(true);
+    VW_UpdateScreen();
+    auto at = [&](int x, int y) { return mp.last_frame()[y * SCREENWIDTH + x]; };
+    CHECK(vw_framebuffer[50 * SCREENWIDTH + 100] == 8);
+    CHECK(at(100, 50) == 0 && at(101, 51) == 15 && at(99, 50) == 8);  // the fingertip
+    int frames = mp.frames();
+    mp.SetMouse(200, 120, 0);
+    IN_PumpEvents();
+    VW_UpdateHand();
+    CHECK(mp.frames() == frames + 1 && at(100, 50) == 8 && at(200, 120) == 0);
+    VW_UpdateHand();
+    CHECK(mp.frames() == frames + 1);  // nothing moved
+    VW_ShowHand(false);
+    VW_UpdateScreen();
+    CHECK(at(200, 120) == 8);
+    IN_ClearKeysDown();
+    Set(nullptr);
+  }
+
   // Two gamepads: each keeps its id and can be read on its own, oldest first;
   // the newest still drives Controls[0].
   {

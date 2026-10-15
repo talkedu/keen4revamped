@@ -48,6 +48,12 @@ void VW_SetPaletteReg(int index, int egacolor);
 // Shows the framebuffer.
 void VW_UpdateScreen();
 void VW_SetScreen(word crtc, word pelpan);
+// Port: the menus' mouse pointer, a pointing hand drawn over the shown frame
+// (never into the framebuffer) where the mouse is, while the mouse is in use.
+// VW_UpdateHand, called as input is polled, shows the frame again when the
+// hand moves, so it follows the mouse on screens that are waiting for input.
+void VW_ShowHand(boolean on);
+void VW_UpdateHand();
 // Waits `number` vertical retraces (1/70 s each), showing the frame.
 void VW_WaitVBL(int number);
 // 1D06:0999. Copies the shown page into the draw page. The port draws into a

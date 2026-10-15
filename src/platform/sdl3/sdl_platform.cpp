@@ -266,6 +266,41 @@ class SdlPlatform final : public IPlatform {
     Read(gamepads_[index], state);
   }
 
+  void ReadMouse(MouseState* state) override {
+    Pump();
+    *state = MouseState{};
+    state->held = mouse_held_;
+    state->pressed = mouse_pressed_;
+    mouse_pressed_ = 0;
+    if (!mouse_in_) return;
+    float lx = 0, ly = 0;
+    if (!SDL_RenderCoordinatesFromWindow(renderer_, mouse_wx_, mouse_wy_, &lx, &ly)) return;
+    // undo the logical view ApplyMode set up, back to the classic frame
+    constexpr float wide = render::kWideWidth, high = render::kClassicHeight;
+    float fx = lx, fy = ly;
+    if (video_.upscaled && target_) {
+      // a fixed resolution: the 356x200 view is letterboxed in the target
+      float s = std::min(target_w_ / wide, target_h_ / high);
+      fx = (lx - (target_w_ - wide * s) / 2) / s - render::kWideMargin;
+      fy = (ly - (target_h_ - high * s) / 2) / s;
+    } else if (video_.upscaled) {
+      fx = lx - render::kWideMargin;
+    } else {
+      fy = ly * render::kClassicHeight / 240.0f;  // shown as 320x240
+    }
+    state->x = static_cast<int>(std::floor(fx));
+    state->y = static_cast<int>(std::floor(fy));
+    state->inside = state->x >= 0 && state->x < render::kClassicWidth && state->y >= 0 &&
+                    state->y < render::kClassicHeight;
+  }
+
+  void ShowSystemCursor(bool show) override {
+    if (show)
+      SDL_ShowCursor();
+    else
+      SDL_HideCursor();
+  }
+
   bool QuitRequested() override { return quit_; }
 
   int StartAudio(AudioCallback callback, void* user) override {
@@ -535,6 +570,30 @@ class SdlPlatform final : public IPlatform {
         case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
           UpdateRefresh();
           break;
+        case SDL_EVENT_MOUSE_MOTION:
+          mouse_in_ = true;
+          mouse_wx_ = ev.motion.x;
+          mouse_wy_ = ev.motion.y;
+          break;
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+          mouse_in_ = false;
+          break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+          std::uint32_t bit = ev.button.button == SDL_BUTTON_LEFT    ? std::uint32_t{kMouseLeftButton}
+                              : ev.button.button == SDL_BUTTON_RIGHT ? std::uint32_t{kMouseRightButton}
+                                                                     : 0;
+          if (ev.button.down) {
+            mouse_held_ |= bit;
+            mouse_pressed_ |= bit;
+          } else {
+            mouse_held_ &= ~bit;
+          }
+          mouse_in_ = true;
+          mouse_wx_ = ev.button.x;
+          mouse_wy_ = ev.button.y;
+          break;
+        }
         case SDL_EVENT_GAMEPAD_ADDED:
           if (SDL_Gamepad* pad = SDL_OpenGamepad(ev.gdevice.which)) {
             if (std::find(gamepads_.begin(), gamepads_.end(), pad) == gamepads_.end())
@@ -565,6 +624,9 @@ class SdlPlatform final : public IPlatform {
   std::vector<std::uint32_t> rgb_;
   std::deque<KeyEvent> keys_;
   std::vector<SDL_Gamepad*> gamepads_;  // in connection order
+  bool mouse_in_ = false;
+  float mouse_wx_ = 0, mouse_wy_ = 0;  // window coordinates
+  std::uint32_t mouse_held_ = 0, mouse_pressed_ = 0;
   SDL_Texture* target_ = nullptr;  // the remaster view at a fixed resolution
   int target_w_ = 0, target_h_ = 0;
   bool quit_ = false;

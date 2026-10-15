@@ -1,12 +1,14 @@
 // ID_VW: video (segments 1D06 and 1E0A).
 #include "id/id_vw.h"
 
+#include <cstring>
 #include <map>
 #include <utility>
 #include <vector>
 
 #include "exe/keen4exe.h"
 #include "id/id_ca.h"
+#include "id/id_in.h"
 #include "id/id_sys.h"
 #include "platform/platform.h"
 
@@ -174,11 +176,99 @@ void VW_FadeDown() {
   screenfaded = false;
 }
 
-void VW_UpdateScreen() {
+namespace hand {
+
+// A white glove pointing up, outlined in black like the game's sprites.
+// X black, W white, G light gray, . transparent; the tip of the finger points.
+constexpr int kW = 12, kH = 14, kHotX = 4, kHotY = 0;
+constexpr const char* kRows[kH] = {
+    "....XX......",  //
+    "...XWWX.....",  //
+    "...XWWX.....",  //
+    "...XWWX.....",  //
+    "...XWWXXX...",  //
+    "...XWWXWWXX.",  //
+    ".XXXWWXWWXWX",  //
+    "XWWXWWWWWWWX",  //
+    "XWWWWWWWWWGX",  //
+    ".XWWWWWWWWGX",  //
+    "..XWWWWWWWGX",  //
+    "..XWWWWWWGX.",  //
+    "...XWWWWWGX.",  //
+    "...XXXXXXXX.",  //
+};
+
+bool on;
+bool drawn;         // the frame on screen has the hand, at (x, y)
+int x, y;
+bool hidpointer;    // the system's pointer is hidden
+byte shown[SCREENWIDTH * SCREENHEIGHT];  // the last frame shown, without the hand
+byte out[SCREENWIDTH * SCREENHEIGHT];
+
+// Where the hand should be; false when it should not show.
+bool Wanted(int* hx, int* hy) {
+  if (!on) return false;
+  MouseInfo m;
+  IN_ReadMouse(&m);
+  *hx = m.x;
+  *hy = m.y;
+  return m.shown;
+}
+
+void Present() {
   std::uint32_t palette[16];
   for (int i = 0; i < 16; i++) palette[i] = EgaToRgb(attribute_regs[i]);
-  keen4::platform::Get().Present(vw_framebuffer, SCREENWIDTH, SCREENHEIGHT, palette);
+  int hx = 0, hy = 0;
+  drawn = Wanted(&hx, &hy);
+  const byte* frame = shown;
+  if (drawn) {
+    x = hx;
+    y = hy;
+    std::memcpy(out, shown, sizeof out);
+    for (int row = 0; row < kH; row++) {
+      int sy = y - kHotY + row;
+      if (sy < 0 || sy >= SCREENHEIGHT) continue;
+      for (int col = 0; col < kW; col++) {
+        int sx = x - kHotX + col;
+        if (sx < 0 || sx >= SCREENWIDTH) continue;
+        char c = kRows[row][col];
+        if (c != '.') out[sy * SCREENWIDTH + sx] = c == 'X' ? 0 : c == 'W' ? 15 : 7;
+      }
+    }
+    frame = out;
+  }
+  keen4::platform::Get().Present(frame, SCREENWIDTH, SCREENHEIGHT, palette);
+}
+
+}  // namespace hand
+
+void VW_UpdateScreen() {
+  std::memcpy(hand::shown, vw_framebuffer, sizeof hand::shown);
+  hand::Present();
   SYS_Poll();
+}
+
+void VW_ShowHand(boolean on) {
+  hand::on = on;
+  // the frame keeps the hand until the next one is shown
+  hand::drawn = false;
+  VW_UpdateHand();
+}
+
+void VW_UpdateHand() {
+  MouseInfo m;
+  IN_ReadMouse(&m);
+  // the system's pointer never shows over the game's screen: in play it is
+  // hidden, and in the menus the hand stands in for it
+  bool hide = m.inside;
+  if (hide != hand::hidpointer) {
+    hand::hidpointer = hide;
+    keen4::platform::Get().ShowSystemCursor(!hide);
+  }
+  if (!hand::on) return;
+  int hx = 0, hy = 0;
+  bool want = hand::Wanted(&hx, &hy);
+  if (want != hand::drawn || (want && (hx != hand::x || hy != hand::y))) hand::Present();
 }
 
 // 1E0A:07DA

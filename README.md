@@ -8,7 +8,8 @@ as in the original.
 Status: playable MVP. The whole game runs at the original 320x200 from our own port of the
 decompiled code: title, demos, control panel, world map, all levels and enemies, save/load,
 high scores, help screens, AdLib music and sound effects. Not ported yet: the scrolling intro
-and the story crawl (the title picture stands in for them), and mouse input.
+and the story crawl (the title picture stands in for them), and mouse control in play (the
+mouse works in the menus).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and milestones.
 
@@ -145,9 +146,16 @@ status window and Start (Menu) opens the control panel. In menus: d-pad or stick
 A selects, B or Start goes back. The control panel's Gravis gamepad option remaps jump, pogo,
 fire and status to any of A, B, X and Y.
 
+The mouse works in the menus: a pointing hand follows it, the item under the hand is
+selected, a left click picks it and a right click goes back, like Esc. Elsewhere outside
+play (help, dialogs, "press a key" screens) a left click acts as Enter and a right click
+as Esc. The hand hides when a key or gamepad button is pressed and comes back when the
+mouse moves. The system pointer is hidden over the game.
+
 `--headless --frames N --shot-every K --out DIR --keys "tic:scancode:down,..."` runs
 without a window and saves frames as PNG, which is how the port is checked in CI and tests.
-`--gamepad` and `--gamepad2` script a first and second gamepad the same way.
+`--gamepad` and `--gamepad2` script a first and second gamepad the same way, and
+`--mouse "tic:x:y:buttons,..."` the mouse (1 left, 2 right, in 320x200 screen pixels).
 
 ## Two-player co-op
 

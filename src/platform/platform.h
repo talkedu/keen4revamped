@@ -38,6 +38,18 @@ struct GamepadState {
   std::uint32_t id = 0;       // stays the same while the pad is plugged in; never 0
 };
 
+enum MouseButton : std::uint32_t {
+  kMouseLeftButton = 1u << 0,
+  kMouseRightButton = 1u << 1,
+};
+
+struct MouseState {
+  bool inside = false;      // over the game's 320x200 frame
+  int x = 0, y = 0;         // in pixels of the 320x200 frame
+  std::uint32_t held = 0;   // MouseButton bits down now
+  std::uint32_t pressed = 0;  // bits pressed since the last ReadMouse, even if released again
+};
+
 // Fills `count` stereo frames (2 floats each, -1..1) at the rate StartAudio returned.
 using AudioCallback = void (*)(float* frames, int count, void* user);
 
@@ -91,6 +103,10 @@ class IPlatform {
     else
       *state = GamepadState{};
   }
+  // The mouse, in the classic frame's pixels whichever renderer shows it.
+  virtual void ReadMouse(MouseState* state) { *state = MouseState{}; }
+  // Hides the system's pointer over the window (the game draws its own in menus).
+  virtual void ShowSystemCursor(bool) {}
   // True once the user closed the window.
   virtual bool QuitRequested() = 0;
 

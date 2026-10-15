@@ -2,6 +2,7 @@
 
 #include "id/id_in.h"
 #include "id/id_sd.h"
+#include "id/id_vw.h"
 #include "platform/platform.h"
 
 void SD_ServiceWithoutAudio();
@@ -24,6 +25,7 @@ void SYS_Poll() {
     lastTicks = now;
   }
   IN_PumpEvents();
+  VW_UpdateHand();
   SD_ServiceWithoutAudio();
   if (plat.QuitRequested()) Quit(nullptr);
 }

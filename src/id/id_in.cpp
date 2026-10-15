@@ -65,6 +65,18 @@ void INL_KeyService(byte k, bool special) {
   if (INL_KeyHook && !special) INL_KeyHook();
 }
 
+// Port: the mouse's state (the code is after the gamepad's).
+namespace mouse {
+bool inside;
+int x, y;
+std::uint32_t held;      // buttons down, less the ignored ones
+std::uint32_t ignored;   // held through a clear; dropped until released
+std::uint32_t clicked;   // pressed since IN_TakeMouseClicks last took them
+std::uint32_t typed;     // buttons whose key is currently down
+bool shown;              // the menu hand: moved or clicked since the last key press
+bool keys = true;        // clicks type Return and Escape
+}  // namespace mouse
+
 // Port: the gamepad. The newest connected pad is joystick 1. Controls[0]
 // follows whichever device was used last: the pad when it connects or a button
 // is pressed, the keyboard when a key is pressed or the pad goes away. While
@@ -184,17 +196,62 @@ void Pump() {
       Type(key, true);
     }
   }
+  if (bits & ~held) mouse::shown = false;  // pressing a pad button hides the menu hand
   held = bits;
 }
 
 }  // namespace pad
+
+// Port: the mouse. Its position and buttons come from the platform in the
+// 320x200 screen's pixels; outside the play loop its clicks type keys like
+// the gamepad's buttons do.
+namespace mouse {
+
+using keen4::platform::Get;
+using keen4::platform::MouseState;
+
+struct KeyMap {
+  std::uint32_t bit;
+  ScanCode scan;
+};
+static_assert(kMouseLeft == keen4::platform::kMouseLeftButton && kMouseRight == keen4::platform::kMouseRightButton);
+constexpr KeyMap kKeys[] = {{kMouseLeft, sc_Return}, {kMouseRight, sc_Escape}};
+
+void Pump() {
+  MouseState s;
+  Get().ReadMouse(&s);
+  if (s.inside && (!inside || s.x != x || s.y != y)) shown = true;
+  inside = s.inside;
+  x = s.x;
+  y = s.y;
+  std::uint32_t pressed = s.pressed & ~ignored;
+  ignored &= s.held;
+  held = s.held & ~ignored;
+  if (pressed) shown = true;
+  // a click in the letterbox around the screen still counts
+  clicked |= pressed;
+  for (const KeyMap& key : kKeys) {
+    if ((pressed & key.bit) && keys && pad::menu && !(typed & key.bit)) {
+      INL_KeyService(static_cast<byte>(key.scan), false);
+      typed |= key.bit;
+    } else if ((typed & key.bit) && !(held & key.bit)) {
+      INL_KeyService(static_cast<byte>(key.scan | 0x80), false);
+      typed &= ~key.bit;
+    }
+  }
+}
+
+}  // namespace mouse
 
 }  // namespace
 
 void IN_PumpEvents() {
   keen4::platform::KeyEvent ev;
   while (keen4::platform::Get().PollKey(&ev)) {
-    if (ev.down) pad::UseKeyboard();
+    if (ev.down) {
+      pad::UseKeyboard();
+      mouse::shown = false;
+    }
     if (ev.scancode == 0xE1) {
       // The Pause key sends E1 1D 45 E1 9D C5 on press only.
       if (ev.down) Paused = true;
@@ -204,7 +261,24 @@ void IN_PumpEvents() {
     INL_KeyService(k, ev.extended);
   }
   pad::Pump();
+  mouse::Pump();
 }
+
+void IN_ReadMouse(MouseInfo* info) {
+  info->inside = mouse::inside;
+  info->x = static_cast<sword>(mouse::x);
+  info->y = static_cast<sword>(mouse::y);
+  info->held = static_cast<word>(mouse::held);
+  info->shown = mouse::shown && mouse::inside;
+}
+
+word IN_TakeMouseClicks() {
+  word clicked = static_cast<word>(mouse::clicked);
+  mouse::clicked = 0;
+  return clicked;
+}
+
+void IN_SetMouseKeys(boolean on) { mouse::keys = on; }
 
 void IN_NoteGameplay() {
   if (DemoMode == demo_Playback) return;  // the title demos leave the pad on the menus
@@ -310,6 +384,9 @@ void IN_ClearKeysDown() {
   for (auto& k : Keyboard) k = false;
   // Port: pad buttons held now count only once released and pressed again.
   pad::ignored |= pad::held;
+  mouse::ignored |= mouse::held;
+  mouse::held = 0;
+  mouse::clicked = 0;
 }
 
 // 1460:09BE
