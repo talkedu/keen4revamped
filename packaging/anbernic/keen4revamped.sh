@@ -44,8 +44,14 @@ args=(--fullscreen)
 [ -d audio ] && args+=(--remastered-audio)
 
 chmod +x ./keen4 2>/dev/null
-type pm_platform_helper >/dev/null 2>&1 && pm_platform_helper "$GAMEDIR/keen4"
+if type pm_platform_helper >/dev/null 2>&1; then
+  pm_platform_helper "$GAMEDIR/keen4"
+fi
 
 ./keen4 "${args[@]}"
+status=$?
 
-type pm_finish >/dev/null 2>&1 && pm_finish
+if type pm_finish >/dev/null 2>&1; then
+  pm_finish
+fi
+exit $status

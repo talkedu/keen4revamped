@@ -25,6 +25,12 @@ set(CMAKE_RANLIB "${_keen4_root}/bin/ranlib" CACHE FILEPATH "")
 # The sysroot holds only the device libraries SDL loads at run time (libc
 # comes from Zig), so it is a search root, not --sysroot.
 set(CMAKE_FIND_ROOT_PATH "${_keen4_root}/sysroot")
+# Its headers come after Zig's libc headers, for SDL's plain header checks
+# (libudev.h and the like).
+set(CMAKE_C_FLAGS_INIT "-idirafter ${_keen4_root}/sysroot/usr/include")
+set(CMAKE_CXX_FLAGS_INIT "-idirafter ${_keen4_root}/sysroot/usr/include")
+# The handhelds have little storage: no debug info in the binary.
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-s")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

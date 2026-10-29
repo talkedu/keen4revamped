@@ -8,6 +8,8 @@
 #     compiler wrappers go in $KEEN4_AARCH64_ROOT/bin.
 #   - Debian 11 (bullseye) arm64 headers and libraries for the parts of SDL3
 #     that talk to the device: KMS/DRM, Wayland, ALSA, PulseAudio and udev.
+#     Wayland comes from Debian 12 (bookworm): SDL's protocol code is made by
+#     the build machine's wayland-scanner, which needs libwayland 1.20+.
 #     SDL loads them at run time, so they are only used to compile against.
 #
 # Everything lands in $KEEN4_AARCH64_ROOT (default ~/.cache/keen4revamped/aarch64)
@@ -22,7 +24,7 @@ zig_version=0.15.2
 zig_sha256=02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
 debian_mirrors="https://deb.debian.org/debian https://archive.debian.org/debian"
 
-# pool path and SHA-256 of each Debian bullseye arm64 package
+# pool path and SHA-256 of each Debian arm64 package
 debs='
 pool/main/libd/libdrm/libdrm-dev_2.4.104-1_arm64.deb dbbbc3d05b470d6d35b5f2daed4be893e41b74f9c7e58bf5be3d18849b14f78a
 pool/main/libd/libdrm/libdrm2_2.4.104-1_arm64.deb 1dc606aa361307a8c5277c2a5ddedea40a4125874e887c98e82b33dacaa853b0
@@ -32,10 +34,12 @@ pool/main/a/alsa-lib/libasound2-dev_1.2.4-1.1_arm64.deb 5acd1f3cd1aa11aeeb9dcd24
 pool/main/a/alsa-lib/libasound2_1.2.4-1.1_arm64.deb 8fabd77256593c42e2ad1578f938b56d0a5ed19aa61c6c72c890fd761fd129a8
 pool/main/p/pulseaudio/libpulse-dev_14.2-2_arm64.deb a83746a514f457d515fec31e34fcd985728eaeae77560bbd5e11496fef3f6058
 pool/main/p/pulseaudio/libpulse0_14.2-2_arm64.deb bb6533d2f67cd7fb94bf2ae1d7f13ae6b3c5b70c098038f21bc47fce30c88621
-pool/main/w/wayland/libwayland-dev_1.18.0-2~exp1.1_arm64.deb 2357033bfe3cee735220abb527ca0707a31dc2813defe7e67d738882607ecdb9
-pool/main/w/wayland/libwayland-client0_1.18.0-2~exp1.1_arm64.deb 7bde74828c3508b5b81400c4b9ef51d65b566d7645747b777ec171eb8ecfce47
-pool/main/w/wayland/libwayland-egl1_1.18.0-2~exp1.1_arm64.deb 8b5e2d8975330f308c226e3b51624a76ea8ebe5115dd8e929e05ea23c4169008
-pool/main/w/wayland/libwayland-cursor0_1.18.0-2~exp1.1_arm64.deb 1c201b449abf41e864dd48c960c9ef7f180b5164a3e7562ae5fd467d60fd074e
+pool/main/w/wayland/libwayland-dev_1.21.0-1_arm64.deb 932405c58195d299495230792e374ad304adadf3d3ffdc07eda3466b756adc33
+pool/main/w/wayland/libwayland-client0_1.21.0-1_arm64.deb ae390cc04c2eb1de90b9a6373505b22c730ada5e72daa50c507b7f99c12faf06
+pool/main/w/wayland/libwayland-egl1_1.21.0-1_arm64.deb c08124a4d9af24f058b45c88867a84697882e755ea94965795d152fe26fe57c9
+pool/main/w/wayland/libwayland-cursor0_1.21.0-1_arm64.deb 8c8d1a3942bc3fc9dd3ea7c679c1a314e59cdaaa700883d54d1bb3ec89db256b
+pool/main/libf/libffi/libffi-dev_3.3-6_arm64.deb 31166c3c814374c520e4c47cc779291888a2a7eca09fc93b5d2918bd7e2ed085
+pool/main/libf/libffi/libffi7_3.3-6_arm64.deb eb748e33ae4ed46f5a4c14b7a2a09792569f2029ede319d0979c373829ba1532
 pool/main/libx/libxkbcommon/libxkbcommon-dev_1.0.3-2_arm64.deb 704aa9acb1643344c7ecd237f6d93efd96d6067fa5e9ec41ca2aba4b88a92f06
 pool/main/libx/libxkbcommon/libxkbcommon0_1.0.3-2_arm64.deb 91c19f642af34ae8cb909d00d08bc83f0b4f8e87ddde6984bd8bff0f7bf83204
 pool/main/s/systemd/libudev-dev_247.3-7+deb11u5_arm64.deb 608eecca1c50230a5488ce436e30926f3b93c57ed018fd7318f1fd278070bdef
