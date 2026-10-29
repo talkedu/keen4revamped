@@ -32,8 +32,23 @@ described in [Running](#running).
   an app-menu entry and a desktop shortcut. `--no-desktop-shortcut` skips the shortcut,
   `--prefix DIR` installs somewhere else, and `~/.local/lib/keen4revamped/uninstall.sh`
   removes it again. The same `install.sh` is in the `.tar.gz`.
+- Anbernic and other Linux handhelds (aarch64: RG35XX, RG40XX, RG353 and the like, on stock
+  firmware, muOS, Knulli or ROCKNIX): see [Handhelds](#handhelds).
 
 Uninstalling removes only the installed files; saved games and the configuration stay.
+
+### Handhelds
+
+`keen4revamped-vX.Y-anbernic-aarch64.zip` is a PortMaster-style port. Unzip it into the
+handheld's ports folder (for example `ROMS/ports` on the SD card), so that
+`keen4revamped.sh` and the `keen4revamped` folder sit side by side, then copy `KEEN4E.EXE`
+and the `.CK4` files from your copy of the game into `keen4revamped/gamedata`. Start
+"keen4revamped" from the Ports list. Saves and settings go in `keen4revamped/saves`, and
+`keen4revamped/log.txt` has the output of the last run. Upscaled art (`art/`) and remastered
+audio (`audio/`) can be copied into `keen4revamped` as on the desktop.
+
+The game reads the built-in controls as a gamepad, so it needs no key mapping; PortMaster,
+when installed, tells it the device's button layout. Quit from the game's menu.
 
 ## Building
 
@@ -49,6 +64,12 @@ To build a Windows `keen4.exe` from Linux or WSL, install MinGW-w64 (`sudo apt i
 and use `cmake --preset windows-cross && cmake --build --preset windows-cross`. In VS Code under
 WSL, the "run on Windows" task builds it and starts it on the Windows host.
 
+The handheld build (Linux aarch64) is cross-compiled with Zig, which needs no root:
+`sh packaging/anbernic/fetch-toolchain.sh` downloads Zig and the arm64 headers SDL needs into
+`~/.cache/keen4revamped/aarch64`, then `cmake --preset anbernic && cmake --build --preset
+anbernic` builds it and `sh packaging/anbernic/make-package.sh build/anbernic keen4.zip`
+packs the port.
+
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).
 
@@ -62,7 +83,7 @@ are offered the release of their own number by CHECK FOR UPDATES.
 ## Releases
 
 Every pull request merged to main becomes a release. The release workflow bumps the version
-from the latest `v*` tag, builds and tests Windows and Linux, and publishes the packages on
+from the latest `v*` tag, builds and tests Windows and Linux, builds the handheld port, and publishes the packages on
 the Releases page with the pull request's title and description as the notes. Start the
 pull request title with `[MAJOR]`, `[MINOR]` or `[PATCH]` to pick the bump, for example
 `[MINOR] Add a level editor`; a title without one is released as a patch.

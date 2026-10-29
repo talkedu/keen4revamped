@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "name": "keen4revamped.zip",
+  "items": [
+    "keen4revamped.sh",
+    "keen4revamped"
+  ],
+  "items_opt": [],
+  "attr": {
+    "title": "Commander Keen 4 Revamped",
+    "porter": ["talkedu"],
+    "desc": "Commander Keen 4: Secret of the Oracle, rebuilt in C++ from the original game: smooth scrolling, upscaled art, remastered audio, two-player co-op and gamepad support.",
+    "inst": "Copy KEEN4E.EXE (v1.4 EGA) and the .CK4 files from your copy of the game, for example the Steam release (base4 folder), into ports/keen4revamped/gamedata.",
+    "genres": ["platformer"],
+    "image": {},
+    "rtr": false,
+    "exp": false,
+    "runtime": null,
+    "reqs": [],
+    "arch": ["aarch64"]
+  }
+}

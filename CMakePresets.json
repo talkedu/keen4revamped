@@ -42,6 +42,28 @@
         "CMAKE_BUILD_TYPE": "Release",
         "KEEN4_BUILD_TESTS": "OFF"
       }
+    },
+    {
+      "name": "anbernic",
+      "displayName": "Linux aarch64 handhelds (cross-compiled with Zig, see packaging/anbernic)",
+      "binaryDir": "build/anbernic",
+      "toolchainFile": "${sourceDir}/cmake/aarch64-linux-zig.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "KEEN4_BUILD_TESTS": "OFF",
+        "SDL_X11": "OFF",
+        "SDL_PIPEWIRE": "OFF",
+        "SDL_JACK": "OFF",
+        "SDL_SNDIO": "OFF",
+        "SDL_LIBURING": "OFF",
+        "SDL_WAYLAND_LIBDECOR": "OFF",
+        "SDL_VULKAN": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -63,6 +85,11 @@
     {
       "name": "windows-cross",
       "configurePreset": "windows-cross",
+      "configuration": "Release"
+    },
+    {
+      "name": "anbernic",
+      "configurePreset": "anbernic",
       "configuration": "Release"
     }
   ],

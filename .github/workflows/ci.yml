@@ -20,12 +20,19 @@ jobs:
           - name: windows
             runs-on: [self-hosted, Linux, X64, wsl]
             preset: windows-cross
+          - name: anbernic
+            runs-on: [self-hosted, Linux, X64, wsl]
+            preset: anbernic
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # the v* tags, for the snapshot version
+      - name: Fetch the aarch64 toolchain
+        # Zig and the arm64 headers are cached in ~/.cache on the runner.
+        if: matrix.preset == 'anbernic'
+        run: sh packaging/anbernic/fetch-toolchain.sh
       - name: Install SDL3 build dependencies
         # The self-hosted runner already has these (and has no passwordless sudo).
         if: runner.os == 'Linux' && runner.environment == 'github-hosted'
@@ -64,3 +71,13 @@ jobs:
           path: |
             build/windows/keen4.exe
             README.md
+      - name: Package the handheld build
+        if: matrix.name == 'anbernic'
+        run: sh packaging/anbernic/make-package.sh build/anbernic keen4revamped-anbernic-aarch64.zip
+      - name: Upload the handheld build
+        # to try a pull request on a device before it is released
+        if: matrix.name == 'anbernic'
+        uses: actions/upload-artifact@v4
+        with:
+          name: keen4-anbernic
+          path: keen4revamped-anbernic-aarch64.zip

@@ -128,6 +128,9 @@ const Asset* PickAsset(const Release& release, const std::string& suffix) {
 std::string PlatformAssetSuffix() {
 #ifdef _WIN32
   return "-windows-x64.zip";
+#elif defined(__aarch64__)
+  // the handheld build: the port folder, without the PortMaster launcher
+  return "-linux-aarch64.tar.gz";
 #else
   return "-linux-x64.tar.gz";
 #endif
