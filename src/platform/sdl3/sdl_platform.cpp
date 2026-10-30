@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <memory>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "audio/remaster_audio.h"
+#include "platform/sdl3/fb_output.h"
 #include "platform/sdl3/remaster_renderer.h"
 #include "render/art.h"
 #include "render/scene.h"
@@ -147,15 +149,36 @@ class SdlPlatform final : public IPlatform {
 
   bool Init(const SdlOptions& options) {
     audio_enabled_ = options.audio;
-    if (!SDL_Init(SDL_INIT_VIDEO | (options.audio ? SDL_INIT_AUDIO : 0))) {
+    const SDL_InitFlags flags = SDL_INIT_VIDEO | (options.audio ? SDL_INIT_AUDIO : 0);
+    video_ = options.video;
+    // KEEN4_FBDEV=/dev/fbN skips SDL's own video drivers.
+    const char* fbdev = std::getenv("KEEN4_FBDEV");
+    if (fbdev && *fbdev) {
+      if (!UseFramebuffer(flags)) return false;
+    } else if (!SDL_Init(flags)) {
       std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-      return false;
+      if (!UseFramebuffer(flags)) return false;
     }
     // Pads already plugged in arrive as SDL_EVENT_GAMEPAD_ADDED like hotplugged ones.
     if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
       std::fprintf(stderr, "No gamepad support: %s\n", SDL_GetError());
+    if (!fb_ && !OpenWindow(options) && !(UseFramebuffer(flags) && OpenFramebufferWindow())) return false;
+    if (fb_ && !window_ && !OpenFramebufferWindow()) return false;
+    art_.SetDirectories(options.art_dirs);
+    art_.SetFallback(options.nearest ? render::Fallback::Nearest : render::Fallback::Scale4x);
+    ReloadArt();
+    remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
+    remaster_renderer_->interpolate = options.interpolate;
+    remaster_renderer_->show_hitboxes = options.hitboxes;
+    UpdateRefresh();
+    ApplyMode();
+    start_ns_ = SDL_GetTicksNS();
+    return true;
+  }
+
+  // A window and a renderer from SDL's video drivers (desktop, KMS/DRM, Wayland).
+  bool OpenWindow(const SdlOptions& options) {
     int scale = options.scale > 0 ? options.scale : 3;
-    video_ = options.video;
     // the remaster view is 16:9, the classic one 4:3
     int winw = video_.upscaled ? 427 * scale : 320 * scale, winh = 240 * scale;
     if (video_.upscaled && video_.width > 0 && video_.height > 0) {
@@ -177,18 +200,49 @@ class SdlPlatform final : public IPlatform {
     renderer_ = SDL_CreateRenderer(window_, nullptr);
     if (!renderer_) {
       std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+      SDL_DestroyWindow(window_);
+      window_ = nullptr;
       return false;
     }
-    art_.SetDirectories(options.art_dirs);
-    art_.SetFallback(options.nearest ? render::Fallback::Nearest : render::Fallback::Scale4x);
-    ReloadArt();
-    remaster_renderer_ = std::make_unique<RemasterRenderer>(renderer_, &art_);
-    remaster_renderer_->interpolate = options.interpolate;
-    remaster_renderer_->show_hitboxes = options.hitboxes;
-    UpdateRefresh();
-    ApplyMode();
-    start_ns_ = SDL_GetTicksNS();
     return true;
+  }
+
+  // Falls back to the Linux framebuffer: SDL keeps running (input, sound) on
+  // its offscreen video driver, and frames go to /dev/fb0.
+  bool UseFramebuffer(SDL_InitFlags flags) {
+    auto fb = std::make_unique<FramebufferOutput>();
+    if (!fb->Open()) {
+      std::fprintf(stderr, "video: no framebuffer to fall back to\n");
+      return false;
+    }
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
+    if (!SDL_Init(flags)) {
+      std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+      return false;
+    }
+    fb_ = std::move(fb);
+    return true;
+  }
+
+  bool OpenFramebufferWindow() {
+    // The window only receives events; drawing goes to the framebuffer's surface.
+    window_ = SDL_CreateWindow("Commander Keen 4", fb_->width(), fb_->height(), SDL_WINDOW_HIDDEN);
+    renderer_ = SDL_CreateSoftwareRenderer(fb_->surface());
+    if (!renderer_) {
+      std::fprintf(stderr, "SDL_CreateSoftwareRenderer failed: %s\n", SDL_GetError());
+      return false;
+    }
+    // the screen is the framebuffer: no window modes, and no vsync to wait on
+    video_.fullscreen = false;
+    video_.vsync = false;
+    return true;
+  }
+
+  // Shows what the renderer drew: SDL_RenderPresent, and the framebuffer copy.
+  void PresentFrame() {
+    SDL_RenderPresent(renderer_);
+    if (fb_) fb_->Show();
   }
 
   std::uint64_t Ticks70() override { return (SDL_GetTicksNS() - start_ns_) * 70 / 1000000000ull; }
@@ -239,7 +293,7 @@ class SdlPlatform final : public IPlatform {
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
     SDL_RenderTexture(renderer_, texture_, nullptr, nullptr);
-    SDL_RenderPresent(renderer_);
+    PresentFrame();
     Pump();
   }
 
@@ -502,7 +556,7 @@ class SdlPlatform final : public IPlatform {
     } else {
       remaster_renderer_->Draw(frame_.data(), palette_, now);
     }
-    SDL_RenderPresent(renderer_);
+    PresentFrame();
     last_draw_ns_ = now;
   }
 
@@ -619,6 +673,7 @@ class SdlPlatform final : public IPlatform {
 
   SDL_Window* window_ = nullptr;
   SDL_Renderer* renderer_ = nullptr;
+  std::unique_ptr<FramebufferOutput> fb_;  // set when drawing to /dev/fb0
   SDL_Texture* texture_ = nullptr;
   int tex_w_ = 0, tex_h_ = 0;
   std::vector<std::uint32_t> rgb_;
