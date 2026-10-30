@@ -44,7 +44,7 @@ handheld's ports folder (for example `ROMS/ports` on the SD card), so that
 `keen4revamped.sh` and the `keen4revamped` folder sit side by side, then copy `KEEN4E.EXE`
 and the `.CK4` files from your copy of the game into `keen4revamped/gamedata`. Start
 "keen4revamped" from the Ports list. Saves and settings go in `keen4revamped/saves`, and
-`keen4revamped/log.txt` has the output of the last run. Upscaled art (`art/`) and remastered
+`keen4revamped/log.txt` (next to the `keen4` program) has the output of the last run. Upscaled art (`art/`) and remastered
 audio (`audio/`) can be copied into `keen4revamped` as on the desktop.
 
 The game reads the built-in controls as a gamepad, so it needs no key mapping; PortMaster,
