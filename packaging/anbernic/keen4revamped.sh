@@ -50,6 +50,15 @@ echo "keen4revamped: $GAMEDIR, firmware ${CFW_NAME:-unknown}, device ${DEVICE_NA
 export KEEN4_DATA_DIR="$GAMEDIR/gamedata"
 export KEEN4_SAVE_DIR="$GAMEDIR/saves"
 mkdir -p "$KEEN4_DATA_DIR" "$KEEN4_SAVE_DIR"
+# The files may sit in a subfolder, such as Steam's base4 copied as a whole.
+exe=$(find "$KEEN4_DATA_DIR" -maxdepth 4 -type f -iname keen4e.exe 2>/dev/null | head -n 1)
+if [ -n "$exe" ]; then
+  KEEN4_DATA_DIR=$(dirname "$exe")
+else
+  echo "keen4revamped: no KEEN4E.EXE in $KEEN4_DATA_DIR. Its files are:"
+  ls -laR "$KEEN4_DATA_DIR" 2>&1 | head -n 40
+fi
+echo "keen4revamped: game data in $KEEN4_DATA_DIR"
 
 # Upscaled art in art/ and remastered audio in audio/ are picked up from here
 # as on the desktop (see docs/ART.md and docs/AUDIO.md).

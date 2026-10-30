@@ -42,6 +42,7 @@ bool FramebufferOutput::Open() {
     fix.line_length = static_cast<__u32>(w * 4);
     fix.smem_len = static_cast<__u32>(w * h * 4);
     if (ftruncate(fd_, fix.smem_len) != 0) return false;
+    test_ = true;
   } else if (ioctl(fd_, FBIOGET_VSCREENINFO, &var) != 0 || ioctl(fd_, FBIOGET_FSCREENINFO, &fix) != 0) {
     std::fprintf(stderr, "video: %s: cannot read the screen mode\n", device);
     return false;
@@ -68,10 +69,12 @@ bool FramebufferOutput::Open() {
     return false;
   }
   map_ = static_cast<unsigned char*>(map);
+  bytes_per_pixel_ = static_cast<int>(var.bits_per_pixel / 8);
+  alpha_mask_ = mask(var.transp);
   surface_ = SDL_CreateSurface(width_, height_, SDL_PIXELFORMAT_XRGB8888);
   if (!surface_) return false;
-  std::fprintf(stderr, "video: framebuffer %s, %dx%d, %s\n", device, width_, height_,
-               SDL_GetPixelFormatName(format_));
+  std::fprintf(stderr, "video: framebuffer %s, %dx%d (virtual %ux%u at %u,%u), %s\n", device, width_, height_,
+               var.xres_virtual, var.yres_virtual, var.xoffset, var.yoffset, SDL_GetPixelFormatName(format_));
   return true;
 #else
   return false;
@@ -80,9 +83,37 @@ bool FramebufferOutput::Open() {
 
 void FramebufferOutput::Show() {
   if (!map_ || !surface_) return;
-  // An alpha channel in the framebuffer gets full opacity.
-  SDL_ConvertPixels(width_, height_, surface_->format, surface_->pixels, surface_->pitch, format_, map_ + offset_,
-                    pitch_);
+#ifdef KEEN4_HAVE_FBDEV
+  // Draw into the page on screen now, then pan to it: some drivers (Allwinner's
+  // among them) only update the display layer on a pan.
+  fb_var_screeninfo var{};
+  bool real = !test_ && ioctl(fd_, FBIOGET_VSCREENINFO, &var) == 0;
+  if (real) {
+    size_t offset = static_cast<size_t>(var.yoffset) * pitch_ + var.xoffset * (var.bits_per_pixel / 8);
+    if (offset + static_cast<size_t>(pitch_) * height_ <= map_size_) offset_ = offset;
+  }
+#endif
+  unsigned char* dst = map_ + offset_;
+  SDL_ConvertPixels(width_, height_, surface_->format, surface_->pixels, surface_->pitch, format_, dst, pitch_);
+  // The rendered frame has no alpha; a framebuffer with an alpha channel
+  // must get full opacity, or the display layer stays see-through.
+  if (alpha_mask_ && bytes_per_pixel_ == 4) {
+    for (int y = 0; y < height_; y++) {
+      auto* row = reinterpret_cast<Uint32*>(dst + static_cast<size_t>(y) * pitch_);
+      for (int x = 0; x < width_; x++) row[x] |= alpha_mask_;
+    }
+  } else if (alpha_mask_ && bytes_per_pixel_ == 2) {
+    for (int y = 0; y < height_; y++) {
+      auto* row = reinterpret_cast<Uint16*>(dst + static_cast<size_t>(y) * pitch_);
+      for (int x = 0; x < width_; x++) row[x] = static_cast<Uint16>(row[x] | alpha_mask_);
+    }
+  }
+#ifdef KEEN4_HAVE_FBDEV
+  if (real && ioctl(fd_, FBIOPAN_DISPLAY, &var) != 0 && !pan_failed_) {
+    pan_failed_ = true;
+    std::fprintf(stderr, "video: the framebuffer does not pan; drawing without it\n");
+  }
+#endif
 }
 
 }  // namespace keen4::platform
