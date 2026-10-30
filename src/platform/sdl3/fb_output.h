@@ -30,6 +30,10 @@ class FramebufferOutput {
   size_t map_size_ = 0;
   size_t offset_ = 0;  // the visible page, when the framebuffer is double-buffered
   int pitch_ = 0;
+  int bytes_per_pixel_ = 0;
+  Uint32 alpha_mask_ = 0;  // set in every pixel written
+  bool test_ = false;      // a plain file stands in (KEEN4_FBDEV_MODE)
+  bool pan_failed_ = false;
   int width_ = 0, height_ = 0;
   SDL_PixelFormat format_ = SDL_PIXELFORMAT_UNKNOWN;
   SDL_Surface* surface_ = nullptr;
