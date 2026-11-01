@@ -269,4 +269,3 @@ configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository
 `KEEN4_GITHUB_CLIENT_ID`); without one the item says updates are off. `KEEN4_GITHUB_CLIENT_ID`,
 `KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
 client id, the repository and the saved token.
-
