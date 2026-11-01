@@ -50,6 +50,9 @@ audio (`audio/`) can be copied into `keen4revamped` as on the desktop.
 The game reads the built-in controls as a gamepad, so it needs no key mapping; PortMaster,
 when installed, tells it the device's button layout. Quit from the game's menu.
 
+The handheld build has no CHECK FOR UPDATES: to update, unzip a newer release over the old
+one; the game files in `gamedata` and the `saves` folder are kept.
+
 ## Building
 
 Requires CMake 3.25+ and a C++20 compiler (MSVC 2022, GCC 12+, Clang 15+).
@@ -209,19 +212,13 @@ card, compares it with the latest release on GitHub and, if there is a newer one
 with a progress bar, puts its files in place of the running game's and restarts. It is greyed
 out during a game.
 
-The repository is private, so the first check signs in to GitHub: the game opens
-github.com/login/device in the browser and shows a code to enter there (it is also on the
-clipboard). The account needs access to the repository. The token is kept in
-`github-token.txt` next to `CONFIG.CK4`; delete it to sign out. On Windows, a game installed
-in Program Files asks for administrator rights to replace its files; on Linux the game folder
-must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs libcurl, which
-desktop distributions have.
+No GitHub account is needed: the game reads the public releases anonymously. GitHub allows
+60 such requests an hour from one address, plenty for a few checks. On Windows, a game
+installed in Program Files asks for administrator rights to replace its files; on Linux the
+game folder must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs
+libcurl, which desktop distributions have.
 
-Builds sign in with a GitHub OAuth app or GitHub App that has device flow enabled. A GitHub
-App needs the Contents (read-only) repository permission and must be installed on the
-repository; turn off user token expiration in its optional features, or players sign in again
-every 8 hours. Its client id is set when
-configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository variable
-`KEEN4_GITHUB_CLIENT_ID`); without one the item says updates are off. `KEEN4_GITHUB_CLIENT_ID`,
-`KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
-client id, the repository and the saved token.
+The repository the game updates from is set when configuring, `-DKEEN4_UPDATE_REPO=owner/name`
+(default `talkedu/keen4revamped`), and `KEEN4_UPDATE_REPO` in the environment overrides it.
+`-DKEEN4_UPDATER=OFF` builds the game without the updater and without the menu item; the
+handheld build does that.

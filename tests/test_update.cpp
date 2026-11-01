@@ -78,8 +78,6 @@ int main() {
     CHECK(!update::ParseRelease(R"({"message": "Not Found"})", &r));
   }
 
-  CHECK(http::FormEncode("urn:a b/c~d") == "urn%3Aa%20b%2Fc~d");
-
   if (failures == 0) std::printf("all tests passed\n");
   return failures == 0 ? 0 : 1;
 }

@@ -39,7 +39,9 @@
 #include "id/id_us.h"
 #include "platform/headless/headless_platform.h"
 #include "platform/platform.h"
+#if KEEN4_UPDATER
 #include "update/install.h"
+#endif
 #ifdef KEEN4_WITH_SDL3
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>  // provides WinMain on Windows
@@ -185,10 +187,12 @@ std::string DefaultSaveDir() {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if KEEN4_UPDATER
   // keen4 --apply-update FROM TO: the updater's helper with administrator rights.
   int helper_exit = 0;
   if (keen4::update::RunHelper(argc, argv, &helper_exit)) return helper_exit;
   keen4::update::Init(argc, argv);
+#endif
 
   std::string datadir, savedir;
   bool headless = false, sound = true;
