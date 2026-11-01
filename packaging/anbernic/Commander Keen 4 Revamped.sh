@@ -1,7 +1,8 @@
 #!/bin/bash
 # Commander Keen 4 Revamped for Linux handhelds (Anbernic RG35XX, RG40XX,
-# RG353 and the like), as a PortMaster port. It also runs without PortMaster:
-# keep this script next to the keen4revamped folder.
+# RG353 and the like), as a PortMaster port. It also runs without PortMaster
+# (the stock firmware of some devices): keep this script next to the
+# keen4revamped folder.
 #
 # Your Keen 4 files (KEEN4E.EXE v1.4 EGA and the .CK4 files) go in
 # keen4revamped/gamedata. Saves and settings go in keen4revamped/saves.
@@ -23,17 +24,17 @@ fi
 
 if [ -f "$controlfolder/control.txt" ]; then
   source "$controlfolder/control.txt"
-  [ -f "$controlfolder/mod_${CFW_NAME}.txt" ] && source "$controlfolder/mod_${CFW_NAME}.txt"
+  [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
   get_controls
 fi
 
-# The game folder sits next to this script, wherever the firmware keeps its
-# ports (ports, PORTS, Roms/PORTS, on either SD card); PortMaster's usual
-# /$directory/ports is only a fallback.
+# PortMaster's folder first. Firmwares without PortMaster keep their ports
+# elsewhere (PORTS, Roms/PORTS, on either SD card), so the folder next to this
+# script is the fallback.
 here="$(cd "$(dirname "$0")" && pwd)"
-GAMEDIR="$here/keen4revamped"
-if [ ! -x "$GAMEDIR/keen4" ] && [ ! -f "$GAMEDIR/keen4" ] && [ -n "$directory" ]; then
-  GAMEDIR="/$directory/ports/keen4revamped"
+GAMEDIR="/$directory/ports/keen4revamped"
+if [ -z "$directory" ] || [ ! -f "$GAMEDIR/keen4" ]; then
+  GAMEDIR="$here/keen4revamped"
 fi
 
 if ! cd "$GAMEDIR"; then
@@ -41,10 +42,11 @@ if ! cd "$GAMEDIR"; then
   exit 1
 fi
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
-echo "keen4revamped: $GAMEDIR, firmware ${CFW_NAME:-unknown}, device ${DEVICE_NAME:-unknown}"
+echo "keen4revamped: $GAMEDIR, firmware ${CFW_NAME:-unknown}, device ${DEVICE_NAME:-unknown}," \
+  "screen ${DISPLAY_WIDTH:-?}x${DISPLAY_HEIGHT:-?}"
 
-# The game reads the pad itself (SDL3 gamepads), so there is no gptokeyb
-# mapping; PortMaster's description of this device's buttons is enough.
+# The game reads the pad itself (SDL3 gamepads), with PortMaster's description
+# of this device's buttons.
 [ -n "$sdl_controllerconfig" ] && export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 
 export KEEN4_DATA_DIR="$GAMEDIR/gamedata"
@@ -65,7 +67,23 @@ echo "keen4revamped: game data in $KEEN4_DATA_DIR"
 args=(--fullscreen)
 [ -d audio ] && args+=(--remastered-audio)
 
+# On a 4:3 or square screen (640x480, 720x720) the 16:9 view leaves wide black
+# bars, while the original 4:3 view fills the screen. Without upscaled art,
+# the first run starts in the original view; the game saves the choice, and
+# VIDEO in the menu switches it back.
+if [ ! -f "$KEEN4_SAVE_DIR/CONFIG.CK4" ] && [ ! -f art/manifest.txt ] &&
+   [ -n "$DISPLAY_WIDTH" ] && [ -n "$DISPLAY_HEIGHT" ] &&
+   [ $((DISPLAY_WIDTH * 3)) -le $((DISPLAY_HEIGHT * 4)) ]; then
+  args+=(--classic)
+fi
+
 chmod +x ./keen4 2>/dev/null
+
+# gptokeyb only for PortMaster's Select+Start exit: its mapping turns every
+# button off, so the game does not also get them as keys.
+if [ -n "$GPTOKEYB" ]; then
+  $GPTOKEYB "keen4" -c "$GAMEDIR/keen4revamped.gptk" &
+fi
 if type pm_platform_helper >/dev/null 2>&1; then
   pm_platform_helper "$GAMEDIR/keen4"
 fi
@@ -74,6 +92,6 @@ fi
 status=$?
 
 if type pm_finish >/dev/null 2>&1; then
-  pm_finish
+  pm_finish  # also stops gptokeyb
 fi
 exit $status

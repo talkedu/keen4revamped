@@ -88,7 +88,9 @@ jobs:
             README.md
       - name: Package the handheld build
         if: matrix.name == 'anbernic'
-        run: sh packaging/anbernic/make-package.sh build/anbernic keen4revamped-anbernic-aarch64.zip
+        run: |
+          sh packaging/anbernic/make-package.sh --portmaster portmaster/keen4revamped \
+            build/anbernic keen4revamped-anbernic-aarch64.zip
       - name: Upload the handheld build
         # to try a pull request on a device before it is released
         if: matrix.name == 'anbernic'
@@ -96,3 +98,11 @@ jobs:
         with:
           name: keen4-anbernic
           path: keen4revamped-anbernic-aarch64.zip
+      - name: Upload the PortMaster folder
+        # ports/keen4revamped/ for a PortMaster-New pull request (see
+        # packaging/anbernic/portmaster/SUBMITTING.md)
+        if: matrix.name == 'anbernic'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: keen4-portmaster
+          path: portmaster
