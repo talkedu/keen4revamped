@@ -23,6 +23,46 @@ This repository contains no game data. The port loads the original `.CK4` files 
 copy you own (for example the Steam release). Never commit game files, the original
 executable, or anything extracted from it; `.gitignore` blocks the usual names.
 
+## License
+
+Copyright (C) the keen4revamped contributors.
+
+This program is free software; you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation; either version
+2 of the License, or (at your option) any later version (SPDX: `GPL-2.0-or-later`). It is
+distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+[LICENSE](LICENSE) for the full text.
+
+The vendored libraries in [third_party](third_party) keep their own licences (listed in
+[third_party/README.md](third_party/README.md)), as does SDL3, which is fetched at build
+time. Every release package carries all of them in its `licenses/` folder.
+
+## Legal
+
+keen4revamped is an unofficial fan project. It is not affiliated with, endorsed by or
+sponsored by id Software, ZeniMax Media, Microsoft or Apogee Software (3D Realms).
+
+This repository and its releases contain no game data: no `KEEN4E.EXE`, no `.CK4` files and
+nothing extracted from them. To play you need your own copy of Commander Keen 4: Secret of
+the Oracle, version 1.4 EGA, for example the one in the Commander Keen Complete Pack on
+Steam.
+
+Commander Keen is a trademark of its respective owners. Other names are trademarks of their
+owners and are used here only to describe what the software works with.
+
+## Thanks
+
+- id Software and Apogee, for Commander Keen.
+- The Keen Dreams source code, released under the GPL in 2014, whose names for the id
+  engine's modules, functions and variables this port follows.
+- [Omnispeak](https://github.com/sulix/omnispeak) and K1n9_Duk3's reconstructed Keen 4-6
+  source, which were references while decompiling.
+- [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) by Nuke.YKT, the AdLib emulator.
+- [stb](https://github.com/nothings/stb) by Sean Barrett (stb_image, stb_vorbis).
+- [dr_libs](https://github.com/mackron/dr_libs) by David Reid (dr_flac, dr_wav).
+- [SDL](https://www.libsdl.org/), by Sam Lantinga and the SDL contributors.
+
 ## Installing
 
 Each [release](https://github.com/talkedu/keen4revamped/releases) has installers next to the
@@ -230,42 +270,3 @@ configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository
 `KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
 client id, the repository and the saved token.
 
-## License
-
-Copyright (C) the keen4revamped contributors.
-
-This program is free software; you can redistribute it and/or modify it under the terms of
-the GNU General Public License as published by the Free Software Foundation; either version
-2 of the License, or (at your option) any later version (SPDX: `GPL-2.0-or-later`). It is
-distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
-implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
-[LICENSE](LICENSE) for the full text.
-
-The vendored libraries in [third_party](third_party) keep their own licences (listed in
-[third_party/README.md](third_party/README.md)), as does SDL3, which is fetched at build
-time. Every release package carries all of them in its `licenses/` folder.
-
-## Legal
-
-keen4revamped is an unofficial fan project. It is not affiliated with, endorsed by or
-sponsored by id Software, ZeniMax Media, Microsoft or Apogee Software (3D Realms).
-
-This repository and its releases contain no game data: no `KEEN4E.EXE`, no `.CK4` files and
-nothing extracted from them. To play you need your own copy of Commander Keen 4: Secret of
-the Oracle, version 1.4 EGA, for example the one in the Commander Keen Complete Pack on
-Steam.
-
-Commander Keen is a trademark of its respective owners. Other names are trademarks of their
-owners and are used here only to describe what the software works with.
-
-## Thanks
-
-- id Software and Apogee, for Commander Keen.
-- The Keen Dreams source code, released under the GPL in 2014, whose names for the id
-  engine's modules, functions and variables this port follows.
-- [Omnispeak](https://github.com/sulix/omnispeak) and K1n9_Duk3's reconstructed Keen 4-6
-  source, which were references while decompiling.
-- [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) by Nuke.YKT, the AdLib emulator.
-- [stb](https://github.com/nothings/stb) by Sean Barrett (stb_image, stb_vorbis).
-- [dr_libs](https://github.com/mackron/dr_libs) by David Reid (dr_flac, dr_wav).
-- [SDL](https://www.libsdl.org/), by Sam Lantinga and the SDL contributors.
