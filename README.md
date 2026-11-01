@@ -83,19 +83,25 @@ Uninstalling removes only the installed files; saved games and the configuration
 
 ### Handhelds
 
-`keen4revamped-vX.Y-anbernic-aarch64.zip` is a PortMaster-style port. Unzip it into the
+`keen4revamped-vX.Y-anbernic-aarch64.zip` is a PortMaster port. Unzip it into the
 handheld's ports folder (for example `ROMS/ports` on the SD card), so that
-`keen4revamped.sh` and the `keen4revamped` folder sit side by side, then copy `KEEN4E.EXE`
-and the `.CK4` files from your copy of the game into `keen4revamped/gamedata`. Start
-"keen4revamped" from the Ports list. Saves and settings go in `keen4revamped/saves`, and
-`keen4revamped/log.txt` (next to the `keen4` program) has the output of the last run. Upscaled art (`art/`) and remastered
-audio (`audio/`) can be copied into `keen4revamped` as on the desktop.
+`Commander Keen 4 Revamped.sh` and the `keen4revamped` folder sit side by side, then copy
+`KEEN4E.EXE` and the `.CK4` files from your copy of the game into `keen4revamped/gamedata`.
+Start "Commander Keen 4 Revamped" from the Ports list. Saves and settings go in
+`keen4revamped/saves`, and `keen4revamped/log.txt` (next to the `keen4` program) has the
+output of the last run. Upscaled art (`art/`) and remastered audio (`audio/`) can be copied
+into `keen4revamped` as on the desktop.
 
 The game reads the built-in controls as a gamepad, so it needs no key mapping; PortMaster,
-when installed, tells it the device's button layout. Quit from the game's menu.
+when installed, tells it the device's button layout. Select+Start quits under PortMaster;
+the game's menu quits everywhere. On a 4:3 or square screen (640x480, 720x720) the first run
+starts in the original 4:3 view, which fills the screen; VIDEO in the menu switches to the
+16:9 view.
 
 The handheld build has no CHECK FOR UPDATES: to update, unzip a newer release over the old
-one; the game files in `gamedata` and the `saves` folder are kept.
+one; the game files in `gamedata` and the `saves` folder are kept. Releases before 1.10
+started from `keen4revamped.sh`; delete it after updating, so the Ports list shows the game
+once.
 
 ## Building
 
@@ -115,7 +121,8 @@ The handheld build (Linux aarch64) is cross-compiled with Zig, which needs no ro
 `sh packaging/anbernic/fetch-toolchain.sh` downloads Zig and the arm64 headers SDL needs into
 `~/.cache/keen4revamped/aarch64`, then `cmake --preset anbernic && cmake --build --preset
 anbernic` builds it and `sh packaging/anbernic/make-package.sh build/anbernic keen4.zip`
-packs the port.
+packs the port. With `--portmaster DIR` first, it also writes the folder for a PortMaster
+pull request (see [packaging/anbernic/portmaster/SUBMITTING.md](packaging/anbernic/portmaster/SUBMITTING.md)).
 
 SDL3 is fetched and built automatically. Pass `-DKEEN4_WITH_SDL3=OFF` for a headless build
 (tests and CI only).

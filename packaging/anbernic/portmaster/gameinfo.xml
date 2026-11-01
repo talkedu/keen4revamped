@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gameList>
+  <game>
+    <path>./Commander Keen 4 Revamped.sh</path>
+    <name>Commander Keen 4 Revamped</name>
+    <desc>Commander Keen 4: Secret of the Oracle, rebuilt in C++ from the original game: smooth scrolling, a 16:9 view, optional upscaled art and remastered audio, two-player co-op and gamepad support.</desc>
+    <image>./keen4revamped/screenshot.png</image>
+    <releasedate>19911215T000000</releasedate>
+    <genre>Platform</genre>
+    <developer>id Software</developer>
+    <publisher>Apogee</publisher>
+  </game>
+</gameList>

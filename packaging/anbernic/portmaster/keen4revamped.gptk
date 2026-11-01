@@ -1,0 +1,33 @@
+# The game reads the gamepad itself. gptokeyb runs only for PortMaster's
+# Select+Start exit, so every button is turned off here: otherwise gptokeyb
+# would also send its default keys and the game would get each press twice.
+back = "
+start = "
+guide = "
+
+a = "
+b = "
+x = "
+y = "
+
+l1 = "
+l2 = "
+l3 = "
+r1 = "
+r2 = "
+r3 = "
+
+up = "
+down = "
+left = "
+right = "
+
+left_analog_up = "
+left_analog_down = "
+left_analog_left = "
+left_analog_right = "
+
+right_analog_up = "
+right_analog_down = "
+right_analog_left = "
+right_analog_right = "
