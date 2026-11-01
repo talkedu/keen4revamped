@@ -630,7 +630,7 @@ boolean CtlDialog(const char* s1, const char* s2, const char* s3) {
 // Port: before a co-op game, each player picks a device: player 1 a gamepad
 // (A) or the keyboard (any key), player 2 another gamepad. Escape backs out.
 void DrawCoopSetup(const char* title, const char* line1, const char* line2) {
-  const char* lines[4] = {title, line1, line2, S(0x4922)};  // "ESC TO BACK OUT"
+  const char* lines[4] = {title, line1, line2, S(0x4922)};
   word w = 0, h = 0, lw;
   for (const char* s : lines) {
     Measure(s, &lw, &h);
@@ -799,7 +799,7 @@ bool RunInBackground(const std::function<void()>& work, const std::function<void
 
 void UpdateFailed(const std::string& error) {
   std::fprintf(stderr, "Update failed: %s\n", error.c_str());
-  CtlDialog("UPDATE FAILED", Fit(error).c_str(), S(0x49F6));  // "PRESS ANY KEY"
+  CtlDialog("UPDATE FAILED", Fit(error).c_str(), S(0x49F6));
 }
 
 void CheckForUpdates() {
@@ -896,7 +896,7 @@ void CheckForUpdates() {
     return;
   }
   std::string updated = std::string(Tr("UPDATED TO")) + " " + version;
-  CtlDialog(updated.c_str(), S(0x49F6), "TO RESTART THE GAME");  // "PRESS ANY KEY"
+  CtlDialog(updated.c_str(), S(0x49F6), "TO RESTART THE GAME");
   update::RelaunchOnExit();
   lastcomm = uc_Quit;
   ctlpaneldone = true;
@@ -906,32 +906,32 @@ void CheckForUpdates() {
 
 // 1A89:06E8
 boolean ConfirmComm(word comm) {
-  if (!comm) Quit(S(0x4903));  // "USL_ConfirmComm() - empty comm"
+  if (!comm) Quit(S(0x4903));
 
   boolean confirm = true;
   boolean dialog = false;
-  const char *s1 = nullptr, *s2 = nullptr, *s3 = S(0x4922);  // "ESC TO BACK OUT"
+  const char *s1 = nullptr, *s2 = nullptr, *s3 = S(0x4922);
   switch (comm) {
     case uc_Abort:
-      s1 = S(0x4932);  // "REALLY END CURRENT GAME?"
-      s2 = S(0x494B);  // "PRESS Y TO END IT"
+      s1 = S(0x4932);
+      s2 = S(0x494B);
       if (ingame && GameIsDirty) dialog = true;
       break;
     case uc_Quit:
-      s1 = S(0x495D);  // "REALLY QUIT?"
-      s2 = S(0x496A);  // "PRESS Y TO QUIT"
+      s1 = S(0x495D);
+      s2 = S(0x496A);
       dialog = true;
       break;
     case uc_Loaded:
-      s1 = S(0x497A);  // "YOU'RE IN A GAME"
-      s2 = S(0x498B);  // "PRESS Y TO LOAD GAME"
+      s1 = S(0x497A);
+      s2 = S(0x498B);
       if (ingame && GameIsDirty) dialog = true;
       break;
     case uc_SEasy:
     case uc_SNormal:
     case uc_SHard:
-      s1 = S(0x49A0);  // "YOU'RE IN A GAME"
-      s2 = S(0x49B1);  // "PRESS Y FOR NEW GAME"
+      s1 = S(0x49A0);
+      s2 = S(0x49B1);
       if (ingame && GameIsDirty) dialog = true;
       break;
     default:
@@ -955,16 +955,16 @@ boolean ConfirmComm(word comm) {
 void HandleError(int num) {
   char buf[64];
   using keen4::lang::Tr;
-  std::strcpy(buf, Tr(S(0x49C6)));  // "Error: "
+  std::strcpy(buf, Tr(S(0x49C6)));
   if (num < 0)
-    std::strcat(buf, Tr(S(0x49CE)));  // "Unknown"
+    std::strcat(buf, Tr(S(0x49CE)));
   else if (num == ENOSPC || num == 8)
-    std::strcat(buf, Tr(S(0x49D6)));  // "Disk is Full"
+    std::strcat(buf, Tr(S(0x49D6)));
   else if (num == 11)
-    std::strcat(buf, Tr(S(0x49E3)));  // "File is Incomplete"
+    std::strcat(buf, Tr(S(0x49E3)));
   else
     std::strncat(buf, std::strerror(num), sizeof buf - std::strlen(buf) - 1);
-  CtlDialog(buf, S(0x49F6), nullptr);  // "PRESS ANY KEY"
+  CtlDialog(buf, S(0x49F6), nullptr);
   VW_UpdateScreen();
   IN_ClearKeysDown();
   IN_Ack();
@@ -1006,7 +1006,7 @@ boolean TwoCustom(int msg, UserItem*) { return ToggleOption(msg, &oldshooting, 0
 // 1A89:0A0A
 boolean ConfigCustom(int msg, UserItem*) {
   if (msg == uic_TouchupCard) {
-    const char* s = S(0x4C07);  // "CONTROL: "
+    const char* s = S(0x4C07);
     word w, h, w2;
     Measure(s, &w, &h);
     const char* name = S(g_exe.Word(static_cast<std::uint16_t>(0x4762 + Controls[0] * 2)));
@@ -1058,7 +1058,7 @@ void KeySCustom(UserItem* item, word index) {
       }
     }
     if (used)
-      CtlDialog(S(0x4C11), S(0x4C22), nullptr);  // "Key already used"
+      CtlDialog(S(0x4C11), S(0x4C22), nullptr);
     else
       *KeyMap(index) = scan;
   }
@@ -1157,12 +1157,12 @@ boolean ConfigJoystick(word joy) {
   // Port: an SDL gamepad comes calibrated.
   if (joy < 2 && JoysPresent[joy]) return true;
   footerstrings[2] = footerstrings[1] = S(0x4C30);
-  footerstrings[0] = S(0x4C31);  // "ESC to back out"
+  footerstrings[0] = S(0x4C31);
   DrawCtlPanel();
   word x = 0x86, y = 0x43;
   VWB_DrawPic(x, y, CP_JOYSTICKPIC);
 
-  CJDraw(S(0x4C41), S(0x4C5D));  // "Move Joystick to upper left", "and press button #1"
+  CJDraw(S(0x4C41), S(0x4C5D));
   VWB_DrawTile8(x + 0x18, y + 8, 0x62);
   VWB_DrawTile8(x + 8, y + 8, 0x5D);
   VWB_DrawTile8(x + 8, y + 0x18, 0x5C);
@@ -1170,7 +1170,7 @@ boolean ConfigJoystick(word joy) {
   word minx, miny, maxx, maxy;
   if (!CJGet(joy, 0, x + 8, y + 8, &minx, &miny)) return false;
 
-  CJDraw(S(0x4C71), S(0x4C8E));  // "Move Joystick to lower right", "and press button #2"
+  CJDraw(S(0x4C71), S(0x4C8E));
   VWB_DrawTile8(x + 0x18, y + 8, 0x43);
   VWB_DrawTile8(x + 0x28, y + 0x18, 0x63);
   VWB_DrawTile8(x + 8, y + 8, 0x5C);
@@ -1204,16 +1204,16 @@ void GravisDraw(const char* s1, const char* s2, word count) {
   VWB_Bar(CTL_X + 1, 0x40, CTL_W - 2, 0x44, BackColor);
   px = 0x52;
   py = 0x40;
-  DrawString(S(0x4D0E));  // "Make sure that the button"
+  DrawString(S(0x4D0E));
   px = 0x52;
   py = 0x48;
-  DrawString(S(0x4D28));  // "switch is set for 4 buttons"
+  DrawString(S(0x4D28));
   for (word button = 0; button < 4; button++) {
     px = 0x52;
     py = static_cast<sword>(button * 8 + 0x58);
     DrawString(S(g_exe.Word(static_cast<std::uint16_t>(0x476C + button * 2))));
-    DrawString(S(0x4D44));  // ":"
-    const char* label = S(0x4D46);  // "?"
+    DrawString(S(0x4D44));
+    const char* label = S(0x4D46);
     for (word i = 0; i < count; i++) {
       if (GravisMap[i] == button) label = S(g_exe.Word(static_cast<std::uint16_t>(0x4774 + i * 2)));
     }
@@ -1232,7 +1232,7 @@ void GravisDraw(const char* s1, const char* s2, word count) {
 
 // 1A89:1216
 boolean GravisGetButton(word index, const char* name) {
-  GravisDraw(S(0x4D48), name, index);  // "PRESS BUTTON FOR "
+  GravisDraw(S(0x4D48), name, index);
   for (;;) {
     // Port: the pad is read before Escape, since B types Escape in menus, and
     // every pass waits a moment so the pad state can change.
@@ -1268,7 +1268,7 @@ boolean GravisCustom(int msg, UserItem*) {
     GravisGamepad = false;
   } else {
     footerstrings[2] = footerstrings[1] = S(0x4D5A);
-    footerstrings[0] = S(0x4D5B);  // "ESC to back out"
+    footerstrings[0] = S(0x4D5B);
     DrawCtlPanel();
     fontcolor = NohiliteColor;
     px = py = 0x52;
@@ -1276,7 +1276,7 @@ boolean GravisCustom(int msg, UserItem*) {
     if (GravisGetButton(0, S(0x4D6B)) && GravisGetButton(1, S(0x4D70)) && GravisGetButton(2, S(0x4D75)) &&
         GravisGetButton(3, S(0x4D7A))) {
       GravisGamepad = true;
-      GravisDraw(S(0x4D81), S(0x4D8F), 4);  // "PRESS ANY KEY"
+      GravisDraw(S(0x4D81), S(0x4D8F), 4);
       IN_Ack();
     } else {
       GravisGamepad = false;
@@ -1302,7 +1302,7 @@ void DoLoadGame(UserItem* item) {
   if (!ConfirmComm(uc_Loaded)) return;
   word n = ItemIndex(item, loadsaveitems);
   SaveGame* game = &Games[n];
-  ShowLoadSave(S(0x4D90), game->name);  // "Loading"
+  ShowLoadSave(S(0x4D90), game->name);
 
   int err = 0;
   std::string filename = keen4::files::WritePath(USL_GiveSaveName(n));
@@ -1363,7 +1363,7 @@ boolean LoadCustom(int msg, UserItem* item) {
       word i = ItemIndex(item, loadsaveitems);
       px = static_cast<sword>(item->x + (Games[i].present ? 2 : 0x3C));
       py = static_cast<sword>(item->y + 2);
-      DrawString(Games[i].present ? Games[i].name : S(0x4D9C));  // "Empty"
+      DrawString(Games[i].present ? Games[i].name : S(0x4D9C));
       result = true;
       break;
     }
@@ -1381,8 +1381,8 @@ void SetupCard();
 
 // 1A89:16DD
 void DoSaveGame(UserItem* item) {
-  footerstrings[2] = S(0x4DA2);  // "Type name"
-  footerstrings[1] = S(0x4DAC);  // "Enter accepts"
+  footerstrings[2] = S(0x4DA2);
+  footerstrings[1] = S(0x4DAC);
   DrawCtlPanel();
 
   word n = ItemIndex(item, loadsaveitems);
@@ -1392,10 +1392,10 @@ void DoSaveGame(UserItem* item) {
   game->oldtest = 0xA537;
   boolean ok = US_LineInput(item->x + 2, item->y + 2, game->name, game->present ? game->name : nullptr, true,
                             MaxGameName, 0x8A);
-  if (!std::strlen(game->name)) std::strcpy(game->name, S(0x4DBA));  // "Untitled"
+  if (!std::strlen(game->name)) std::strcpy(game->name, S(0x4DBA));
 
   if (ok) {
-    ShowLoadSave(S(0x4DC3), game->name);  // "Saving"
+    ShowLoadSave(S(0x4DC3), game->name);
     int err = 0;
     std::string filename = keen4::files::WritePath(USL_GiveSaveName(n));
     std::FILE* file = std::fopen(filename.c_str(), "wb");
@@ -1448,12 +1448,12 @@ void DrawPongScore(word keen, word comp) {
   PrintY = 0x34;
   px = 0x50;
   VWB_Bar(px, py, 0x2A, 6, BackColor);
-  DrawString(S(0x4DCE));  // "KEEN:"
+  DrawString(S(0x4DCE));
   PrintX = static_cast<word>(px);
   US_PrintUnsigned(keen);
   px = 0xB6;
   VWB_Bar(px, py, 0x32, 6, BackColor);
-  DrawString(S(0x4DD4));  // "COMP:"
+  DrawString(S(0x4DD4));
   PrintX = static_cast<word>(px);
   US_PrintUnsigned(comp);
 }
@@ -1530,7 +1530,7 @@ void PlayPong() {
         SD_PlaySound(SND_COMPSCORE);
         DrawPongScore(keenscore, compscore);
         if (compscore == 21) {
-          CtlDialog(S(0x4DDA), S(0x4DE4), nullptr);  // "You lost!"
+          CtlDialog(S(0x4DDA), S(0x4DE4), nullptr);
           done = true;
           continue;
         }
@@ -1541,7 +1541,7 @@ void PlayPong() {
         SD_PlaySound(SND_KEENSCORE);
         DrawPongScore(keenscore, compscore);
         if (keenscore == 21) {
-          CtlDialog(S(0x4DF2), S(0x4DFB), nullptr);  // "You won!"
+          CtlDialog(S(0x4DF2), S(0x4DFB), nullptr);
           done = true;
           continue;
         }
@@ -1694,16 +1694,16 @@ int ItemAt(int x, int y) {
 
 // 1A89:20CA
 void SetupCard() {
-  footerstrings[2] = S(0x4E09);  // "Arrows move"
-  footerstrings[1] = S(0x4E15);  // "Enter selects"
-  footerstrings[0] = S(cstackptr ? 0x4E23 : 0x4E33);  // "ESC to back out" / "ESC to quit"
+  footerstrings[2] = S(0x4E09);
+  footerstrings[1] = S(0x4E15);
+  footerstrings[0] = S(cstackptr ? 0x4E23 : 0x4E33);
   SelectItem(topcard, topcard->cursor, false);
   DrawCtlPanel();
 }
 
 // 1A89:2108
 void DownLevel(UserItemGroup* card) {
-  if (!card) Quit(S(0x4E3F));  // "USL_DownLevel() - nil card"
+  if (!card) Quit(S(0x4E3F));
   PushCard(card);
   if (topcard->custom && topcard->custom(uic_SetupCard, nullptr)) PopCard();
   SetupCard();
@@ -1750,7 +1750,7 @@ void DoItem() {
   if (item->comm == uc_Coop) {
     // the NEW GAME card, for two players; player 2 needs a gamepad
     if (!IN_GamepadCount()) {
-      CtlDialog("CONNECT A GAMEPAD", S(0x49F6), nullptr);  // "PRESS ANY KEY"
+      CtlDialog("CONNECT A GAMEPAD", S(0x49F6), nullptr);
       return;
     }
     coopchosen = true;
@@ -1790,7 +1790,7 @@ void SetControlValues() {
   if (!JoysPresent[0] && !JoysPresent[1]) controlitems[3].flags |= ui_Disabled;
   SetVideoText();
 
-  RootItem(4).text = S(ingame ? 0x4E5A : 0x4E69);  // "RETURN TO GAME" / "RETURN TO DEMO"
+  RootItem(4).text = S(ingame ? 0x4E5A : 0x4E69);
   if (!ingame) {
     RootItem(2).flags |= ui_Disabled;
     RootItem(5).flags |= ui_Disabled;
@@ -1842,7 +1842,7 @@ void HandleComm(word comm) {
       restartcoop = coopchosen;
       break;
     default:
-      Quit(S(0x4E86));  // "USL_HandleComm() - unknown"
+      Quit(S(0x4E86));
   }
 }
 
@@ -1854,7 +1854,7 @@ void SetUpCtlPanel() {
   for (int i = 124; i <= 128; i++) CA_MarkGrChunk(i);
   CA_MarkGrChunk(4);
   CA_MarkGrChunk(CP_MENUMASKPICM);
-  CA_CacheMarks(S(0x4E78));  // "Control Panel"
+  CA_CacheMarks(S(0x4E78));
   CA_LoadAllSounds();
 
   fontnumber = 1;  // DGROUP A550: the panel uses the small font
@@ -1887,7 +1887,7 @@ void TearDownCtlPanel() {
     } else {
       US_CenterWindow(20, 3);
       fontcolor = 3;
-      US_PrintCentered(S(0x4EA1));  // "Quitting..."
+      US_PrintCentered(S(0x4EA1));
       fontcolor = 15;
       VW_UpdateScreen();
       Quit(nullptr);
