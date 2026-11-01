@@ -13,11 +13,55 @@ mouse works in the menus).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and milestones.
 
+keen4revamped is free software under the GNU General Public License, version 2 or (at your
+option) any later version: see [LICENSE](LICENSE) and [License](#license). It is an
+unofficial fan project; see [Legal](#legal).
+
 ## You need your own copy of Keen 4
 
 This repository contains no game data. The port loads the original `.CK4` files from a
 copy you own (for example the Steam release). Never commit game files, the original
 executable, or anything extracted from it; `.gitignore` blocks the usual names.
+
+## License
+
+Copyright (C) the keen4revamped contributors.
+
+This program is free software; you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation; either version
+2 of the License, or (at your option) any later version (SPDX: `GPL-2.0-or-later`). It is
+distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+[LICENSE](LICENSE) for the full text.
+
+The vendored libraries in [third_party](third_party) keep their own licences (listed in
+[third_party/README.md](third_party/README.md)), as does SDL3, which is fetched at build
+time. Every release package carries all of them in its `licenses/` folder.
+
+## Legal
+
+keen4revamped is an unofficial fan project. It is not affiliated with, endorsed by or
+sponsored by id Software, ZeniMax Media, Microsoft or Apogee Software (3D Realms).
+
+This repository and its releases contain no game data: no `KEEN4E.EXE`, no `.CK4` files and
+nothing extracted from them. To play you need your own copy of Commander Keen 4: Secret of
+the Oracle, version 1.4 EGA, for example the one in the Commander Keen Complete Pack on
+Steam.
+
+Commander Keen is a trademark of its respective owners. Other names are trademarks of their
+owners and are used here only to describe what the software works with.
+
+## Thanks
+
+- id Software and Apogee, for Commander Keen.
+- The Keen Dreams source code, released under the GPL in 2014, whose names for the id
+  engine's modules, functions and variables this port follows.
+- [Omnispeak](https://github.com/sulix/omnispeak) and K1n9_Duk3's reconstructed Keen 4-6
+  source, which were references while decompiling.
+- [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) by Nuke.YKT, the AdLib emulator.
+- [stb](https://github.com/nothings/stb) by Sean Barrett (stb_image, stb_vorbis).
+- [dr_libs](https://github.com/mackron/dr_libs) by David Reid (dr_flac, dr_wav).
+- [SDL](https://www.libsdl.org/), by Sam Lantinga and the SDL contributors.
 
 ## Installing
 
@@ -49,6 +93,9 @@ audio (`audio/`) can be copied into `keen4revamped` as on the desktop.
 
 The game reads the built-in controls as a gamepad, so it needs no key mapping; PortMaster,
 when installed, tells it the device's button layout. Quit from the game's menu.
+
+The handheld build has no CHECK FOR UPDATES: to update, unzip a newer release over the old
+one; the game files in `gamedata` and the `saves` folder are kept.
 
 ## Building
 
@@ -209,19 +256,13 @@ card, compares it with the latest release on GitHub and, if there is a newer one
 with a progress bar, puts its files in place of the running game's and restarts. It is greyed
 out during a game.
 
-The repository is private, so the first check signs in to GitHub: the game opens
-github.com/login/device in the browser and shows a code to enter there (it is also on the
-clipboard). The account needs access to the repository. The token is kept in
-`github-token.txt` next to `CONFIG.CK4`; delete it to sign out. On Windows, a game installed
-in Program Files asks for administrator rights to replace its files; on Linux the game folder
-must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs libcurl, which
-desktop distributions have.
+No GitHub account is needed: the game reads the public releases anonymously. GitHub allows
+60 such requests an hour from one address, plenty for a few checks. On Windows, a game
+installed in Program Files asks for administrator rights to replace its files; on Linux the
+game folder must be writable (the installer's `~/.local/lib/keen4revamped` is). Linux needs
+libcurl, which desktop distributions have.
 
-Builds sign in with a GitHub OAuth app or GitHub App that has device flow enabled. A GitHub
-App needs the Contents (read-only) repository permission and must be installed on the
-repository; turn off user token expiration in its optional features, or players sign in again
-every 8 hours. Its client id is set when
-configuring, `-DKEEN4_GITHUB_CLIENT_ID=...` (CI and releases take the repository variable
-`KEEN4_GITHUB_CLIENT_ID`); without one the item says updates are off. `KEEN4_GITHUB_CLIENT_ID`,
-`KEEN4_UPDATE_REPO` (owner/name) and `KEEN4_GITHUB_TOKEN` in the environment override the
-client id, the repository and the saved token.
+The repository the game updates from is set when configuring, `-DKEEN4_UPDATE_REPO=owner/name`
+(default `talkedu/keen4revamped`), and `KEEN4_UPDATE_REPO` in the environment overrides it.
+`-DKEEN4_UPDATER=OFF` builds the game without the updater and without the menu item; the
+handheld build does that, and it is the default on macOS.

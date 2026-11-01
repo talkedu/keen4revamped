@@ -62,7 +62,8 @@
         "SDL_SNDIO": "OFF",
         "SDL_LIBURING": "OFF",
         "SDL_WAYLAND_LIBDECOR": "OFF",
-        "SDL_VULKAN": "OFF"
+        "SDL_VULKAN": "OFF",
+        "KEEN4_UPDATER": "OFF"
       }
     }
   ],

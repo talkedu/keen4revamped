@@ -30,8 +30,10 @@
 #include "id/id_us.h"
 #include "id/id_vw.h"
 #include "platform/platform.h"
+#if KEEN4_UPDATER
 #include "update/github.h"
 #include "update/install.h"
+#endif
 
 // Game-side globals the panel edits (CK_PLAY / CK_MAIN).
 extern boolean showscorebox, jerk, oldshooting, QuietFX, GravisGamepad;
@@ -222,8 +224,8 @@ void LoadTree() {
   rootgroup->y = 0;
 
   // Port: the configure card becomes VIDEO, SOUND, MUSIC, OPTIONS, CONTROLS,
-  // then LANGUAGE and CHECK FOR UPDATES after a gap. The four USE items and
-  // the CONTROL: line (ConfigCustom) move to the CONTROLS card.
+  // then LANGUAGE and (with the updater) CHECK FOR UPDATES after a gap. The
+  // four USE items and the CONTROL: line (ConfigCustom) move to the CONTROLS card.
   std::vector<UserItem>& config = itemarrays[Linear(0x1FCC, 0)];
   for (auto& [key, group] : groups) {
     if (group->items == configitems) configgroup = group.get();
@@ -279,9 +281,13 @@ void LoadTree() {
   language.flags = ui_Separated;
   language.text = "LANGUAGE";
   language.child = &languagegroup;
+#if KEEN4_UPDATER
   UserItem update = button(uc_Update);
   update.text = "CHECK FOR UPDATES";
   config = {video, config[0], config[1], config[2], controls, language, update, UserItem{}};
+#else
+  config = {video, config[0], config[1], config[2], controls, language, UserItem{}};
+#endif
   configgroup->items = configitems = config.data();
   configgroup->custom = nullptr;
 }
@@ -697,9 +703,10 @@ boolean CoopInputSetup() {
 }
 
 // ---------------------------------------------------------------------------
-// Port: CHECK FOR UPDATES. Signs in to GitHub (the repository is private),
-// compares the latest release with this version, downloads it with a
-// progress bar and restarts the game on the new files. See src/update/.
+// Port: CHECK FOR UPDATES. Compares the latest release on GitHub with this
+// version, downloads it with a progress bar and restarts the game on the new
+// files. See src/update/. Builds configured with KEEN4_UPDATER=OFF leave it out.
+#if KEEN4_UPDATER
 
 namespace update = keen4::update;
 using keen4::lang::Tr;
@@ -795,106 +802,24 @@ void UpdateFailed(const std::string& error) {
   CtlDialog("UPDATE FAILED", Fit(error).c_str(), S(0x49F6));
 }
 
-// The OAuth device flow: GitHub gives a code, the player enters it at
-// github.com/login/device (opened in the browser), the game polls for the token.
-bool SignIn(std::string* token) {
-  std::atomic<bool> cancel{false};
-  update::DeviceCode code;
-  std::string error;
-  bool ok = false;
-  if (!RunInBackground([&] { ok = update::RequestDeviceCode(&code, &error); },
-                       [] { DrawUpdatePanel({Tr("CHECK FOR UPDATES"), Tr("CONNECTING TO GITHUB"), S(0x4922)}); },
-                       &cancel))
-    return false;
-  if (!ok) {
-    UpdateFailed(error);
-    return false;
-  }
-  keen4::platform::Get().SetClipboardText(code.user_code.c_str());
-  keen4::platform::Get().OpenUrl(code.verification_uri.c_str());
-  std::string where = code.verification_uri;
-  if (where.compare(0, 8, "https://") == 0) where.erase(0, 8);
-  std::string open = std::string(Tr("OPEN")) + " " + where;
-
-  update::Poll result = update::Poll::Pending;
-  RunInBackground(
-      [&] {
-        using clock = std::chrono::steady_clock;
-        auto deadline = clock::now() + std::chrono::seconds(code.expires_in);
-        int interval = code.interval > 0 ? code.interval : 5;
-        while (!cancel) {
-          auto wake = clock::now() + std::chrono::seconds(interval);
-          while (!cancel && clock::now() < wake) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          if (cancel) return;
-          result = update::PollForToken(code, token, &error);
-          if (result == update::Poll::SlowDown) interval += 5;
-          if (result != update::Poll::Pending && result != update::Poll::SlowDown) return;
-          if (clock::now() > deadline) {
-            result = update::Poll::Expired;
-            return;
-          }
-        }
-      },
-      [&] { DrawUpdatePanel({Tr("SIGN IN TO GITHUB"), open, Tr("AND ENTER THIS CODE:"), code.user_code, S(0x4922)}); },
-      &cancel);
-  if (cancel) return false;
-  switch (result) {
-    case update::Poll::Token:
-      update::SaveToken(*token);
-      return true;
-    case update::Poll::Denied:
-      CtlDialog("SIGN-IN CANCELED", "ON GITHUB", S(0x49F6));
-      return false;
-    case update::Poll::Expired:
-      CtlDialog("THE CODE EXPIRED", "PLEASE TRY AGAIN", S(0x49F6));
-      return false;
-    default:
-      UpdateFailed(error);
-      return false;
-  }
-}
-
 void CheckForUpdates() {
-  if (update::ClientId().empty()) {
-    CtlDialog("UPDATES ARE OFF", "IN THIS BUILD", S(0x49F6));
-    return;
-  }
   std::string error;
   if (!keen4::http::Available(&error)) {
     UpdateFailed(error);
     return;
   }
-  std::string token = update::LoadToken();
-  if (token.empty() && !SignIn(&token)) return;
 
-  // the latest release; a token GitHub no longer takes means signing in again
+  // the latest release
   std::atomic<bool> cancel{false};
   update::Release release;
   update::Check check = update::Check::Failed;
-  for (int attempt = 0;; attempt++) {
-    if (!RunInBackground([&] { check = update::FetchLatestRelease(token, &release, &error); },
-                         [] { DrawUpdatePanel({Tr("CHECK FOR UPDATES"), Tr("CONNECTING TO GITHUB"), S(0x4922)}); },
-                         &cancel))
-      return;
-    if (check != update::Check::SignIn) break;
-    update::ForgetToken();
-    token.clear();
-    if (attempt > 0 || !SignIn(&token)) return;
-  }
+  if (!RunInBackground([&] { check = update::FetchLatestRelease(&release, &error); },
+                       [] { DrawUpdatePanel({Tr("CHECK FOR UPDATES"), Tr("CONNECTING TO GITHUB"), S(0x4922)}); },
+                       &cancel))
+    return;
   switch (check) {
     case update::Check::Ok:
       break;
-    case update::Check::NoAccess:
-      // A GitHub App's token sees only the repositories the app is installed
-      // on, so installing it fixes this without signing in again. Otherwise
-      // the next try can sign in with another account.
-      if (update::IsGitHubApp()) {
-        CtlDialog("NO ACCESS TO THE GAME", "INSTALL THE GITHUB APP", "ON THE GAME'S REPOSITORY");
-      } else {
-        update::ForgetToken();
-        CtlDialog("NO ACCESS TO THE GAME", "ON THIS GITHUB ACCOUNT", S(0x49F6));
-      }
-      return;
     case update::Check::NoRelease:
       CtlDialog("NO RELEASES YET", "ON GITHUB", S(0x49F6));
       return;
@@ -930,7 +855,7 @@ void CheckForUpdates() {
   RunInBackground(
       [&] {
         ok = update::DownloadAsset(
-            token, *asset, archive,
+            *asset, archive,
             [&](std::uint64_t d, std::uint64_t t) {
               done = d;
               if (t) total = t;
@@ -976,6 +901,8 @@ void CheckForUpdates() {
   lastcomm = uc_Quit;
   ctlpaneldone = true;
 }
+
+#endif  // KEEN4_UPDATER
 
 // 1A89:06E8
 boolean ConfirmComm(word comm) {
@@ -1813,11 +1740,13 @@ void DoItem() {
     DrawCtlPanel();
     return;
   }
+#if KEEN4_UPDATER
   if (item->comm == uc_Update) {
     CheckForUpdates();
     if (!ctlpaneldone) DrawCtlPanel();
     return;
   }
+#endif
   if (item->comm == uc_Coop) {
     // the NEW GAME card, for two players; player 2 needs a gamepad
     if (!IN_GamepadCount()) {

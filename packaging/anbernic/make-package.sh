@@ -24,18 +24,16 @@ chmod +x "$port/keen4" "$stage/keen4revamped.sh"
 cp packaging/anbernic/port.json README.md "$port"
 cp packaging/anbernic/gamedata-README.txt "$port/gamedata/README.txt"
 cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$port/docs"
-cp third_party/README.md "$port/licenses/third_party.md"
-for f in "$build"/_deps/sdl3-src/LICENSE.txt; do
-  [ -f "$f" ] && cp "$f" "$port/licenses/SDL3.txt"
-done
+sh packaging/copy-licenses.sh "$build" "$port/licenses"
 
 rm -f "$out"
 case $out in /*) dest=$out ;; *) dest="$PWD/$out" ;; esac
 (cd "$stage" && zip -qr -X "$dest" keen4revamped.sh keen4revamped)
 echo "wrote $out"
 
-# The in-game updater on the handheld installs the port folder alone, as a
-# .tar.gz (it unpacks with tar, which on these devices may not read .zip).
+# The port folder alone, as a .tar.gz, for the in-game updater of older
+# handheld releases (it unpacks with tar, which on these devices may not read
+# .zip). Current handheld builds have no updater (KEEN4_UPDATER=OFF).
 if [ -n "$tarball" ]; then
   case $tarball in /*) dest=$tarball ;; *) dest="$PWD/$tarball" ;; esac
   tar -czf "$dest" -C "$stage" keen4revamped
