@@ -34,6 +34,8 @@ else()
       break()
     endif()
   endforeach()
+  # any case, as in a pull request title's [PATCH]
+  string(TOLOWER "${KEEN4_VERSION_BUMP}" KEEN4_VERSION_BUMP)
   if(KEEN4_VERSION_BUMP STREQUAL "major")
     math(EXPR _keen4_major "${_keen4_major} + 1")
     set(_keen4_minor 0)
