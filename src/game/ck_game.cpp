@@ -170,7 +170,7 @@ void FreeGraphics() {}
 void GameOverScreen() {
   VW_FixRefreshBuffer();
   US_CenterWindow(16, 3);
-  US_PrintCentered(g_exe.String(0x024E));  // "Game Over!"
+  US_PrintCentered(g_exe.String(0x024E));
   VW_UpdateScreen();
   IN_ClearKeysDown();
   IN_UserInput(4 * 70, false);
@@ -269,15 +269,15 @@ void HandleDeathImpl() {
   VW_FixRefreshBuffer();
   US_CenterWindow(20, 8);
   PrintY += 3;
-  US_CPrint(g_exe.String(0x02FF));  // "You didn't make it past"
+  US_CPrint(g_exe.String(0x02FF));
   word y1 = static_cast<word>(PrintY + 22);
   if (h < 15) PrintY += 4;
   US_CPrint(str);
   PrintY = static_cast<word>(y1 + 2);
-  US_CPrint(g_exe.String(0x0317));  // "Try Again"
+  US_CPrint(g_exe.String(0x0317));
   PrintY += 4;
   word y2 = static_cast<word>(PrintY - 2);
-  US_CPrint(g_exe.String(0x0321));  // "Exit to Shadowlands"
+  US_CPrint(g_exe.String(0x0321));
 
   IN_ClearKeysDown();
   boolean selection = false;
@@ -552,7 +552,7 @@ void SetupGameLevel(boolean loadnow) {
     if (scorescreenkludge) {
       CA_CacheMarks(nullptr);
     } else if (DemoMode != demo_Off) {
-      CA_CacheMarks(g_exe.String(0x0299));  // "DEMO"
+      CA_CacheMarks(g_exe.String(0x0299));
     } else {
       std::strncpy(str, LevelEnter(mapon), sizeof str - 1);
       CA_CacheMarks(str);
@@ -566,7 +566,7 @@ void StartDemoRecord() {
   VW_FixRefreshBuffer();
   US_CenterWindow(30, 3);
   PrintY += 6;
-  US_Print(g_exe.String(0x029E));  // "  Record a demo from level(0-21):"
+  US_Print(g_exe.String(0x029E));
   VW_UpdateScreen();
   if (US_LineInput(PrintX, PrintY, str, nullptr, true, 2, 0)) {
     int level = std::atoi(str);
@@ -581,17 +581,17 @@ void StartDemoRecord() {
 // 05C4:08F4
 void EndDemoRecord() {
   char filename[10];
-  std::memcpy(filename, g_exe.String(0x0244), sizeof filename);  // "DEMO?.CK4"
+  std::memcpy(filename, g_exe.String(0x0244), sizeof filename);
   IN_StopDemo();
   VW_FixRefreshBuffer();
   US_CenterWindow(22, 3);
   PrintY += 6;
-  US_Print(g_exe.String(0x02C0));  // "  Save as demo #(0-9):"
+  US_Print(g_exe.String(0x02C0));
   VW_UpdateScreen();
   if (US_LineInput(PrintX, PrintY, str, nullptr, true, 2, 0) && str[0] >= '0' && str[0] <= '9') {
     filename[4] = str[0];
     std::FILE* f = std::fopen(keen4::files::WritePath(filename).c_str(), "wb");
-    if (!f) Quit(g_exe.String(0x02D7));  // "EndDemoRecord:  Cannot write demo file!"
+    if (!f) Quit(g_exe.String(0x02D7));
     byte header[4];
     PutWord(header, static_cast<word>(mapon));
     PutWord(header + 2, DemoOffset);
@@ -692,7 +692,7 @@ void GameLoop() {
           // drawn straight onto the visible page in the original
           US_CenterWindow(26, 8);
           PrintY += 25;
-          US_CPrint(g_exe.String(0x0389));  // "One moment"
+          US_CPrint(g_exe.String(0x0389));
           VW_UpdateScreen();
         }
         break;

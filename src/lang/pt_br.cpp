@@ -1,7 +1,8 @@
 // Brazilian Portuguese.
 //
 // Exe strings are named by their address (see engine/lang.h); the English
-// original is in the comment. Windows in the game are sized for the English
+// original is at that address in the player's own KEEN4E.EXE and is not
+// copied here. Windows in the game are sized for the English
 // text, so translated lines are kept about as wide, and the help articles
 // keep the original's picture commands and page breaks.
 #include "engine/lang.h"
@@ -12,25 +13,25 @@ namespace {
 
 constexpr ExeEntry kExe[] = {
     // Level names (CK_GAME's far table at DGROUP 18F4)
-    {FAR(0x1F04, 0), "Terras Sombrias"},                     // Shadowlands
-    {FAR(0x1F05, 0), "Vila da Fronteira"},                   // Border Village
-    {FAR(0x1F06, 0), "Vila das Lesmas"},                     // Slug Village
-    {FAR(0x1F07, 0), "O Poço Perigoso"},                     // The Perilous Pit
-    {FAR(0x1F09, 0), "Caverna dos\nDescendentes"},          // Cave of the Descendents
-    {FAR(0x1F0B, 0), "Abismo dos Arrepios"},                 // Chasm of Chills
-    {FAR(0x1F0C, 0), "Crystalus"},                           // Crystalus
-    {FAR(0x1F0D, 0), "Hillville"},                           // Hillville
-    {FAR(0x1F0E, 0), "Sand Yego"},                           // Sand Yego
-    {FAR(0x1F0F, 0), "Miragia"},                             // Miragia
-    {FAR(0x1F10, 0), "Oásis da Água da Vida"},               // Lifewater Oasis
-    {FAR(0x1F11, 0), "Pirâmide das Luas"},                   // Pyramid of the Moons
-    {FAR(0x1F13, 0), "Pirâmide das Sombras"},                // Pyramid of Shadows
-    {FAR(0x1F15, 0), "Pirâmide dos Anciões\nGnosticenos"},   // Pyramid of the Gnosticene Ancients
-    {FAR(0x1F18, 0), "Pirâmide do Proibido"},                // Pyramid of the Forbidden
-    {FAR(0x1F1A, 0), "Ilha do Piche"},                       // Isle of Tar
-    {FAR(0x1F1B, 0), "Ilha do Fogo"},                        // Isle of Fire
-    {FAR(0x1F1C, 0), "Poço dos Desejos"},                    // Well of Wishes
-    {FAR(0x1F1D, 0), "Megafoguete\nFeijão-com-Bacon"},       // Bean-with-Bacon Megarocket
+    {FAR(0x1F04, 0), "Terras Sombrias"},
+    {FAR(0x1F05, 0), "Vila da Fronteira"},
+    {FAR(0x1F06, 0), "Vila das Lesmas"},
+    {FAR(0x1F07, 0), "O Poço Perigoso"},
+    {FAR(0x1F09, 0), "Caverna dos\nDescendentes"},
+    {FAR(0x1F0B, 0), "Abismo dos Arrepios"},
+    {FAR(0x1F0C, 0), "Crystalus"},
+    {FAR(0x1F0D, 0), "Hillville"},
+    {FAR(0x1F0E, 0), "Sand Yego"},
+    {FAR(0x1F0F, 0), "Miragia"},
+    {FAR(0x1F10, 0), "Oásis da Água da Vida"},
+    {FAR(0x1F11, 0), "Pirâmide das Luas"},
+    {FAR(0x1F13, 0), "Pirâmide das Sombras"},
+    {FAR(0x1F15, 0), "Pirâmide dos Anciões\nGnosticenos"},
+    {FAR(0x1F18, 0), "Pirâmide do Proibido"},
+    {FAR(0x1F1A, 0), "Ilha do Piche"},
+    {FAR(0x1F1B, 0), "Ilha do Fogo"},
+    {FAR(0x1F1C, 0), "Poço dos Desejos"},
+    {FAR(0x1F1D, 0), "Megafoguete\nFeijão-com-Bacon"},
 
     // Entering a level (DGROUP 1958)
     {FAR(0x1F1F, 0), "Keen entra nas\nTerras Sombrias"},
@@ -60,32 +61,32 @@ constexpr ExeEntry kExe[] = {
     {FAR(0x1F65, 0), "Desculpe.  Você não\nficou bravo, ficou?"},
 
     // CK_GAME, CK_PLAY and CK_TEXT
-    {DG(0x024E), "Fim de Jogo!"},                                  // Game Over!
-    {DG(0x0259), "Memória insuficiente\npara carregar o jogo!"},  // Not enough memory to load game!
+    {DG(0x024E), "Fim de Jogo!"},
+    {DG(0x0259), "Memória insuficiente\npara carregar o jogo!"},
     {DG(0x0279), "Memória insuficiente\npara carregar o jogo!"},
-    {DG(0x029E), "  Gravar demo da fase (0-21):"},     // Record a demo from level(0-21):
-    {DG(0x02C0), "  Salvar como demo (0-9):"},           // Save as demo #(0-9):
-    {DG(0x02FF), "Você não passou de"},                          // You didn't make it past
-    {DG(0x0317), "Tentar de Novo"},                              // Try Again
-    {DG(0x0321), "Voltar ao Mapa"},                              // Exit to Shadowlands
-    {DG(0x0335), "Memória insuficiente\npara carregar a fase!"},  // Insufficient memory to load level!
-    {DG(0x0389), "Um momento"},                                  // One moment
-    {DG(0x0764), "pág. "},                                       // "pg "
-    {DG(0x0768), " de "},                                        // " of "
+    {DG(0x029E), "  Gravar demo da fase (0-21):"},
+    {DG(0x02C0), "  Salvar como demo (0-9):"},
+    {DG(0x02FF), "Você não passou de"},
+    {DG(0x0317), "Tentar de Novo"},
+    {DG(0x0321), "Voltar ao Mapa"},
+    {DG(0x0335), "Memória insuficiente\npara carregar a fase!"},
+    {DG(0x0389), "Um momento"},
+    {DG(0x0764), "pág. "},
+    {DG(0x0768), " de "},
 
     // K4_SPEC: Princess Lindsey, the wetsuit and the council members
     {DG(0x1ADC), "Há um equipamento para\nnadar no Lago Três-\nDentes. Ele está\nescondido em Miragia.\n"},
     {DG(0x1B29), "O caminho para a\nPirâmide do Proibido\nfica embaixo da\nPirâmide das Luas.\n"},
-    {DG(0x1B73), "Obrigado, Alteza!"},                            // Thanks, your Highness!
+    {DG(0x1B73), "Obrigado, Alteza!"},
     {DG(0x1B8A), "Obrigado pela pista\nmisteriosa,\nPrincesa!\n"},
     {DG(0x1BB5), "A Princesa Lindsey diz:\n"},
-    {DG(0x1BCD), "Eu não sei nadar!"},                            // I can't swim!
+    {DG(0x1BCD), "Eu não sei nadar!"},
     {DG(0x1BDB), "Legal!  Agora eu\nrespiro debaixo\nd'água!"},
-    {DG(0x1C01), "Moleza, ó guardião\nda sabedoria!"},             // No sweat, oh guardian of wisdom!
-    {DG(0x1C22), "Parece um bom plano,\nbarbudo!"},                // Sounds like a plan, bearded one!
-    {DG(0x1C43), "Sem problemas."},                               // No problemo.
+    {DG(0x1C01), "Moleza, ó guardião\nda sabedoria!"},
+    {DG(0x1C22), "Parece um bom plano,\nbarbudo!"},
+    {DG(0x1C43), "Sem problemas."},
     {DG(0x1C50), "Ótimo.  Sabe, você é\na cara do último\nque eu resgatei..."},
-    {DG(0x1C90), "Boa ideia, vovô."},                             // Good idea, Gramps.
+    {DG(0x1C90), "Boa ideia, vovô."},
     {DG(0x1CA3), "Que a estrada se\nabra aos seus pés,\nSr. Conselheiro."},
     {DG(0x1CD4), "Sábio plano de ação,\nvossa antiguidade."},
     {DG(0x1CFB), "Você é o último,\ncamarada.  Vamos\nvoltar à câmara\ndo Oráculo!"},
@@ -93,135 +94,135 @@ constexpr ExeEntry kExe[] = {
     {DG(0x1DA7), "Muito obrigado\npor me resgatar!\nVoltarei para a\ncâmara do Oráculo\nimediatamente."},
 
     // ID_CA, ID_IN key names, ID_US
-    {DG(0x3BB9), "Carregando"},  // Loading
-    {DG(0x3E50), "Espaço"},      // Space
-    {DG(0x3EA1), "Início"},      // Home
-    {DG(0x3EAB), "Fim"},         // End
-    {DG(0x3EC2), "Cima"},        // Up
-    {DG(0x3EC5), "Baixo"},       // Down
-    {DG(0x3ECA), "Esq."},        // Left
-    {DG(0x3ECF), "Dir."},        // Right
-    {DG(0x46B2), "Vazio"},       // Empty
+    {DG(0x3BB9), "Carregando"},
+    {DG(0x3E50), "Espaço"},
+    {DG(0x3EA1), "Início"},
+    {DG(0x3EAB), "Fim"},
+    {DG(0x3EC2), "Cima"},
+    {DG(0x3EC5), "Baixo"},
+    {DG(0x3ECA), "Esq."},
+    {DG(0x3ECF), "Dir."},
+    {DG(0x46B2), "Vazio"},
 
     // The control panel (ID_US_2): menu items
-    {DG(0x4782), "SEM EFEITOS SONOROS"},        // NO SOUND EFFECTS
-    {DG(0x4793), "ALTO-FALANTE DO PC"},         // PC SPEAKER
-    {DG(0x47B1), "ADLIB/SOUNDBLASTER BAIXO"},   // QUIET ADLIB/SOUNDBLASTER
-    {DG(0x47CA), "SEM MÚSICA"},                 // NO MUSIC
-    {DG(0x47E6), "COMEÇAR NO FÁCIL"},           // BEGIN EASY GAME
-    {DG(0x47F6), "COMEÇAR NO NORMAL"},          // BEGIN NORMAL GAME
-    {DG(0x4808), "COMEÇAR NO DIFÍCIL"},         // BEGIN HARD GAME
-    {DG(0x481C), "CIMA+ESQUERDA"},              // UP & LEFT
-    {DG(0x4826), "CIMA"},                       // UP
-    {DG(0x4829), "CIMA+DIREITA"},               // UP & RIGHT
-    {DG(0x4834), "DIREITA"},                    // RIGHT
-    {DG(0x483A), "BAIXO+DIREITA"},              // DOWN & RIGHT
-    {DG(0x4847), "BAIXO"},                      // DOWN
-    {DG(0x484C), "BAIXO+ESQUERDA"},             // DOWN & LEFT
-    {DG(0x4858), "ESQUERDA"},                   // LEFT
-    {DG(0x485D), "PULAR"},                      // JUMP
-    {DG(0x4867), "ATIRAR"},                     // FIRE
-    {DG(0x486C), "MOVIMENTO"},                  // MOVEMENT
-    {DG(0x4875), "BOTÕES"},                     // BUTTONS
-    {DG(0x487D), "SOM"},                        // SOUND
-    {DG(0x4883), "MÚSICA"},                     // MUSIC
-    {DG(0x4889), "OPÇÕES"},                     // OPTIONS
-    {DG(0x4891), "USAR TECLADO"},               // USE KEYBOARD
-    {DG(0x489E), "USAR JOYSTICK 1"},            // USE JOYSTICK #1
-    {DG(0x48AE), "USAR JOYSTICK 2"},            // USE JOYSTICK #2
-    {DG(0x48BF), "NOVO JOGO"},                  // NEW GAME
-    {DG(0x48C8), "CARREGAR JOGO"},              // LOAD GAME
-    {DG(0x48D2), "SALVAR JOGO"},                // SAVE GAME
-    {DG(0x48DC), "CONFIGURAR"},                 // CONFIGURE
-    {DG(0x48E6), "ENCERRAR JOGO"},              // END GAME
-    {DG(0x48EF), "GUERRA DE RAQUETES"},         // PADDLE WAR
-    {DG(0x48FA), "SAIR"},                       // QUIT
-    {DG(0x4E5A), "VOLTAR AO JOGO"},             // RETURN TO GAME
-    {DG(0x4E69), "VOLTAR À DEMO"},              // RETURN TO DEMO
+    {DG(0x4782), "SEM EFEITOS SONOROS"},
+    {DG(0x4793), "ALTO-FALANTE DO PC"},
+    {DG(0x47B1), "ADLIB/SOUNDBLASTER BAIXO"},
+    {DG(0x47CA), "SEM MÚSICA"},
+    {DG(0x47E6), "COMEÇAR NO FÁCIL"},
+    {DG(0x47F6), "COMEÇAR NO NORMAL"},
+    {DG(0x4808), "COMEÇAR NO DIFÍCIL"},
+    {DG(0x481C), "CIMA+ESQUERDA"},
+    {DG(0x4826), "CIMA"},
+    {DG(0x4829), "CIMA+DIREITA"},
+    {DG(0x4834), "DIREITA"},
+    {DG(0x483A), "BAIXO+DIREITA"},
+    {DG(0x4847), "BAIXO"},
+    {DG(0x484C), "BAIXO+ESQUERDA"},
+    {DG(0x4858), "ESQUERDA"},
+    {DG(0x485D), "PULAR"},
+    {DG(0x4867), "ATIRAR"},
+    {DG(0x486C), "MOVIMENTO"},
+    {DG(0x4875), "BOTÕES"},
+    {DG(0x487D), "SOM"},
+    {DG(0x4883), "MÚSICA"},
+    {DG(0x4889), "OPÇÕES"},
+    {DG(0x4891), "USAR TECLADO"},
+    {DG(0x489E), "USAR JOYSTICK 1"},
+    {DG(0x48AE), "USAR JOYSTICK 2"},
+    {DG(0x48BF), "NOVO JOGO"},
+    {DG(0x48C8), "CARREGAR JOGO"},
+    {DG(0x48D2), "SALVAR JOGO"},
+    {DG(0x48DC), "CONFIGURAR"},
+    {DG(0x48E6), "ENCERRAR JOGO"},
+    {DG(0x48EF), "GUERRA DE RAQUETES"},
+    {DG(0x48FA), "SAIR"},
+    {DG(0x4E5A), "VOLTAR AO JOGO"},
+    {DG(0x4E69), "VOLTAR À DEMO"},
 
     // The control panel: dialogs and footers
-    {DG(0x4922), "ESC PARA VOLTAR"},            // ESC TO BACK OUT
-    {DG(0x4932), "ENCERRAR O JOGO ATUAL?"},     // REALLY END CURRENT GAME?
-    {DG(0x494B), "APERTE Y PARA ENCERRAR"},     // PRESS Y TO END IT
-    {DG(0x495D), "SAIR MESMO?"},                // REALLY QUIT?
-    {DG(0x496A), "APERTE Y PARA SAIR"},         // PRESS Y TO QUIT
-    {DG(0x497A), "HÁ UM JOGO EM ANDAMENTO"},    // YOU'RE IN A GAME
-    {DG(0x498B), "APERTE Y PARA CARREGAR"},     // PRESS Y TO LOAD GAME
-    {DG(0x49A0), "HÁ UM JOGO EM ANDAMENTO"},    // YOU'RE IN A GAME
-    {DG(0x49B1), "APERTE Y PARA NOVO JOGO"},    // PRESS Y FOR NEW GAME
-    {DG(0x49C6), "Erro: "},                     // Error:
-    {DG(0x49CE), "desconhecido"},               // Unknown
-    {DG(0x49D6), "disco cheio"},                // Disk is Full
-    {DG(0x49E3), "arquivo incompleto"},         // File is Incomplete
-    {DG(0x49F6), "APERTE UMA TECLA"},           // PRESS ANY KEY
-    {DG(0x4A04), "PLACAR (SIM)"},               // SCORE BOX (ON)
-    {DG(0x4A13), "PLACAR (NÃO)"},               // SCORE BOX (OFF)
-    {DG(0x4A23), "TIRO COM 2 BOTÕES (SIM)"},    // TWO-BUTTON FIRING (ON)
-    {DG(0x4A3A), "TIRO COM 2 BOTÕES (NÃO)"},    // TWO-BUTTON FIRING (OFF)
-    {DG(0x4A52), "ANTI-TRANCOS (SIM)"},         // FIX JERKY MOTION (ON)
-    {DG(0x4A68), "ANTI-TRANCOS (NÃO)"},         // FIX JERKY MOTION (OFF)
-    {DG(0x4A7F), "COMPATÍVEL C/ SVGA (SIM)"},   // SVGA COMPATIBILITY (ON)
-    {DG(0x4A97), "COMPATÍVEL C/ SVGA (NÃO)"},   // SVGA COMPATIBILITY (OFF)
-    {DG(0x4AB0), "GRAVIS GAMEPAD (SIM)"},       // USE GRAVIS GAMEPAD (ON)
-    {DG(0x4AC8), "GRAVIS GAMEPAD (NÃO)"},       // USE GRAVIS GAMEPAD (OFF)
-    {DG(0x4AE1), "Placar ligado"},              // Score box now on
-    {DG(0x4AF2), "Placar desligado"},           // Score box now off
-    {DG(0x4B04), "Aperte uma tecla"},           // Press any key
-    {DG(0x4B12), "Anti-trancos ligado"},          // Jerky motion fix enabled
-    {DG(0x4B2B), "Anti-trancos desligado"},       // Jerky motion fix disabled
+    {DG(0x4922), "ESC PARA VOLTAR"},
+    {DG(0x4932), "ENCERRAR O JOGO ATUAL?"},
+    {DG(0x494B), "APERTE Y PARA ENCERRAR"},
+    {DG(0x495D), "SAIR MESMO?"},
+    {DG(0x496A), "APERTE Y PARA SAIR"},
+    {DG(0x497A), "HÁ UM JOGO EM ANDAMENTO"},
+    {DG(0x498B), "APERTE Y PARA CARREGAR"},
+    {DG(0x49A0), "HÁ UM JOGO EM ANDAMENTO"},
+    {DG(0x49B1), "APERTE Y PARA NOVO JOGO"},
+    {DG(0x49C6), "Erro: "},
+    {DG(0x49CE), "desconhecido"},
+    {DG(0x49D6), "disco cheio"},
+    {DG(0x49E3), "arquivo incompleto"},
+    {DG(0x49F6), "APERTE UMA TECLA"},
+    {DG(0x4A04), "PLACAR (SIM)"},
+    {DG(0x4A13), "PLACAR (NÃO)"},
+    {DG(0x4A23), "TIRO COM 2 BOTÕES (SIM)"},
+    {DG(0x4A3A), "TIRO COM 2 BOTÕES (NÃO)"},
+    {DG(0x4A52), "ANTI-TRANCOS (SIM)"},
+    {DG(0x4A68), "ANTI-TRANCOS (NÃO)"},
+    {DG(0x4A7F), "COMPATÍVEL C/ SVGA (SIM)"},
+    {DG(0x4A97), "COMPATÍVEL C/ SVGA (NÃO)"},
+    {DG(0x4AB0), "GRAVIS GAMEPAD (SIM)"},
+    {DG(0x4AC8), "GRAVIS GAMEPAD (NÃO)"},
+    {DG(0x4AE1), "Placar ligado"},
+    {DG(0x4AF2), "Placar desligado"},
+    {DG(0x4B04), "Aperte uma tecla"},
+    {DG(0x4B12), "Anti-trancos ligado"},
+    {DG(0x4B2B), "Anti-trancos desligado"},
     {DG(0x4B45), "Aperte uma tecla"},
-    {DG(0x4B53), "Modo compatível ligado"},       // SVGA compatibility now on
-    {DG(0x4B6D), "Modo compatível desligado"},    // SVGA compatibility now off
+    {DG(0x4B53), "Modo compatível ligado"},
+    {DG(0x4B6D), "Modo compatível desligado"},
     {DG(0x4B88), "Aperte uma tecla"},
-    {DG(0x4B96), "Tiro com dois botões ligado"},     // Two-button firing now on
-    {DG(0x4BAF), "Tiro com dois botões desligado"},  // Two-button firing now off
+    {DG(0x4B96), "Tiro com dois botões ligado"},
+    {DG(0x4BAF), "Tiro com dois botões desligado"},
     {DG(0x4BC9), "Aperte uma tecla"},
-    {DG(0x4BD7), "TECLADO"},                    // KEYBOARD
+    {DG(0x4BD7), "TECLADO"},
     {DG(0x4BE0), "TECLADO"},
-    {DG(0x4BE9), "JOYSTICK 1"},                 // JOYSTICK #1
-    {DG(0x4BF5), "JOYSTICK 2"},                 // JOYSTICK #2
-    {DG(0x4C07), "CONTROLE: "},                 // CONTROL:
-    {DG(0x4C11), "Tecla já usada"},             // Key already used
+    {DG(0x4BE9), "JOYSTICK 1"},
+    {DG(0x4BF5), "JOYSTICK 2"},
+    {DG(0x4C07), "CONTROLE: "},
+    {DG(0x4C11), "Tecla já usada"},
     {DG(0x4C22), "Aperte uma tecla"},
-    {DG(0x4C31), "ESC para voltar"},            // ESC to back out
-    {DG(0x4C41), "Leve o joystick ao alto e"},  // Move Joystick to upper left
-    {DG(0x4C5D), "à esquerda e aperte o 1"},    // and press button #1
-    {DG(0x4C71), "Leve o joystick abaixo e"},   // Move Joystick to lower right
-    {DG(0x4C8E), "à direita e aperte o 2"},     // and press button #2
-    {DG(0x4CA2), "USANDO JOYSTICK 1"},          // USING JOYSTICK #1
+    {DG(0x4C31), "ESC para voltar"},
+    {DG(0x4C41), "Leve o joystick ao alto e"},
+    {DG(0x4C5D), "à esquerda e aperte o 1"},
+    {DG(0x4C71), "Leve o joystick abaixo e"},
+    {DG(0x4C8E), "à direita e aperte o 2"},
+    {DG(0x4CA2), "USANDO JOYSTICK 1"},
     {DG(0x4CB4), "APERTE UMA TECLA"},
-    {DG(0x4CC2), "USANDO JOYSTICK 2"},          // USING JOYSTICK #2
+    {DG(0x4CC2), "USANDO JOYSTICK 2"},
     {DG(0x4CD4), "APERTE UMA TECLA"},
-    {DG(0x4CE2), "Verm."},                      // Red
-    {DG(0x4CE6), "Azul"},                       // Blue
-    {DG(0x4CEB), "Amarelo"},                    // Yellow
-    {DG(0x4CF2), "Verde"},                      // Green
-    {DG(0x4CF8), "Pular"},                      // Jump
-    {DG(0x4D02), "Atirar"},                     // Fire
-    {DG(0x4D0E), "Confira se a chave dos"},     // Make sure that the button
-    {DG(0x4D28), "botões está em 4 botões"},    // switch is set for 4 buttons
-    {DG(0x4D48), "APERTE O BOTÃO: "},           // PRESS BUTTON FOR
+    {DG(0x4CE2), "Verm."},
+    {DG(0x4CE6), "Azul"},
+    {DG(0x4CEB), "Amarelo"},
+    {DG(0x4CF2), "Verde"},
+    {DG(0x4CF8), "Pular"},
+    {DG(0x4D02), "Atirar"},
+    {DG(0x4D0E), "Confira se a chave dos"},
+    {DG(0x4D28), "botões está em 4 botões"},
+    {DG(0x4D48), "APERTE O BOTÃO: "},
     {DG(0x4D5B), "ESC para voltar"},
-    {DG(0x4D6B), "PULAR"},                      // JUMP
-    {DG(0x4D75), "ATIRAR"},                     // FIRE
+    {DG(0x4D6B), "PULAR"},
+    {DG(0x4D75), "ATIRAR"},
     {DG(0x4D81), "APERTE UMA TECLA"},
-    {DG(0x4D90), "Carregando"},                 // Loading
-    {DG(0x4D9C), "Vazio"},                      // Empty
-    {DG(0x4DA2), "Digite o nome"},              // Type name
-    {DG(0x4DAC), "Enter confirma"},             // Enter accepts
-    {DG(0x4DBA), "Sem nome"},                   // Untitled
-    {DG(0x4DC3), "Salvando"},                   // Saving
-    {DG(0x4DD4), "PC:"},                        // COMP:
-    {DG(0x4DDA), "Você perdeu!"},               // You lost!
+    {DG(0x4D90), "Carregando"},
+    {DG(0x4D9C), "Vazio"},
+    {DG(0x4DA2), "Digite o nome"},
+    {DG(0x4DAC), "Enter confirma"},
+    {DG(0x4DBA), "Sem nome"},
+    {DG(0x4DC3), "Salvando"},
+    {DG(0x4DD4), "PC:"},
+    {DG(0x4DDA), "Você perdeu!"},
     {DG(0x4DE4), "Aperte uma tecla"},
-    {DG(0x4DF2), "Você venceu!"},               // You won!
+    {DG(0x4DF2), "Você venceu!"},
     {DG(0x4DFB), "Aperte uma tecla"},
-    {DG(0x4E09), "Setas movem"},                // Arrows move
-    {DG(0x4E15), "Enter escolhe"},              // Enter selects
-    {DG(0x4E23), "ESC para voltar"},            // ESC to back out
-    {DG(0x4E33), "ESC para sair"},              // ESC to quit
-    {DG(0x4E78), "Painel de Controle"},         // Control Panel
-    {DG(0x4EA1), "Saindo..."},                  // Quitting...
+    {DG(0x4E09), "Setas movem"},
+    {DG(0x4E15), "Enter escolhe"},
+    {DG(0x4E23), "ESC para voltar"},
+    {DG(0x4E33), "ESC para sair"},
+    {DG(0x4E78), "Painel de Controle"},
+    {DG(0x4EA1), "Saindo..."},
 };
 
 // Text the port prints from its own source (CK_PLAY, co-op).

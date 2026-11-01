@@ -539,7 +539,7 @@ void LindseyDialog() {
   VW_FixRefreshBuffer();
 
   OtherTalkWindow(LINDSEYPIC);
-  US_CPrint(g_exe.String(0x1BB5));  // "Princess Lindsey says:\n"
+  US_CPrint(g_exe.String(0x1BB5));
   US_CPrint(DgString(mapon == 7 ? 0x19D4 : 0x19D6));
   VW_UpdateScreen();
   SD_PlaySound(SND_LINDSEY);
@@ -607,7 +607,7 @@ void CantSwim() {
   CA_UpLevel();
   CA_CacheGrChunk(KEENTALK1PIC);
   KeenTalkWindow(KEENTALK1PIC);
-  US_CPrint(g_exe.String(0x1BCD));  // "I can't swim!"
+  US_CPrint(g_exe.String(0x1BCD));
   WaitAck(30);
   CA_DownLevel();
 }
@@ -620,7 +620,7 @@ void GotScuba() {
   MarkChunk(KEENTALK2PIC);
   CA_CacheMarks(nullptr);
   KeenTalkWindow(KEENTALK1PIC);
-  US_CPrint(g_exe.String(0x1BDB));  // "Cool!  I can breathe under water now!"
+  US_CPrint(g_exe.String(0x1BDB));
   WaitAck(30);
   VWB_DrawPic(WindowX + WindowW, WindowY, KEENTALK2PIC);
   WaitAck(30);

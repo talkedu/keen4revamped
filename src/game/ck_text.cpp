@@ -192,7 +192,7 @@ void HandleWord() {
   int wordindex = 1;
   while (!IsBlank(*text)) {
     word_[wordindex] = *text++;
-    if (++wordindex == WORDLIMIT) Quit(g_exe.String(0x0720));  // "PageLayout: Word limit exceeded"
+    if (++wordindex == WORDLIMIT) Quit(g_exe.String(0x0720));
   }
   word_[wordindex] = 0;
 
@@ -238,7 +238,7 @@ void PageLayout(boolean shownumber) {
 
   while (IsBlank(*text)) text++;
   if (*text != '^' || std::toupper(static_cast<unsigned char>(*++text)) != 'P')
-    Quit(g_exe.String(0x0740));  // "PageLayout: Text not headed with ^P"
+    Quit(g_exe.String(0x0740));
   while (*text++ != '\n') {
   }
 
@@ -308,7 +308,7 @@ void CacheLayoutGraphics() {
     }
   } while (text < bombpoint);
 
-  Quit(g_exe.String(0x076D));  // "CacheLayoutGraphics: No ^E to terminate file!"
+  Quit(g_exe.String(0x076D));
 }
 
 // 0915:079C: returns the chosen topic, or -1 for Escape.
