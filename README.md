@@ -221,4 +221,4 @@ libcurl, which desktop distributions have.
 The repository the game updates from is set when configuring, `-DKEEN4_UPDATE_REPO=owner/name`
 (default `talkedu/keen4revamped`), and `KEEN4_UPDATE_REPO` in the environment overrides it.
 `-DKEEN4_UPDATER=OFF` builds the game without the updater and without the menu item; the
-handheld build does that.
+handheld build does that, and it is the default on macOS.

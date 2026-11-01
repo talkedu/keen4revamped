@@ -62,8 +62,13 @@ option(KEEN4_BUILD_TESTS "Build the test suite" ON)
 
 # In-game updater (CONFIGURE card, CHECK FOR UPDATES): installs the latest
 # release of a public GitHub repository, with no sign-in. OFF leaves it out of
-# the build, for packages updated some other way (the handheld port).
-option(KEEN4_UPDATER "Build the in-game updater" ON)
+# the build, for packages updated some other way (the handheld port). It is
+# off by default on macOS, which has no release archive for it to install.
+if(APPLE)
+  option(KEEN4_UPDATER "Build the in-game updater" OFF)
+else()
+  option(KEEN4_UPDATER "Build the in-game updater" ON)
+endif()
 set(KEEN4_UPDATE_REPO "talkedu/keen4revamped" CACHE STRING "owner/name of the repository the updater installs releases from")
 
 if(MSVC)
