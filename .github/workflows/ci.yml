@@ -44,8 +44,6 @@ jobs:
       - name: Configure
         # The build is the version this pull request will release, plus
         # -SNAPSHOT: the title's [MAJOR]/[MINOR]/[PATCH] tag picks the bump.
-        # KEEN4_GITHUB_CLIENT_ID is the OAuth app the in-game updater signs in
-        # with (see README, Updating).
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
@@ -55,8 +53,7 @@ jobs:
             bump=${BASH_REMATCH[1],,}
           fi
           shopt -u nocasematch
-          cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION_BUMP=$bump \
-            -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
+          cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION_BUMP=$bump
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test

@@ -31,8 +31,9 @@ case $out in /*) dest=$out ;; *) dest="$PWD/$out" ;; esac
 (cd "$stage" && zip -qr -X "$dest" keen4revamped.sh keen4revamped)
 echo "wrote $out"
 
-# The in-game updater on the handheld installs the port folder alone, as a
-# .tar.gz (it unpacks with tar, which on these devices may not read .zip).
+# The port folder alone, as a .tar.gz, for the in-game updater of older
+# handheld releases (it unpacks with tar, which on these devices may not read
+# .zip). Current handheld builds have no updater (KEEN4_UPDATER=OFF).
 if [ -n "$tarball" ]; then
   case $tarball in /*) dest=$tarball ;; *) dest="$PWD/$tarball" ;; esac
   tar -czf "$dest" -C "$stage" keen4revamped

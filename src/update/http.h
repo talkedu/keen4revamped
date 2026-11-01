@@ -7,7 +7,7 @@
 
 // Minimal HTTPS client for the updater: WinHTTP on Windows, the system's
 // libcurl (loaded at run time, so it is not a build dependency) elsewhere.
-// Redirects are not followed, so a token never travels to another host.
+// Redirects are not followed; the caller decides where to go next.
 namespace keen4::http {
 
 struct Request {
@@ -36,8 +36,5 @@ bool Available(std::string* why);
 
 // Thread safe; blocks until the answer is in, or the progress callback cancels.
 Response Send(const Request& request, const Progress& progress = {});
-
-// Percent-encodes `s` for a form body or URL query.
-std::string FormEncode(const std::string& s);
 
 }  // namespace keen4::http

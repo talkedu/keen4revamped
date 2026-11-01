@@ -6,9 +6,9 @@
 
 #include "update/http.h"
 
-// GitHub side of the in-game updater: signing in with the OAuth device flow
-// (the game shows a code, the player enters it on github.com, so no secret
-// ships in the binary) and reading the latest release of the repository.
+// GitHub side of the in-game updater: reading the latest release of the
+// public repository and downloading its files. It needs no GitHub account:
+// the requests go to the public REST API without a token.
 namespace keen4::update {
 
 struct Asset {
@@ -32,36 +32,15 @@ bool ParseRelease(const std::string& json, Release* out);
 const Asset* PickAsset(const Release& release, const std::string& suffix);
 std::string PlatformAssetSuffix();
 
-// The OAuth app the game signs in with and the repository it updates from:
-// KEEN4_GITHUB_CLIENT_ID and KEEN4_UPDATE_REPO in the environment, else the
-// values the build was configured with. An empty client id disables updates.
-std::string ClientId();
+// The repository the game updates from: KEEN4_UPDATE_REPO in the
+// environment, else the one the build was configured with.
 std::string Repo();
-// True when the client id is a GitHub App's ("Iv..."), not an OAuth app's.
-bool IsGitHubApp();
 
-// The player's token, kept in the folder with CONFIG.CK4 and the saved games
-// (or KEEN4_GITHUB_TOKEN in the environment).
-std::string LoadToken();
-void SaveToken(const std::string& token);
-void ForgetToken();
-
-struct DeviceCode {
-  std::string device_code, user_code, verification_uri;
-  int interval = 5;      // seconds between polls
-  int expires_in = 900;  // seconds
-};
-
-bool RequestDeviceCode(DeviceCode* out, std::string* error);
-
-enum class Poll { Pending, SlowDown, Token, Denied, Expired, Failed };
-Poll PollForToken(const DeviceCode& code, std::string* token, std::string* error);
-
-enum class Check { Ok, SignIn, NoAccess, NoRelease, Failed };
-Check FetchLatestRelease(const std::string& token, Release* out, std::string* error);
+enum class Check { Ok, NoRelease, Failed };
+Check FetchLatestRelease(Release* out, std::string* error);
 
 // Downloads `asset` to `path`; `progress` may cancel.
-bool DownloadAsset(const std::string& token, const Asset& asset, const std::string& path,
-                   const http::Progress& progress, bool* canceled, std::string* error);
+bool DownloadAsset(const Asset& asset, const std::string& path, const http::Progress& progress, bool* canceled,
+                   std::string* error);
 
 }  // namespace keen4::update

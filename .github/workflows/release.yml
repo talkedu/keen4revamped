@@ -141,8 +141,7 @@ jobs:
             libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl1-mesa-dev \
             libasound2-dev libpulse-dev libudev-dev
       - name: Configure
-        # the OAuth app the in-game updater signs in with (see README, Updating)
-        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION" -DKEEN4_GITHUB_CLIENT_ID="${{ vars.KEEN4_GITHUB_CLIENT_ID }}"
+        run: cmake --preset ${{ matrix.preset }} -DKEEN4_VERSION="$VERSION"
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }} --parallel
       - name: Test
@@ -193,8 +192,9 @@ jobs:
           tar czf "$dir.tar.gz" "$dir"
           sh packaging/linux/make-installer.sh "$dir" "$dir-installer.sh"
       - name: Package (Anbernic)
-        # The zip goes in the handheld's ports folder; the .tar.gz is what the
-        # in-game updater installs there.
+        # The zip goes in the handheld's ports folder. The handheld build has no
+        # updater any more; the .tar.gz is for the updater in older handheld
+        # releases.
         if: matrix.preset == 'anbernic'
         run: |
           sh packaging/anbernic/make-package.sh build/anbernic \
