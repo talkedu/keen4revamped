@@ -4,7 +4,7 @@
 ;   makensis -DVERSION=1.2.0 -DSRCDIR=path/to/package -DOUTFILE=setup.exe keen4revamped.nsi
 ;
 ; SRCDIR is the unpacked windows-x64 release folder (keen4.exe, keen4-extract.exe,
-; README.md, docs/, tools/). Game data is never part of it: players point the game
+; README.md, docs/, tools/, licenses/). Game data is never part of it: players point the game
 ; at their own copy of Keen 4, so the installer neither asks for nor writes a data path.
 
 Unicode true
@@ -147,6 +147,7 @@ Section "Uninstall"
   Delete "$INSTDIR\keen4revamped.ico"
   RMDir /r "$INSTDIR\docs"
   RMDir /r "$INSTDIR\tools"
+  RMDir /r "$INSTDIR\licenses"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 

@@ -158,6 +158,7 @@ jobs:
           cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
+          sh packaging/copy-licenses.sh build/windows "$dir/licenses"
           zip -qr "$dir.zip" "$dir"
       - name: Installer (Windows)
         # NSIS builds the setup .exe on Linux. The runner has no passwordless
@@ -188,6 +189,7 @@ jobs:
           cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$dir/docs"
           cp tools/keen4-upscale/keen4_upscale.py "$dir/tools/keen4-upscale"
           cp tools/keen4-curate/keen4_curate.py "$dir/tools/keen4-curate"
+          sh packaging/copy-licenses.sh build/release "$dir/licenses"
           tar czf "$dir.tar.gz" "$dir"
           sh packaging/linux/make-installer.sh "$dir" "$dir-installer.sh"
       - name: Package (Anbernic)

@@ -24,10 +24,7 @@ chmod +x "$port/keen4" "$stage/keen4revamped.sh"
 cp packaging/anbernic/port.json README.md "$port"
 cp packaging/anbernic/gamedata-README.txt "$port/gamedata/README.txt"
 cp docs/ART.md docs/AUDIO.md docs/LANGUAGES.md "$port/docs"
-cp third_party/README.md "$port/licenses/third_party.md"
-for f in "$build"/_deps/sdl3-src/LICENSE.txt; do
-  [ -f "$f" ] && cp "$f" "$port/licenses/SDL3.txt"
-done
+sh packaging/copy-licenses.sh "$build" "$port/licenses"
 
 rm -f "$out"
 case $out in /*) dest=$out ;; *) dest="$PWD/$out" ;; esac

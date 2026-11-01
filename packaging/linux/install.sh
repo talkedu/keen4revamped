@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs keen4revamped for the current user (no root needed):
 #
-#   ~/.local/lib/keen4revamped/      the game, keen4-extract, docs and tools
+#   ~/.local/lib/keen4revamped/      the game, keen4-extract, docs, tools and licenses
 #   ~/.local/bin/keen4, keen4-extract
 #   an app-menu entry and a desktop shortcut, both with the game icon
 #
@@ -55,7 +55,7 @@ if [ "$uninstall" = 1 ]; then
   rm -f "$menu_entry" "$icon" "$desktop_link"
   rm -f "$app/keen4" "$app/keen4-extract" "$app/README.md" "$app/keen4revamped.png" \
         "$app/install.sh" "$app/uninstall.sh"
-  rm -rf "$app/docs" "$app/tools"
+  rm -rf "$app/docs" "$app/tools" "$app/licenses"
   rmdir "$app" 2>/dev/null || echo "Kept $app: it has files the installer did not add."
   refresh_menus
   echo "keen4revamped is uninstalled. Saved games are still in ~/.local/share/keen4revamped."
@@ -70,9 +70,9 @@ fi
 
 mkdir -p "$app" "$bin" "$(dirname "$menu_entry")" "$(dirname "$icon")"
 if [ "$src" != "$app" ]; then
-  rm -rf "$app/docs" "$app/tools"
+  rm -rf "$app/docs" "$app/tools" "$app/licenses"
   cp -R "$src/keen4" "$src/keen4-extract" "$src/README.md" "$src/keen4revamped.png" \
-        "$src/docs" "$src/tools" "$src/install.sh" "$src/uninstall.sh" "$app/"
+        "$src/docs" "$src/tools" "$src/licenses" "$src/install.sh" "$src/uninstall.sh" "$app/"
 fi
 chmod 755 "$app/keen4" "$app/keen4-extract" "$app/install.sh" "$app/uninstall.sh"
 ln -sf "$app/keen4" "$bin/keen4"
